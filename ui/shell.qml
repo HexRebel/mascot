@@ -48,7 +48,11 @@ ShellRoot {
         interval: 2000
         repeat: true
         running: !daemon.connected
-        onTriggered: daemon.connected = true
+        // Assigning true while already false is not a change, so toggle
+        onTriggered: {
+            daemon.connected = false;
+            daemon.connected = true;
+        }
     }
 
     Bubble {

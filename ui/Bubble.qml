@@ -99,12 +99,16 @@ PanelWindow {
         if (!text || bubble.busy)
             return;
 
-        // The typed text is passed as "$1", never parsed by the shell
-        const command = bubble.event?.command || "aichat";
+        // The typed text is passed as "$1", never parsed by the shell. Without
+        // CHAT_COMMAND use the bubble's own aichat config: the main one asks to
+        // confirm tool calls, which nobody can answer from here
+        const command = bubble.event?.command || 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat';
         bubble.errorText = "";
         bubble.transcript += (bubble.transcript ? "\n\n" : "") + "› " + text + "\n";
         input.text = "";
-        chat.command = ["sh", "-c", command + ' "$@"', "mascot-bubble", text];
+        // stdin must be closed: aichat reads a non-tty stdin as extra input and
+        // waits forever on the open pipe Process gives it
+        chat.command = ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble", text];
         chat.running = true;
     }
 
