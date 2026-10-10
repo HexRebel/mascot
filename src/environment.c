@@ -253,6 +253,9 @@ struct environment_subsurface {
 // Button id passed with mask 0xFFFFFFF0, shifted right by 0xF (unused)
 #define EVENT_FRAME_MISC_BUTTON POINTER_THIRD_BUTTON
 
+// Max pointer travel (global px) between press and release for a tap
+#define ENVIRONMENT_TAP_THRESHOLD 5
+
 struct environment_event_frame {
   uint32_t mask;
 
@@ -281,6 +284,11 @@ struct environment_pointer {
   int32_t public_x, public_y;
 
   uint32_t reference_tick;
+
+  // Left press on a mascot that has not moved far enough to become a drag yet.
+  // Released before ENVIRONMENT_TAP_THRESHOLD -> tap, otherwise -> drag.
+  struct mascot *pending_press;
+  int32_t press_x, press_y;
 
   environment_subsurface_t *grabbed_subsurface;
   enum {
@@ -1406,6 +1414,18 @@ static void mascot_on_pointer_motion(void *data, struct wl_pointer *pointer,
   env_pointer->x = global_x;
   env_pointer->y = global_y;
 
+  if (env_pointer->pending_press) {
+    int32_t travel_x = global_x - env_pointer->press_x;
+    int32_t travel_y = global_y - env_pointer->press_y;
+    if (travel_x * travel_x + travel_y * travel_y >
+        ENVIRONMENT_TAP_THRESHOLD * ENVIRONMENT_TAP_THRESHOLD) {
+      struct mascot *pressed = env_pointer->pending_press;
+      env_pointer->pending_press = NULL;
+      mascot_drag_started(pressed, env_pointer);
+    }
+    return;
+  }
+
   if (env_pointer->grabbed_subsurface)
     return;
 
@@ -1478,6 +1498,10 @@ static void mascot_on_pointer_leave(void *data, struct wl_pointer *pointer,
     ERROR("Critical! No pointer in mascot_on_pointer_enter!");
   }
 
+  // Implicit grab should keep us on the surface while pressed; if not, it is
+  // neither a tap nor a drag
+  env_pointer->pending_press = NULL;
+
   environment_subsurface_t *env_surface =
       environment_subsurface_from_surface(surface);
   if (!env_surface) {
@@ -1545,7 +1569,10 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
           mascot, scaled_x, scaled_y, pressed_button, false);
       if (!hotspot_press_result &&
           pressed_button == mascot_hotspot_button_left) {
-        mascot_drag_started(mascot, env_pointer);
+        // Defer the drag until the pointer moves, see mascot_on_pointer_motion
+        env_pointer->pending_press = mascot;
+        env_pointer->press_x = env_pointer->x;
+        env_pointer->press_y = env_pointer->y;
       }
       if (!hotspot_press_result &&
           pressed_button == mascot_hotspot_button_right) {
@@ -1557,8 +1584,16 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
     }
 
   } else {
-    if (env_pointer->grabbed_subsurface &&
+    if (env_pointer->pending_press &&
         pressed_button == mascot_hotspot_button_left) {
+      struct mascot *pressed = env_pointer->pending_press;
+      env_pointer->pending_press = NULL;
+      if (pressed == mascot) {
+        // TODO(fase 3, trin 2): send chat event to IPC clients
+        INFO("<Mascot:%s:%u> Tapped", mascot->prototype->name, mascot->id);
+      }
+    } else if (env_pointer->grabbed_subsurface &&
+               pressed_button == mascot_hotspot_button_left) {
       env_pointer->dx = (env_pointer->x - env_pointer->dx);
       env_pointer->dy = (env_pointer->y - env_pointer->dy);
       mascot_drag_ended(
