@@ -1424,7 +1424,8 @@ static void mascot_on_pointer_motion(void *data, struct wl_pointer *pointer,
         ENVIRONMENT_TAP_THRESHOLD * ENVIRONMENT_TAP_THRESHOLD) {
       struct mascot *pressed = env_pointer->pending_press;
       env_pointer->pending_press = NULL;
-      mascot_drag_started(pressed, env_pointer);
+      if (mascot_drag_started(pressed, env_pointer))
+        chat_mascot_dragged(pressed);
     }
     return;
   }

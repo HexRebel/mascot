@@ -28,6 +28,8 @@ ShellRoot {
 
         if (event.event === "tap")
             bubble.openFor(event);
+        else if (event.event === "dragged")
+            bubble.closeFor(event.mascot);
     }
 
     Socket {

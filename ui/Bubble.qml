@@ -87,6 +87,12 @@ PanelWindow {
         input.forceActiveFocus();
     }
 
+    // The mascot was dragged away from under the bubble
+    function closeFor(mascot: int): void {
+        if (bubble.visible && bubble.event?.mascot === mascot)
+            bubble.close();
+    }
+
     function close(): void {
         chat.running = false;
         bubble.visible = false;

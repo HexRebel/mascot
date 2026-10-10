@@ -225,6 +225,42 @@ static void json_escape(const char* in, char* out, size_t out_len)
     out[pos] = 0;
 }
 
+// Writes one line to every client, returns whether at least one got all of it
+static bool chat_broadcast(const char* line, int len)
+{
+    bool delivered = false;
+    for (int i = 0; i < client_count; i++) {
+        ssize_t sent = send(clients[i].fd, line, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (sent == len) {
+            delivered = true;
+            continue;
+        }
+        if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            WARN("Chat client is not reading, event dropped");
+            continue;
+        }
+        // Broken or half-written stream: epoll sees EOF and chat_client_readable() cleans up
+        shutdown(clients[i].fd, SHUT_RDWR);
+    }
+    return delivered;
+}
+
+void chat_mascot_dragged(struct mascot* mascot)
+{
+    if (!mascot) return;
+    // Released directly: chat_find_mascot() would take environment_mutex
+    // in the middle of a Wayland dispatch
+    if (mascot->id == held_mascot_id) {
+        mascot_chat_hold(mascot, false);
+        held_mascot_id = -1;
+    }
+    if (!client_count) return;
+
+    char line[64];
+    int len = snprintf(line, sizeof(line), "{\"event\":\"dragged\",\"mascot\":%u}\n", mascot->id);
+    chat_broadcast(line, len);
+}
+
 bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
 {
     if (!client_count || !mascot || !env) return false;
@@ -271,20 +307,7 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
         return false;
     }
 
-    bool delivered = false;
-    for (int i = 0; i < client_count; i++) {
-        ssize_t sent = send(clients[i].fd, line, len, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (sent == len) {
-            delivered = true;
-            continue;
-        }
-        if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            WARN("Chat client is not reading, event dropped");
-            continue;
-        }
-        // Broken or half-written stream: epoll sees EOF and chat_client_readable() cleans up
-        shutdown(clients[i].fd, SHUT_RDWR);
-    }
+    bool delivered = chat_broadcast(line, len);
 
     // Keep the mascot still while someone is talking to it
     if (delivered) chat_hold(mascot);
