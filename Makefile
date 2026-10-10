@@ -56,8 +56,10 @@ override PLUGINS_LIB_OBJS := $(PLUGINS_LIB_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
 override _ := $(shell mkdir -p $(DIRS))
 
+override WL_PROTO_STAMP := $(WL_PROTO_DIR)/.stamp
+
 # Generate wayland-protocols headers & sources
-protocols-autogen:
+$(WL_PROTO_STAMP): Makefile wlr-protocols/wlr-layer-shell-unstable-v1.xml
 	$(WAYLAND_SCANNER) client-header $(WAYLAND_PROTOCOLS_DIR)/staging/cursor-shape/cursor-shape-v1.xml         $(WL_PROTO_DIR)/cursor-shape-v1.h
 	$(WAYLAND_SCANNER) private-code  $(WAYLAND_PROTOCOLS_DIR)/staging/cursor-shape/cursor-shape-v1.xml         $(WL_PROTO_DIR)/cursor-shape-v1.c
 	$(WAYLAND_SCANNER) client-header $(WAYLAND_PROTOCOLS_DIR)/stable/viewporter/viewporter.xml                 $(WL_PROTO_DIR)/viewporter.h
@@ -74,6 +76,10 @@ protocols-autogen:
 	$(WAYLAND_SCANNER) private-code  $(WAYLAND_PROTOCOLS_DIR)/staging/alpha-modifier/alpha-modifier-v1.xml     $(WL_PROTO_DIR)/alpha-modifier-v1.c
 	$(WAYLAND_SCANNER) client-header wlr-protocols/wlr-layer-shell-unstable-v1.xml                             $(WL_PROTO_DIR)/wlr-layer-shell.h
 	$(WAYLAND_SCANNER) private-code  wlr-protocols/wlr-layer-shell-unstable-v1.xml                             $(WL_PROTO_DIR)/wlr-layer-shell.c
+	@touch $@
+
+.PHONY: protocols-autogen
+protocols-autogen: $(WL_PROTO_STAMP)
 
 
 # Rule to build wayland-protocol sources
@@ -103,7 +109,7 @@ $(UTILS_DIR)/mascot: $(SRCDIR)/mascotctl/client.py
 	@mkdir -p $(UTILS_DIR)
 	$(PYTHON3) scripts/py-compose.py -s $< -o $@
 
-$(SRC): protocols-autogen
+$(WL_HEADERS) $(WL_HEADERS:.h=.c) $(OBJS): | $(WL_PROTO_STAMP)
 
 .PHONY: all
 all: $(TARGET) $(PLUGINS_LIB) $(UTILS_DIR)/mascot
