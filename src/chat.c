@@ -23,6 +23,7 @@
 
 #define _GNU_SOURCE
 #include "chat.h"
+#include "config.h"
 #include "mascot.h"
 #include <errno.h>
 #include <linux/limits.h>
@@ -148,6 +149,15 @@ void chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
                 prototype, sizeof(prototype));
     json_escape(environment_name(env), output, sizeof(output));
 
+    // Quoted JSON string, or null when CHAT_COMMAND is unset
+    char command[2048] = "null";
+    const char* chat_command = config_get_chat_command();
+    if (chat_command) {
+        char escaped[2040];
+        json_escape(chat_command, escaped, sizeof(escaped));
+        snprintf(command, sizeof(command), "\"%s\"", escaped);
+    }
+
     char sprite[128] = "null";
     struct bounding_box box;
     if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
@@ -156,19 +166,21 @@ void chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
     }
 
     // Everything is environment-local, logical px, top-referenced
-    char line[1024];
+    char line[4096];
     int len = snprintf(line, sizeof(line),
         "{\"event\":\"tap\",\"mascot\":%u,\"prototype\":\"%s\",\"output\":\"%s\","
         "\"pointer\":{\"x\":%d,\"y\":%d},"
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
-        "\"surface\":{\"width\":%d,\"height\":%d}}\n",
+        "\"surface\":{\"width\":%d,\"height\":%d},"
+        "\"command\":%s}\n",
         mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
-        environment_workarea_width(env), environment_workarea_height(env));
+        environment_workarea_width(env), environment_workarea_height(env),
+        command);
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return;

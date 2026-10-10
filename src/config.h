@@ -55,7 +55,9 @@
 #define CONFIG_PARAM_UNIFIED_OUTPUTS "UNIFIED_OUTPUTS"
 #define CONFIG_PARAM_OPACITY "OPACITY"
 #define CONFIG_PARAM_MASCOT_SCALE "MASCOT_SCALE"
-#define CONFIG_PARAM_COUNT 31
+#define CONFIG_PARAM_CHAT_ENABLED "CHAT_ENABLED"
+#define CONFIG_PARAM_CHAT_COMMAND "CHAT_COMMAND"
+#define CONFIG_PARAM_COUNT 33
 
 #define POINTER_PRIMARY_BUTTON 0x01
 #define POINTER_SECONDARY_BUTTON 0x02
@@ -133,6 +135,12 @@ const char* config_get_prototypes_location();
 const char* config_get_plugins_location();
 const char* config_get_socket_location();
 
+bool config_set_chat_enabled(int32_t value);
+bool config_set_chat_command(const char* value);
+int32_t config_get_chat_enabled();
+// NULL if unset
+const char* config_get_chat_command();
+
 bool config_get_by_key(const char* key, char* dest, uint8_t size);
 bool config_set_by_key(const char* key, const char* value);
 
@@ -168,6 +176,8 @@ __attribute((unused)) static const char* config_keys[] = {
     CONFIG_PARAM_ON_TOOL_BUTTON3,
     CONFIG_PARAM_OPACITY,
     CONFIG_PARAM_MASCOT_SCALE,
+    CONFIG_PARAM_CHAT_ENABLED,
+    CONFIG_PARAM_CHAT_COMMAND,
     NULL
 };
 

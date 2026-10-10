@@ -71,6 +71,10 @@ struct config {
     float mascot_opacity;
     float mascot_scale;
 
+    // Chat bubble
+    bool chat_enabled;
+    char* chat_command;
+
     char* prototypes_location;
     char* plugins_location;
     char* socket_location;
@@ -148,20 +152,23 @@ bool config_parse(const char* path)
     config.unified_outputs = -1;
     config.mascot_opacity = -1.0f;
     config.mascot_scale = -1.0f;
+    config.chat_enabled = true;
 
     FILE* file = fopen(path, "r");
     if (!file) {
         return false;
     }
 
-    char line[256] = {0};
+    char line[1024] = {0};
     while (fgets(line, sizeof(line), file)) {
         if (line[0] == '#') {
             continue;
         }
 
-        char* key = strtok(line, "=");
-        char* value = strtok(NULL, "=");
+        // Split on the first '=' only, values such as chat_command may contain more
+        char* key = line;
+        char* value = strchr(line, '=');
+        if (value) *value++ = '\0';
 
         key = string_strip(key);
         value = string_strip(value);
@@ -247,6 +254,10 @@ bool config_parse(const char* path)
             config_set_opacity(atof(value));
         } else if (strcasecmp(key, "mascot_scale") == 0) {
             config_set_mascot_scale(atof(value));
+        } else if (strcasecmp(key, "chat_enabled") == 0) {
+            config_set_chat_enabled(parse_bool(value));
+        } else if (strcasecmp(key, "chat_command") == 0) {
+            config_set_chat_command(value);
         }
     }
     strncpy(config.config_location, path, PATH_MAX);
@@ -295,6 +306,8 @@ void config_write(const char* path)
     if (config.socket_location) fprintf(file, "socket_location=%s\n", config.socket_location);
     if (config.mascot_scale != -1.0f) fprintf(file, "mascot_scale=%f\n", config.mascot_scale);
     if (config.mascot_opacity != -1.0f) fprintf(file, "mascot_opacity=%f\n", config.mascot_opacity);
+    fprintf(file, "chat_enabled=%s\n", config.chat_enabled ? "true" : "false");
+    if (config.chat_command) fprintf(file, "chat_command=%s\n", config.chat_command);
 
 
     fclose(file);
@@ -737,6 +750,31 @@ float config_get_mascot_scale()
     return config.mascot_scale == -1.0f ? 1.0f : config.mascot_scale;
 }
 
+bool config_set_chat_enabled(int32_t value)
+{
+    config.chat_enabled = value;
+    return true;
+}
+
+bool config_set_chat_command(const char* value)
+{
+    // A newline would end the line in mascotd.conf and in the chat socket's JSON
+    if (value && strchr(value, '\n')) return false;
+    free(config.chat_command);
+    config.chat_command = (value && *value) ? strdup(value) : NULL;
+    return true;
+}
+
+int32_t config_get_chat_enabled()
+{
+    return config.chat_enabled;
+}
+
+const char* config_get_chat_command()
+{
+    return config.chat_command;
+}
+
 bool config_get_by_key(const char* key, char* dest, uint8_t size)
 {
     if (!strcmp(key, CONFIG_PARAM_BREEDING)) {
@@ -870,6 +908,12 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_MASCOT_SCALE)) {
         snprintf(dest, size, "%f", config.mascot_scale);
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_ENABLED)) {
+        snprintf(dest, size, "%s", config.chat_enabled ? "true" : "false");
+        return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_COMMAND)) {
+        snprintf(dest, size, "%s", config.chat_command ? config.chat_command : "");
+        return true;
     }
     return false;
 }
@@ -952,6 +996,10 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_mascot_scale(atof(value));
     } else if (!strcmp(key, CONFIG_PARAM_OPACITY)) {
         res = config_set_opacity(atof(value));
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_ENABLED)) {
+        res = config_set_chat_enabled(parse_bool(value));
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_COMMAND)) {
+        res = config_set_chat_command(value);
     }
     if (res) config_write(config.config_location);
     return res;

@@ -1077,7 +1077,9 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "ON_TOOL_BUTTON2": "On Tool Button 2",
         "ON_TOOL_BUTTON3": "On Tool Button 3",
         "OPACITY": "Opacity",
-        "MASCOT_SCALE": "Scaling"
+        "MASCOT_SCALE": "Scaling",
+        "CHAT_ENABLED": "Chat Enabled",
+        "CHAT_COMMAND": "Chat Command"
     }
     starttime = time.time()
     wait_until_null_null = False
@@ -1157,6 +1159,8 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "PROTOTYPES_LOCATION": "prototypes_location",
         "PLUGINS_LOCATION": "plugins_location",
         "SOCKET_LOCATION": "socket_location",
+        "CHAT_ENABLED": "chat_enabled",
+        "CHAT_COMMAND": "chat_command",
     }
 
     backmap = { v: k for k, v in name_cast.items() }
@@ -1180,7 +1184,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
     config = {}
     with open(config_file_loc, "r") as f:
         for line in f.readlines():
-            key, value = line.strip().split("=")
+            key, value = line.strip().split("=", 1)
             if key in backmap:
                 config[backmap[key]] = value.strip()
 

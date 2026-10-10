@@ -1593,9 +1593,11 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
       env_pointer->pending_press = NULL;
       if (pressed == mascot) {
         INFO("<Mascot:%s:%u> Tapped", mascot->prototype->name, mascot->id);
-        protocol_server_announce_tap(mascot, env, env_pointer->x,
-                                     yconv(env, env_pointer->y));
-        chat_announce_tap(mascot, env, env_pointer->x, env_pointer->y);
+        if (config_get_chat_enabled()) {
+          protocol_server_announce_tap(mascot, env, env_pointer->x,
+                                       yconv(env, env_pointer->y));
+          chat_announce_tap(mascot, env, env_pointer->x, env_pointer->y);
+        }
       }
     } else if (env_pointer->grabbed_subsurface &&
                pressed_button == mascot_hotspot_button_left) {
