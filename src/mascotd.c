@@ -366,6 +366,7 @@ struct socket_description {
         SOCKET_TYPE_CLIENT,
         SOCKET_TYPE_ENVIRONMENT,
         SOCKET_TYPE_CHAT_LISTEN,
+        SOCKET_TYPE_CHAT_CLIENT,
     } type;
     struct protocol_client* client;
     ipc_connector_t* ipc_connector;
@@ -854,7 +855,22 @@ int main(int argc, const char** argv)
                 }
                 ipc_free_packet(packet);
             } else if (sd->type == SOCKET_TYPE_CHAT_LISTEN) {
-                chat_accept();
+                int chat_client_fd = chat_accept();
+                if (chat_client_fd == -1) continue;
+                struct socket_description* chat_client_sd = calloc(1, sizeof(struct socket_description));
+                if (!chat_client_sd) ERROR("Failed to allocate memory for socket description");
+                *chat_client_sd = (struct socket_description){ .fd = chat_client_fd, .type = SOCKET_TYPE_CHAT_CLIENT };
+                ev.events = EPOLLIN | EPOLLRDHUP;
+                ev.data.ptr = chat_client_sd;
+                if (epoll_ctl(epfd, EPOLL_CTL_ADD, chat_client_fd, &ev) == -1) {
+                    WARN("Failed to add chat client to epoll: %s", strerror(errno));
+                    shutdown(chat_client_fd, SHUT_RDWR);
+                    chat_client_readable(chat_client_fd);
+                    free(chat_client_sd);
+                }
+            } else if (sd->type == SOCKET_TYPE_CHAT_CLIENT) {
+                // chat.c closes the fd (which also drops it from epoll); the description is ours
+                if (!chat_client_readable(sd->fd)) free(sd);
             } else if (sd->type == SOCKET_TYPE_ENVIRONMENT) {
                 // Wayland event
                 if (events[i].events & EPOLLHUP) {

@@ -634,6 +634,13 @@ enum mascot_tick_result mascot_behavior_next(struct mascot *mascot,
     return mascot_tick_ok;
   }
 
+  // Sitting in mid-air would freeze a falling mascot, so wait for the floor
+  if (mascot->chat_behavior &&
+      mascot_get_border_type(mascot) == environment_border_type_floor) {
+    mascot_set_behavior(mascot, mascot->chat_behavior);
+    return mascot_tick_ok;
+  }
+
   if (mascot->current_behavior)
     INFO("<Mascot:%s:%u> Completed behavior \"%s\"", mascot->prototype->name,
          mascot->id, mascot->current_behavior->name);
@@ -884,6 +891,34 @@ bool mascot_drag_ended(struct mascot *mascot, bool throw) {
   environment_subsurface_set_offset(mascot->subsurface, 0, 0);
   environment_subsurface_move(mascot->subsurface, mascot->X->value.i,
                               mascot->Y->value.i - 120, true, false);
+  return true;
+}
+
+bool mascot_chat_hold(struct mascot *mascot, bool hold) {
+  pthread_mutex_lock(&mascot->tick_lock);
+  if (!hold) {
+    // The current sit runs to its end, then behaviors are picked as usual
+    mascot->chat_behavior = NULL;
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return true;
+  }
+
+  const struct mascot_behavior *sit =
+      mascot_prototype_behavior_by_name(mascot->prototype, "SitDown");
+  if (!sit) {
+    WARN("<Mascot:%s:%u> No SitDown behavior, cannot hold for chat",
+         mascot->prototype->name, mascot->id);
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return false;
+  }
+
+  mascot->chat_behavior = sit;
+  if (!mascot->dragged &&
+      mascot_get_border_type(mascot) == environment_border_type_floor &&
+      mascot->current_behavior != sit) {
+    mascot_set_behavior(mascot, sit);
+  }
+  pthread_mutex_unlock(&mascot->tick_lock);
   return true;
 }
 

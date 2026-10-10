@@ -24,10 +24,13 @@
 #define _GNU_SOURCE
 #include "chat.h"
 #include "config.h"
+#include "list.h"
 #include "mascot.h"
+#include "protocol/server.h"
 #include <errno.h>
 #include <linux/limits.h>
-#include <poll.h>
+#include <pthread.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -35,11 +38,21 @@
 #include <unistd.h>
 
 #define CHAT_MAX_CLIENTS 16
+#define CHAT_LINE_MAX 512
+
+struct chat_client {
+    int fd;
+    size_t len;
+    char buf[CHAT_LINE_MAX];
+};
 
 static int listen_fd = -1;
-static int clients[CHAT_MAX_CLIENTS];
+static struct chat_client clients[CHAT_MAX_CLIENTS];
 static int client_count = 0;
 static char listen_path[PATH_MAX] = {0};
+
+// Mascot kept sitting for the open bubble, by id (pointers may be freed)
+static int64_t held_mascot_id = -1;
 
 size_t chat_socket_path(const char* ipc_socket_path, char* pathbuf, size_t pathbuf_len)
 {
@@ -79,39 +92,111 @@ int chat_listen(const char* path)
     return fd;
 }
 
+static struct mascot* chat_find_mascot(uint32_t id)
+{
+    struct protocol_server_state* state = protocol_get_server_state();
+    struct mascot* mascot = NULL;
+
+    pthread_mutex_lock(&state->environment_mutex);
+    for (uint32_t i = 0, c = list_count(state->environments); i < list_size(state->environments) && c; i++) {
+        environment_t* environment = list_get(state->environments, i);
+        if (!environment) continue;
+        c--;
+        if ((mascot = environment_mascot_by_id(environment, id))) break;
+    }
+    pthread_mutex_unlock(&state->environment_mutex);
+    return mascot;
+}
+
+static void chat_release_held(void)
+{
+    if (held_mascot_id == -1) return;
+    struct mascot* mascot = chat_find_mascot(held_mascot_id);
+    if (mascot) mascot_chat_hold(mascot, false);
+    held_mascot_id = -1;
+}
+
+static void chat_hold(struct mascot* mascot)
+{
+    if (held_mascot_id != -1 && held_mascot_id != mascot->id) chat_release_held();
+    if (mascot_chat_hold(mascot, true)) held_mascot_id = mascot->id;
+}
+
 static void chat_remove_client(int index)
 {
-    close(clients[index]);
+    close(clients[index].fd);
     clients[index] = clients[--client_count];
+    // No bubble left to talk to the held mascot
+    if (!client_count) chat_release_held();
 }
 
-// Drops clients that have hung up, so reconnecting bubbles do not leak fds
-static void chat_prune_clients(void)
-{
-    for (int i = client_count - 1; i >= 0; i--) {
-        struct pollfd pfd = { .fd = clients[i], .events = POLLRDHUP };
-        if (poll(&pfd, 1, 0) > 0 && (pfd.revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL))) {
-            chat_remove_client(i);
-        }
-    }
-}
-
-void chat_accept(void)
+int chat_accept(void)
 {
     int fd = accept4(listen_fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
     if (fd < 0) {
         WARN("Cannot accept chat client: %s", strerror(errno));
-        return;
+        return -1;
     }
 
-    chat_prune_clients();
     if (client_count == CHAT_MAX_CLIENTS) {
         WARN("Too many chat clients, dropping new connection");
         close(fd);
-        return;
+        return -1;
     }
-    clients[client_count++] = fd;
+    clients[client_count++] = (struct chat_client){ .fd = fd };
     INFO("Chat client connected (%d total)", client_count);
+    return fd;
+}
+
+// Handles one line from a client. Only {"event":"close","mascot":N} for now
+static void chat_handle_line(const char* line)
+{
+    if (!strstr(line, "\"event\":\"close\"")) return;
+
+    const char* field = strstr(line, "\"mascot\":");
+    if (!field) return;
+    char* end = NULL;
+    long id = strtol(field + strlen("\"mascot\":"), &end, 10);
+    if (end == field + strlen("\"mascot\":")) return;
+
+    if (id == held_mascot_id) chat_release_held();
+}
+
+bool chat_client_readable(int fd)
+{
+    int index = -1;
+    for (int i = 0; i < client_count; i++) {
+        if (clients[i].fd == fd) index = i;
+    }
+    if (index == -1) {
+        close(fd);
+        return false;
+    }
+
+    struct chat_client* client = &clients[index];
+    ssize_t got = recv(fd, client->buf + client->len, sizeof(client->buf) - client->len - 1, 0);
+    if (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return true;
+    if (got <= 0) {
+        chat_remove_client(index);
+        INFO("Chat client disconnected (%d left)", client_count);
+        return false;
+    }
+    client->len += got;
+    client->buf[client->len] = 0;
+
+    char* line = client->buf;
+    char* newline;
+    while ((newline = strchr(line, '\n'))) {
+        *newline = 0;
+        chat_handle_line(line);
+        line = newline + 1;
+    }
+    client->len = strlen(line);
+    memmove(client->buf, line, client->len + 1);
+
+    // A line longer than the buffer can never complete; drop it
+    if (client->len == sizeof(client->buf) - 1) client->len = 0;
+    return true;
 }
 
 void chat_close(void)
@@ -140,9 +225,9 @@ static void json_escape(const char* in, char* out, size_t out_len)
     out[pos] = 0;
 }
 
-void chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
+bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
 {
-    if (!client_count || !mascot || !env) return;
+    if (!client_count || !mascot || !env) return false;
 
     char prototype[256], output[128];
     json_escape(mascot->prototype->display_name ? mascot->prototype->display_name : mascot->prototype->name,
@@ -183,16 +268,25 @@ void chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
         command);
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
-        return;
+        return false;
     }
 
-    for (int i = client_count - 1; i >= 0; i--) {
-        ssize_t sent = send(clients[i], line, len, MSG_NOSIGNAL | MSG_DONTWAIT);
-        if (sent == len) continue;
+    bool delivered = false;
+    for (int i = 0; i < client_count; i++) {
+        ssize_t sent = send(clients[i].fd, line, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (sent == len) {
+            delivered = true;
+            continue;
+        }
         if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             WARN("Chat client is not reading, event dropped");
             continue;
         }
-        chat_remove_client(i);
+        // Broken or half-written stream: epoll sees EOF and chat_client_readable() cleans up
+        shutdown(clients[i].fd, SHUT_RDWR);
     }
+
+    // Keep the mascot still while someone is talking to it
+    if (delivered) chat_hold(mascot);
+    return delivered;
 }

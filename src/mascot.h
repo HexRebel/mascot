@@ -440,6 +440,9 @@ struct mascot {
     const struct mascot_hotspot* hotspot;
     const struct mascot_behavior* hotspot_behavior;
 
+    // Repeated while the chat bubble is open, see mascot_chat_hold()
+    const struct mascot_behavior* chat_behavior;
+
     environment_t* environment; // opaque pointer to the environment
     environment_subsurface_t* subsurface; // opaque pointer to the mascot's surface
 
@@ -513,7 +516,11 @@ void mascot_set_behavior(struct mascot* mascot, const struct mascot_behavior* be
 
 // Dragging
 bool mascot_drag_started(struct mascot* mascot, environment_pointer_t* pointer);
-bool mascot_drag_ended(struct mascot* mascot, bool throw); // throw - if true, sets behavior to thrown
+bool mascot_drag_ended(struct mascot* mascot, bool throw);
+// Keeps the mascot sitting (behavior "SitDown") until released; applied right
+// away when on the floor, otherwise once it lands. Returns false if the
+// prototype has no such behavior
+bool mascot_chat_hold(struct mascot* mascot, bool hold); // throw - if true, sets behavior to thrown
 
 // Callback for position change
 bool mascot_moved(struct mascot* mascot, int32_t x, int32_t y);

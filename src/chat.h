@@ -22,6 +22,7 @@
 
 #include "master_header.h"
 #include "environment.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -33,14 +34,20 @@ size_t chat_socket_path(const char* ipc_socket_path, char* pathbuf, size_t pathb
 // Creates a listening SOCK_STREAM socket at path, returns fd or -1
 int chat_listen(const char* path);
 
-// Accepts a pending connection on the listening socket
-void chat_accept(void);
+// Accepts a pending connection on the listening socket, returns its fd or -1.
+// The caller adds it to epoll and calls chat_client_readable() on events
+int chat_accept(void);
+
+// Reads from a client; returns false once it is gone (fd already closed)
+bool chat_client_readable(int fd);
 
 // Closes all sockets and unlinks the socket path
 void chat_close(void);
 
-// Writes one line of JSON describing a tap to every connected client.
+// Writes one line of JSON describing a tap to every connected client and, if
+// any received it, keeps the mascot sitting until the bubble sends
+// {"event":"close","mascot":N} or disconnects. Returns whether it was delivered.
 // pointer_x/pointer_y are environment-local, top-referenced
-void chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y);
+bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y);
 
 #endif
