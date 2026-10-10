@@ -20,6 +20,7 @@
 #define _GNU_SOURCE
 
 #include "environment.h"
+#include "chat.h"
 #include "config.h"
 #include "layer_surface.h"
 #include "list.h"
@@ -1594,6 +1595,7 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
         INFO("<Mascot:%s:%u> Tapped", mascot->prototype->name, mascot->id);
         protocol_server_announce_tap(mascot, env, env_pointer->x,
                                      yconv(env, env_pointer->y));
+        chat_announce_tap(mascot, env, env_pointer->x, env_pointer->y);
       }
     } else if (env_pointer->grabbed_subsurface &&
                pressed_button == mascot_hotspot_button_left) {
@@ -3331,17 +3333,12 @@ void environment_get_output_id_info(environment_t *env, const char **name,
     *id = env->output.id;
 }
 
-enum environment_move_result
-environment_subsurface_set_position(environment_subsurface_t *surface,
-                                    int32_t dx, int32_t dy) {
-  if (!surface->surface)
-    return environment_move_invalid;
-
-  enum environment_move_result result = environment_move_ok;
-
-  int32_t surface_anchor_x = 0, surface_anchor_y = 0;
-  surface_anchor_x = surface->offset_x;
-  surface_anchor_y = surface->offset_y;
+// Offset from the mascot's anchor point to the sprite's top-left corner, in
+// surface-local (logical) coordinates
+static void environment_subsurface_sprite_offset(environment_subsurface_t *surface,
+                                                 int32_t *x, int32_t *y) {
+  int32_t surface_anchor_x = surface->offset_x;
+  int32_t surface_anchor_y = surface->offset_y;
 
   if (surface->pose) {
     surface_anchor_x += (surface->mascot->LookingRight->value.i
@@ -3350,10 +3347,40 @@ environment_subsurface_set_position(environment_subsurface_t *surface,
     surface_anchor_y += surface->pose->anchor_y;
   }
 
-  surface_anchor_x = (float)surface_anchor_x /
-                     (config_get_mascot_scale() * surface->env->scale);
-  surface_anchor_y = (float)surface_anchor_y /
-                     (config_get_mascot_scale() * surface->env->scale);
+  *x = (float)surface_anchor_x /
+       (config_get_mascot_scale() * surface->env->scale);
+  *y = (float)surface_anchor_y /
+       (config_get_mascot_scale() * surface->env->scale);
+}
+
+bool environment_subsurface_sprite_geometry(environment_subsurface_t *surface,
+                                            struct bounding_box *box) {
+  if (!surface || !surface->surface || !surface->pose || !surface->env)
+    return false;
+
+  int32_t offset_x, offset_y;
+  environment_subsurface_sprite_offset(surface, &offset_x, &offset_y);
+
+  box->x = surface->x + offset_x;
+  box->y = surface->y + offset_y;
+  box->width =
+      surface->width / (config_get_mascot_scale() * surface->env->scale);
+  box->height =
+      surface->height / (config_get_mascot_scale() * surface->env->scale);
+  return true;
+}
+
+enum environment_move_result
+environment_subsurface_set_position(environment_subsurface_t *surface,
+                                    int32_t dx, int32_t dy) {
+  if (!surface->surface)
+    return environment_move_invalid;
+
+  enum environment_move_result result = environment_move_ok;
+
+  int32_t surface_anchor_x, surface_anchor_y;
+  environment_subsurface_sprite_offset(surface, &surface_anchor_x,
+                                       &surface_anchor_y);
 
   wl_subsurface_set_position(surface->subsurface, dx + surface_anchor_x,
                              dy + surface_anchor_y);

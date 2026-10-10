@@ -108,6 +108,8 @@ void environment_pointer_update_delta(environment_subsurface_t* subsurface, uint
 void environment_subsurface_attach(environment_subsurface_t* surface, const struct mascot_pose* pose);
 enum environment_move_result environment_subsurface_move(environment_subsurface_t* surface, int32_t dx, int32_t dy, bool use_callback, bool use_interpolation);
 enum environment_move_result environment_subsurface_set_position(environment_subsurface_t* surface, int32_t dx, int32_t dy);
+// Sprite's bounding box as currently placed, in environment-local logical coordinates (top-referenced)
+bool environment_subsurface_sprite_geometry(environment_subsurface_t* surface, struct bounding_box* box);
 environment_t* environment_subsurface_get_environment(environment_subsurface_t* surface);
 bool environment_subsurface_move_to_pointer(environment_subsurface_t* surface);
 void environment_subsurface_set_offset(environment_subsurface_t* surface, int32_t x, int32_t y);

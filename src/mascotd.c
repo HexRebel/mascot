@@ -44,6 +44,7 @@
 #include <errno.h>
 
 #include "protocol/server.h"
+#include "chat.h"
 
 #define MASCOT_OVERLAYD_INSTANCE_EXISTS -1
 #define MASCOT_OVERLAYD_INSTANCE_CREATE_ERROR -2
@@ -364,6 +365,7 @@ struct socket_description {
         SOCKET_TYPE_LISTEN,
         SOCKET_TYPE_CLIENT,
         SOCKET_TYPE_ENVIRONMENT,
+        SOCKET_TYPE_CHAT_LISTEN,
     } type;
     struct protocol_client* client;
     ipc_connector_t* ipc_connector;
@@ -644,6 +646,10 @@ int main(int argc, const char** argv)
         own_socket = true;
     }
 
+    char chat_path[PATH_MAX] = {0};
+    chat_socket_path(socket_path, chat_path, sizeof(chat_path));
+    int chat_fd = chat_listen(chat_path);
+
     // Initialize affordance manager
     pthread_mutex_init(&server_state.affordance_manager.mutex, NULL);
     server_state.affordance_manager.slots = calloc(MASCOT_OVERLAYD_INSTANCE_DEFAULT_MASCOT_COUNT, sizeof(struct mascot*));
@@ -744,6 +750,16 @@ int main(int argc, const char** argv)
         };
     }
 
+    // Add chat socket to epoll (if any); chat clients do not keep the overlay alive
+    struct socket_description chat_sd = { .fd = chat_fd, .type = SOCKET_TYPE_CHAT_LISTEN };
+    if (chat_fd != -1) {
+        ev.events = EPOLLIN;
+        ev.data.ptr = &chat_sd;
+        if (epoll_ctl(epfd, EPOLL_CTL_ADD, chat_fd, &ev) == -1) {
+            WARN("Failed to add chat socket to epoll: %s", strerror(errno));
+        }
+    }
+
     // Add wayland fd to epoll
     int wayland_fd = environment_get_display_fd();
     struct socket_description wayland_sd = { .fd = wayland_fd, .type = SOCKET_TYPE_ENVIRONMENT };
@@ -837,6 +853,8 @@ int main(int argc, const char** argv)
                     continue;
                 }
                 ipc_free_packet(packet);
+            } else if (sd->type == SOCKET_TYPE_CHAT_LISTEN) {
+                chat_accept();
             } else if (sd->type == SOCKET_TYPE_ENVIRONMENT) {
                 // Wayland event
                 if (events[i].events & EPOLLHUP) {
@@ -856,6 +874,7 @@ int main(int argc, const char** argv)
     }
 
     plugins_deinit();
+    chat_close();
     close(listen_fd);
     close(inhereted_fd);
     close(epfd);
