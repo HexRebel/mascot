@@ -1146,7 +1146,9 @@ static void on_pointer_frame(void *data, struct wl_pointer *pointer) {
       }
     }
   }
-  if (we_on_hyprland) {
+  // Hyprland also sends empty frames while a press is still held, so they must
+  // not end a pending tap; the real release arrives as a button event
+  if (we_on_hyprland && !env_pointer->pending_press) {
     // Empty frame, sent on mascot release
     if (!env_pointer->frame.mask) {
       env_pointer->frame.mask = EVENT_FRAME_BUTTONS;
