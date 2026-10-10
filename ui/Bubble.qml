@@ -94,22 +94,107 @@ PanelWindow {
             bubble.released(bubble.event.mascot);
     }
 
+    // aichat's REPL dot commands need a tty, so the bubble emulates the useful
+    // ones with aichat's CLI flags. Kept across bubbles until changed
+    property string model: ""
+    property string role: ""
+    property string session: ""
+
+    readonly property string helpText: [
+        ".info                  vis aichats indstillinger",
+        ".models / .roles / .sessions   list dem",
+        ".model <navn>          skift model (fx openrouter:…)",
+        ".role <navn>           skift rolle",
+        ".session <navn>        start/fortsæt en session med hukommelse",
+        ".exit model|role|session   gå tilbage til standard",
+        ".clear                 ryd boblen"
+    ].join("\n")
+
+    function flags(): var {
+        let args = [];
+        if (bubble.model)
+            args.push("-m", bubble.model);
+        if (bubble.role)
+            args.push("-r", bubble.role);
+        if (bubble.session)
+            args.push("-s", bubble.session, "--save-session");
+        return args;
+    }
+
+    // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
+    // parsed by the shell
+    function run(args: var): void {
+        // Without CHAT_COMMAND use the bubble's own aichat config: the main one
+        // asks to confirm tool calls, which nobody can answer from here
+        const command = bubble.event?.command || 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat';
+        // stdin must be closed: aichat reads a non-tty stdin as extra input and
+        // waits forever on the open pipe Process gives it
+        chat.command = ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args);
+        chat.running = true;
+    }
+
+    function say(text: string): void {
+        bubble.transcript += text + "\n";
+    }
+
+    function dotCommand(text: string): void {
+        const [name, ...rest] = text.split(/\s+/);
+        const arg = rest.join(" ");
+        switch (name) {
+        case ".help":
+            say(helpText);
+            return;
+        case ".info":
+            run(flags().concat("--info"));
+            return;
+        case ".models":
+            run(["--list-models"]);
+            return;
+        case ".roles":
+            run(["--list-roles"]);
+            return;
+        case ".sessions":
+            run(["--list-sessions"]);
+            return;
+        case ".model":
+        case ".role":
+        case ".session":
+            {
+                const key = name.slice(1);
+                if (arg)
+                    bubble[key] = arg;
+                say(`${key}: ${bubble[key] || "standard"}`);
+                return;
+            }
+        case ".exit":
+            if (!["model", "role", "session"].includes(arg)) {
+                say("brug .exit model, .exit role eller .exit session");
+                return;
+            }
+            bubble[arg] = "";
+            say(`${arg}: standard`);
+            return;
+        case ".clear":
+            bubble.transcript = "";
+            return;
+        default:
+            say(`ukendt kommando ${name} - prøv .help`);
+            return;
+        }
+    }
+
     function send(): void {
         const text = input.text.trim();
         if (!text || bubble.busy)
             return;
 
-        // The typed text is passed as "$1", never parsed by the shell. Without
-        // CHAT_COMMAND use the bubble's own aichat config: the main one asks to
-        // confirm tool calls, which nobody can answer from here
-        const command = bubble.event?.command || 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat';
         bubble.errorText = "";
         bubble.transcript += (bubble.transcript ? "\n\n" : "") + "› " + text + "\n";
         input.text = "";
-        // stdin must be closed: aichat reads a non-tty stdin as extra input and
-        // waits forever on the open pipe Process gives it
-        chat.command = ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble", text];
-        chat.running = true;
+        if (text.startsWith("."))
+            dotCommand(text);
+        else
+            run(flags().concat("--", text)); // "--": a message may start with '-'
     }
 
     visible: false
@@ -296,7 +381,7 @@ PanelWindow {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !input.text
-                    text: bubble.busy ? "…" : `Skriv til ${bubble.event?.prototype ?? "mascotten"}…`
+                    text: bubble.busy ? "…" : `Skriv til ${bubble.event?.prototype ?? "mascotten"}…  (.help)`
                     color: theme.muted
                     font: input.font
                 }
