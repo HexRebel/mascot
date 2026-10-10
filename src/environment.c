@@ -3408,11 +3408,12 @@ int32_t environment_workarea_bottom(environment_t *env) {
 uint32_t environment_id(environment_t *env) { return env->id; }
 
 const char *environment_name(environment_t *env) {
-  return env->xdg_output_done ? env->xdg_output_name : env->output.name;
+  // xdg_output callbacks store into output.name/desc; xdg_output_* stay NULL
+  return env->xdg_output_name ? env->xdg_output_name : env->output.name;
 }
 
 const char *environment_desc(environment_t *env) {
-  return env->xdg_output_done ? env->xdg_output_desc : env->output.desc;
+  return env->xdg_output_desc ? env->xdg_output_desc : env->output.desc;
 }
 
 bool environment_logical_position(environment_t *env, int32_t *lx,
