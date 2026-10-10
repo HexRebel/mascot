@@ -1,5 +1,5 @@
 /*
-    actionbase.h - wl_shimeji's useful action base functions and related definitions
+    actionbase.h - mascot's useful action base functions and related definitions
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

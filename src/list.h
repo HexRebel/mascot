@@ -1,5 +1,5 @@
 /*
-    list.h - wl_shimeji's lists
+    list.h - mascot's lists
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 

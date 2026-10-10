@@ -1,0 +1,7 @@
+[Unit]
+Description=mascot's overlay daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/mascotd
+Restart=never

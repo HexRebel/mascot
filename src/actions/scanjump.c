@@ -1,5 +1,5 @@
 /*
-    scanjump.c - wl_shimeji's scanjump action implementation
+    scanjump.c - mascot's scanjump action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

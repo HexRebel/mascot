@@ -1,5 +1,5 @@
 /*
-    interact.h - wl_shimeji's interact action implementation
+    interact.h - mascot's interact action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

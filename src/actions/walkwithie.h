@@ -1,5 +1,5 @@
 /*
-    walkwithie.h - wl_shimeji's walk with ie action implementation
+    walkwithie.h - mascot's walk with ie action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

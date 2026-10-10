@@ -1,5 +1,5 @@
 /*
-    plugin.h - wl_shimeji's plugin support
+    plugin.h - mascot's plugin support
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 

@@ -1,5 +1,5 @@
 /*
-    shimeji-overlay.c - Shimeji overlay daemon
+    mascotd.c - Shimeji overlay daemon
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 
@@ -56,7 +56,7 @@
 #define MASCOT_OVERLAYD_INSTANCE_DEFAULT_MASCOT_COUNT 256
 
 #ifndef DEFAULT_CONF_PATH
-#define DEFAULT_CONF_PATH "%s/.local/share/wl_shimeji"
+#define DEFAULT_CONF_PATH "%s/.local/share/mascot"
 #endif
 
 #ifndef DEFAULT_PROTOS_PATH
@@ -64,15 +64,15 @@
 #endif
 
 #ifndef DEFAULT_PLUGINS_PATH
-#define DEFAULT_PLUGINS_PATH "/usr/lib/wl_shimeji/"
+#define DEFAULT_PLUGINS_PATH "/usr/lib/mascot/"
 #endif
 
 #ifndef DEFAULT_CONFIG_FILE_PATH
-#define DEFAULT_CONFIG_FILE_PATH "%s/shimeji-overlayd.conf"
+#define DEFAULT_CONFIG_FILE_PATH "%s/mascotd.conf"
 #endif
 
 #ifndef DEFAULT_SOCK_PATH
-#define DEFAULT_SOCK_PATH "%s/shimeji-overlayd.sock"
+#define DEFAULT_SOCK_PATH "%s/mascotd.sock"
 #endif
 
 jmp_buf recovery_point;
@@ -509,13 +509,13 @@ int main(int argc, const char** argv)
         } else if (strcmp(argv[i], "-dwt") == 0 || strcmp(argv[i], "--disable-tablets-workarounds") == 0) {
             environment_disable_tablet_workarounds(true);
         } else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
-            printf("%s\n", WL_SHIMEJI_VERSION);
+            printf("%s\n", MASCOTD_VERSION);
             return 0;
         } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
             printf("Usage: %s [options]\n", argv[0]);
             printf("Options:\n");
             printf("  -s, --socket-path <path> - path to the socket\n");
-            printf("  -cd, --configuration-root <path> - path to the configuration root of the wl_shimeji (%s by default)\n", configuration_root);
+            printf("  -cd, --configuration-root <path> - path to the configuration root of the mascot (%s by default)\n", configuration_root);
             printf("  -cfd, --caller-fd <fd> - inhereted fd (optional)\n");
             printf("  -c, --config-file <path> - path to the config file\n");
             printf("  -pl, --plugins-location <path> - path to the plugins directory\n");
@@ -623,7 +623,7 @@ int main(int argc, const char** argv)
     if (listen_fds_env) {
         int listen_fds = atoi(listen_fds_env);
         if (listen_fds > 1) {
-            ERROR("wl_shimeji doesn't support multiple listen sockets");
+            ERROR("mascot doesn't support multiple listen sockets");
         }
         listen_fd = 3;
     }

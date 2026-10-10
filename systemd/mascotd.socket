@@ -1,5 +1,5 @@
 [Socket]
-ListenSequentialPacket=%t/shimeji-overlayd.sock
+ListenSequentialPacket=%t/mascotd.sock
 Accept=no
 
 [Install]

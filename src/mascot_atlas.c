@@ -1,5 +1,5 @@
 /*
-    mascot_atlas.c - wl_shimeji's mascot texture atlas system
+    mascot_atlas.c - mascot's mascot texture atlas system
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

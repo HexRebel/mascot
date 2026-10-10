@@ -1,5 +1,5 @@
 /*
-    config.c - wl_shimeji's config file parser
+    config.c - mascot's config file parser
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 

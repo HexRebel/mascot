@@ -27,8 +27,8 @@ int plugin_deinit(plugin_t* self);
 
 int plugin_init(plugin_t* self, const char* name, const char* version, const char* author, const char* description, int64_t target_version)
 {
-    if (target_version != version_to_i64(WL_SHIMEJI_PLUGIN_TARGET_VERSION)) {
-        WARN("[Plugins] Skipping plugin \"%s\": plugin not build for actual version of wl_shimeji: expected %llu got %llu", name, version_to_i64(WL_SHIMEJI_PLUGIN_TARGET_VERSION), target_version);
+    if (target_version != version_to_i64(MASCOTD_PLUGIN_TARGET_VERSION)) {
+        WARN("[Plugins] Skipping plugin \"%s\": plugin not build for actual version of mascot: expected %llu got %llu", name, version_to_i64(MASCOTD_PLUGIN_TARGET_VERSION), target_version);
         return -1;
     }
 
@@ -89,12 +89,12 @@ static plugin_t* plugin_load(const char* path, set_cursor_pos_func posfn, set_ac
     }
 
     plugin->dl_handle = dlhandle;
-    plugin->init = dlsym(dlhandle, "wl_shimeji_plugin_init");
-    plugin->deinit = dlsym(dlhandle, "wl_shimeji_plugin_deinit");
-    plugin->tick = dlsym(dlhandle, "wl_shimeji_plugin_tick");
-    plugin->move = dlsym(dlhandle, "wl_shimeji_plugin_move");
-    plugin->restore = dlsym(dlhandle, "wl_shimeji_plugin_restore");
-    plugin->activate = dlsym(dlhandle, "wl_shimeji_plugin_activate");
+    plugin->init = dlsym(dlhandle, "mascotd_plugin_init");
+    plugin->deinit = dlsym(dlhandle, "mascotd_plugin_deinit");
+    plugin->tick = dlsym(dlhandle, "mascotd_plugin_tick");
+    plugin->move = dlsym(dlhandle, "mascotd_plugin_move");
+    plugin->restore = dlsym(dlhandle, "mascotd_plugin_restore");
+    plugin->activate = dlsym(dlhandle, "mascotd_plugin_activate");
 
     if (!plugin->init) {
         WARN("[Plugins] Failed to load plugin at %s: Unable to locate init function", path);

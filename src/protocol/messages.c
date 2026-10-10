@@ -521,8 +521,8 @@ bool protocol_handler_client_hello(struct protocol_client* client, ipc_packet_t*
     static bool server_protocol_version_set = false;
 
     if (!server_protocol_version_set) {
-        server_protocol_version = version_to_i64(WL_SHIMEJI_PROTOCOL_VERSION);
-        server_min_protocol_version = version_to_i64(WL_SHIMEJI_PROTOCOL_MIN_VER);
+        server_protocol_version = version_to_i64(MASCOTD_PROTOCOL_VERSION);
+        server_min_protocol_version = version_to_i64(MASCOTD_PROTOCOL_MIN_VER);
         server_protocol_version_set = true;
     }
 

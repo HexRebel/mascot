@@ -1,5 +1,5 @@
 /*
-    selector.h - wl_shimeji's selector action implementation
+    selector.h - mascot's selector action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

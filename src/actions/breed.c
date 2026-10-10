@@ -1,5 +1,5 @@
 /*
-    breed.c - wl_shimeji's breed action implementation
+    breed.c - mascot's breed action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

@@ -10,14 +10,14 @@
 #ifndef MASTER_HEADER
 #define MASTER_HEADER
 
-#define WL_SHIMEJI_VERSION "0.0.2"
-#define WL_SHIMEJI_MASCOT_MIN_VER "0.0.1"
-#define WL_SHIMEJI_MASCOT_CUR_VER "0.0.1"
+#define MASCOTD_VERSION "0.0.2"
+#define MASCOTD_MASCOT_MIN_VER "0.0.1"
+#define MASCOTD_MASCOT_CUR_VER "0.0.1"
 
-#define WL_SHIMEJI_PROTOCOL_VERSION "0.0.1"
-#define WL_SHIMEJI_PROTOCOL_MIN_VER "0.0.1"
+#define MASCOTD_PROTOCOL_VERSION "0.0.1"
+#define MASCOTD_PROTOCOL_MIN_VER "0.0.1"
 
-#define WL_SHIMEJI_PLUGIN_TARGET_VERSION "0.0.2"
+#define MASCOTD_PLUGIN_TARGET_VERSION "0.0.2"
 
 #if defined(GNU_EXTS) && defined(__has_attribute)
 #define GNU_ATTRIBUTE(attr) __has_attribute(attr)

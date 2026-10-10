@@ -1,5 +1,5 @@
 /*
-    mascot_config_parser.h - wl_shimeji's mascot configuration parser
+    mascot_config_parser.h - mascot's mascot configuration parser
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

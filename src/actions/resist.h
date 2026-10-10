@@ -1,5 +1,5 @@
 /*
-    resist.h - wl_shimeji's resist action implementation
+    resist.h - mascot's resist action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

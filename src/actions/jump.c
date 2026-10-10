@@ -1,5 +1,5 @@
 /*
-    jump.c - wl_shimeji's jump action implementation
+    jump.c - mascot's jump action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

@@ -722,8 +722,8 @@ void* protocol_import_thread(void* arg) {
     int64_t mascot_prototype_version = 0;
     if (!minmax_ver_precomputed) {
         minmax_ver_precomputed = true;
-        minimum_version = version_to_i64(WL_SHIMEJI_MASCOT_MIN_VER);
-        current_version = version_to_i64(WL_SHIMEJI_MASCOT_CUR_VER);
+        minimum_version = version_to_i64(MASCOTD_MASCOT_MIN_VER);
+        current_version = version_to_i64(MASCOTD_MASCOT_CUR_VER);
     }
 
     mascot_prototype_version = version_to_i64(mascot_version);
@@ -749,8 +749,8 @@ void* protocol_import_thread(void* arg) {
 
         const char* notice_args[] = {
             mascot_version,
-            WL_SHIMEJI_MASCOT_MIN_VER,
-            WL_SHIMEJI_MASCOT_CUR_VER
+            MASCOTD_MASCOT_MIN_VER,
+            MASCOTD_MASCOT_CUR_VER
         };
 
         ipc_packet_t* warning = protocol_builder_notice(NOTICE_SEVERITY_WARNING, "import.error.bad_version", notice_args, 3, true);

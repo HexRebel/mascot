@@ -1,5 +1,5 @@
 /*
-    mascot.h - wl_shimeji's mascot processing routines
+    mascot.h - mascot's mascot processing routines
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

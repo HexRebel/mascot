@@ -1,5 +1,5 @@
 /*
-    sequence.h - wl_shimeji's sequence action implementation
+    sequence.h - mascot's sequence action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

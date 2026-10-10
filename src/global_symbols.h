@@ -1,5 +1,5 @@
 /*
-    global_symbols.h - wl_shimeji's expressions VM global symbols definitions
+    global_symbols.h - mascot's expressions VM global symbols definitions
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

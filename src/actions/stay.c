@@ -1,5 +1,5 @@
 /*
-    stay.c - wl_shimeji's stay action implementation
+    stay.c - mascot's stay action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

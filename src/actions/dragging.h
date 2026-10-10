@@ -1,5 +1,5 @@
 /*
-    dragging.h - wl_shimeji's drag action implementation
+    dragging.h - mascot's drag action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

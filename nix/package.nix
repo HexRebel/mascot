@@ -3,15 +3,15 @@
   symlinkJoin,
   python3,
   python3Packages,
-  wl_shimeji-unwrapped,
+  mascot-unwrapped,
 }:
 
 symlinkJoin {
-  pname = "wl_shimeji";
-  inherit (wl_shimeji-unwrapped) version;
+  pname = "mascot";
+  inherit (mascot-unwrapped) version;
 
   paths = [
-    wl_shimeji-unwrapped
+    mascot-unwrapped
   ];
 
   nativeBuildInputs = [
@@ -25,14 +25,14 @@ symlinkJoin {
   postBuild = ''
     buildPythonPath "$pythonInputs"
 
-    wrapProgram $out/bin/shimejictl \
+    wrapProgram $out/bin/mascot \
       --prefix PATH : $program_PATH \
       --set PYTHONHOME ${python3} \
       --set PYTHONPATH $program_PYTHONPATH
   '';
 
-  meta = wl_shimeji-unwrapped.meta // {
+  meta = mascot-unwrapped.meta // {
     hydraPlatforms = [ ];
-    priority = (wl_shimeji-unwrapped.meta.priority or lib.meta.defaultPriority) - 1;
+    priority = (mascot-unwrapped.meta.priority or lib.meta.defaultPriority) - 1;
   };
 }

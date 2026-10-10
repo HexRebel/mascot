@@ -1,5 +1,5 @@
 /*
-    dispose.h - wl_shimeji's dispose action implementation
+    dispose.h - mascot's dispose action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

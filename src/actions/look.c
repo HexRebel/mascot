@@ -1,5 +1,5 @@
 /*
-    look.c - wl_shimeji's look action implementation
+    look.c - mascot's look action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

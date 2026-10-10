@@ -11,7 +11,7 @@
 }:
 
 stdenv.mkDerivation (finalAttrs: {
-  pname = "wl_shimeji-unwrapped";
+  pname = "mascot-unwrapped";
   version = "0-unstable";
 
   src = builtins.path { path = ./..; };
@@ -38,7 +38,7 @@ stdenv.mkDerivation (finalAttrs: {
   meta = {
     description = "Shimeji reimplementation for Wayland in C.";
     homepage = "https://github.com/CluelessCatBurger/wl_shimeji";
-    mainProgram = "shimejictl";
+    mainProgram = "mascot";
     license = lib.licenses.gpl2Only;
     platforms = lib.platforms.linux;
     maintainers = with lib.maintainers; [ claymorwan ];

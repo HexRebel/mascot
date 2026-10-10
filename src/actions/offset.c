@@ -1,5 +1,5 @@
 /*
-    offset.c - wl_shimeji's offset action implementation
+    offset.c - mascot's offset action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

@@ -1,5 +1,5 @@
 /*
-    environment.h - wl_shimeji's environment handling
+    environment.h - mascot's environment handling
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 

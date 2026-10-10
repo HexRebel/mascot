@@ -5,7 +5,7 @@
 	path = src/third_party/qoi
 	url = https://github.com/phoboslab/qoi
 [submodule "src/shimejictl/qoi"]
-	path = src/shimejictl/qoi
+	path = src/mascotctl/qoi
 	url = https://github.com/mathpn/py-qoi
 [submodule "src/plugins/kwinsupport"]
 	path = src/plugins/kwinsupport

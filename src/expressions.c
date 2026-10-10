@@ -1,5 +1,5 @@
 /*
-    expressions.c - wl_shimeji's virtual machine for config conditions and expressions
+    expressions.c - mascot's virtual machine for config conditions and expressions
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

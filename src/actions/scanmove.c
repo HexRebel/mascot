@@ -1,5 +1,5 @@
 /*
-    scanmove.c - wl_shimeji's scanmove action implementation
+    scanmove.c - mascot's scanmove action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

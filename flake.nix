@@ -1,5 +1,5 @@
 {
-  description = "wl_shimeji flake";
+  description = "mascot flake";
 
   inputs = {
     self.submodules = true;
@@ -13,9 +13,9 @@
 
       perSystem = { config, pkgs, ... }: {
         packages = {
-          wl_shimeji = pkgs.callPackage ./nix/package.nix { inherit (config.packages) wl_shimeji-unwrapped; };
-          wl_shimeji-unwrapped = pkgs.callPackage ./nix/unwrapped.nix { };
-          default = config.packages.wl_shimeji;
+          mascot = pkgs.callPackage ./nix/package.nix { inherit (config.packages) mascot-unwrapped; };
+          mascot-unwrapped = pkgs.callPackage ./nix/unwrapped.nix { };
+          default = config.packages.mascot;
         };
       };
     };

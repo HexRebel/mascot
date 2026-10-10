@@ -1,5 +1,5 @@
 /*
-    example.c - wl_shimeji's example action implementation
+    example.c - mascot's example action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

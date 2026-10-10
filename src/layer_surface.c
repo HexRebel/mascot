@@ -1,5 +1,5 @@
 /*
-    layer_surface.c - wl_shimeji's overlay functionality
+    layer_surface.c - mascot's overlay functionality
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 
@@ -88,7 +88,7 @@ struct layer_surface* layer_surface_create(struct wl_output* output, uint32_t la
     _layer_surface->region = wl_compositor_create_region(compositor);
     _layer_surface->surface = wl_compositor_create_surface(compositor);
 
-    _layer_surface->layer_surface = zwlr_layer_shell_v1_get_layer_surface(wlr_layer_shell, _layer_surface->surface, _layer_surface->output, layer, "wl_shimeji");
+    _layer_surface->layer_surface = zwlr_layer_shell_v1_get_layer_surface(wlr_layer_shell, _layer_surface->surface, _layer_surface->output, layer, "mascot");
 
     zwlr_layer_surface_v1_add_listener(_layer_surface->layer_surface, &wlr_shell_surface_listener, (void*)_layer_surface);
 

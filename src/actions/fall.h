@@ -1,5 +1,5 @@
 /*
-    fall.h - wl_shimeji's fall action implementation
+    fall.h - mascot's fall action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

@@ -1,5 +1,5 @@
 /*
-    layer_surface.h - wl_shimeji's overlay functionality
+    layer_surface.h - mascot's overlay functionality
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

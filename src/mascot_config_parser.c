@@ -1,5 +1,5 @@
 /*
-    mascot_config_parser.c - wl_shimeji's mascot configuration parser
+    mascot_config_parser.c - mascot's mascot configuration parser
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 
@@ -2235,8 +2235,8 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     snprintf(path, PATH_MAX-1, "%s/%s", prototypes_root, path_);
 
     if (!version_constraints_processed) {
-        minver = version_to_i64(WL_SHIMEJI_MASCOT_MIN_VER);
-        curver = version_to_i64(WL_SHIMEJI_MASCOT_CUR_VER);
+        minver = version_to_i64(MASCOTD_MASCOT_MIN_VER);
+        curver = version_to_i64(MASCOTD_MASCOT_CUR_VER);
         if (minver > curver) {
             ERROR("Invalid version constraints: min version is greater than current version");
         }
@@ -2369,12 +2369,12 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     }
 
     if (version < minver) {
-        WARN("Cannot load prototype from %s: Mascot config version is too old! Minimum supported version is %s but got %s", filename_buf, WL_SHIMEJI_MASCOT_MIN_VER, version_str);
+        WARN("Cannot load prototype from %s: Mascot config version is too old! Minimum supported version is %s but got %s", filename_buf, MASCOTD_MASCOT_MIN_VER, version_str);
         return PROTOTYPE_LOAD_VERSION_TOO_OLD;
     }
 
     if (version > curver) {
-        WARN("Cannot load prototype from %s: Mascot config version is too new! Highest supported version is %s but got %s", filename_buf, WL_SHIMEJI_MASCOT_CUR_VER, version_str);
+        WARN("Cannot load prototype from %s: Mascot config version is too new! Highest supported version is %s but got %s", filename_buf, MASCOTD_MASCOT_CUR_VER, version_str);
         return PROTOTYPE_LOAD_VERSION_TOO_NEW;
     }
 

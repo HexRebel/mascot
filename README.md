@@ -1,4 +1,4 @@
-# wl_shimeji - Shimeji reimplementation for the Wayland
+# mascot - Shimeji reimplementation for the Wayland
 
 This is a reimplementation of the [Shimeji](https://kilkakon.com/shimeji/) for Wayland in C.
 
@@ -9,13 +9,13 @@ This is a reimplementation of the [Shimeji](https://kilkakon.com/shimeji/) for W
 Shimejis on the screenshot by [paccha](https://linktr.ee/paccha_) and [Moneka](https://x.com/Monikaphobia)
 
 > [!IMPORTANT]
-> **wl_shimeji** currently does not officially support compositors that lack full support of Wayland core specification or violate it. Use at your own risk.
+> **mascot** currently does not officially support compositors that lack full support of Wayland core specification or violate it. Use at your own risk.
 > Notable examples:
 >
 > - Gamescope (does not implement **wl_subcompositor**)
 > - Hyprland (violates the Wayland core specification regarding **wl_subsurface** clipping)
 >
-> Additionally, wl_shimeji **will never support compositors that do not implement the wlr-layer-shell protocol, as it is a core part of wl_shimeji's implementation**, so no Mutter for now.
+> Additionally, mascot **will never support compositors that do not implement the wlr-layer-shell protocol, as it is a core part of mascot's implementation**, so no Mutter for now.
 
 # Requirements
 
@@ -53,9 +53,9 @@ Your compositor should *at least* support xdg-shell, wlr-layer-shell protocols, 
 
 ## Community packages
 
-Below are the community packages for wl_shimeji. They are not maintained by me, so if you have any issues with them, please contact the package maintainer.
+Below are the community packages for mascot. They are not maintained by me, so if you have any issues with them, please contact the package maintainer.
 
-- Arch Linux (AUR): [wl_shimeji-git](https://aur.archlinux.org/packages/wl_shimeji-git)
+- Arch Linux (AUR): [mascot-git](https://aur.archlinux.org/packages/mascot-git)
 
 - Nix / NixOS:
 
@@ -65,7 +65,7 @@ Add it to your flake inputs like so:
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-unstable";
 
-    wl_shimeji = {
+    mascot = {
       url = "git+https://github.com/CluelessCatBurger/wl_shimeji?submodules=1"; # We have to use git to pull the submodules
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -77,12 +77,12 @@ Then add it to your package list
 {
   # System-wide install
   environment.systemPackages = with pkgs; [
-    inputs.wl_shimeji.packages.${stdenv.hostPlatform.system}.default
+    inputs.mascot.packages.${stdenv.hostPlatform.system}.default
   ];
 
   # User side / Home Manager install
   home.packages = with pkgs; [
-    inputs.wl_shimeji.packages.${stdenv.hostPlatform.system}.default
+    inputs.mascot.packages.${stdenv.hostPlatform.system}.default
   ];
 }
 ```
@@ -91,13 +91,13 @@ Then add it to your package list
 
 ### Plugins
 
-- kwinsupport: [wl_shimeji-kwinsupport](https://aur.archlinux.org/packages/wl_shimeji-plugin-kwinsupport) (AUR)
+- kwinsupport: [mascot-kwinsupport](https://aur.archlinux.org/packages/mascot-plugin-kwinsupport) (AUR)
 
 # Building
 
 ```sh
 git clone --recursive https://github.com/CluelessCatBurger/wl_shimeji.git
-cd wl_shimeji
+cd mascot
 make -j$(nproc)
 make install
 ```
@@ -110,7 +110,7 @@ Plugins are optional, but can provide such features as:
 - Interactions with other applications' windows
 - Get global mouse position
 
-Currently mascots can't move windows as it is not supported by wl_shimeji.
+Currently mascots can't move windows as it is not supported by mascot.
 
 Currently we have following plugins:
 
@@ -127,8 +127,8 @@ Currently we have following plugins:
     - Arch: `pacman -S uthash`
     - Debian: `apt-get install libuthash-dev`
     - Fedora: `dnf install uthash-devel`
-  - libwayland-shimeji-plugins (supplied by wl_shimeji)
-  - wl_shimeji should run with XDG_CURRENT_DESKTOP set to "KDE" and org.kde.KWin must be present on session bus
+  - libmascot-plugins (supplied by mascot)
+  - mascot should run with XDG_CURRENT_DESKTOP set to "KDE" and org.kde.KWin must be present on session bus
 
 ## Building plugins
 
@@ -144,19 +144,19 @@ make install-plugins
 
 # How to use
 
-## Converting to wl_shimeji format
+## Converting to mascot format
 
 First, you need to find some Shimeji-ee mascots. They are usually distributed as zip archives. You can find them on the internet.
-When you got shimejis of your choice, you need to convert them to the wl_shimeji format.
+When you got shimejis of your choice, you need to convert them to the mascot format.
 
 ```sh
-shimejictl convert /path/to/shimeji-ee.zip -O /some/output/directory
+mascot convert /path/to/shimeji-ee.zip -O /some/output/directory
 ```
 
 It will try to read the zip archive and will ask you to select which mascots you want to convert:
 
 ```bash
-$ shimejictl convert "The Neuroling Collection v0.7.zip" -O output/
+$ mascot convert "The Neuroling Collection v0.7.zip" -O output/
 Prototypes available for conversion:
 1. Weuron
 2. Vedaling
@@ -172,105 +172,105 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
 >
 ```
 
-When you selected mascot types that you need, shimejictl will convert them to the wl_shimeji format and will save them to the output directory with names like
+When you selected mascot types that you need, mascot will convert them to the mascot format and will save them to the output directory with names like
 `Shimeji.{mascot_name}.wlshm`
 
 # Importing .wlshm prototypes
 
-After you successfully converted your mascots, you can import them to the wl_shimeji format using the following command:
+After you successfully converted your mascots, you can import them to the mascot format using the following command:
 
 ```sh
-shimejictl prototypes import /path/to/Shimeji.{first_name}.wlshm /path/to/Shimeji.{second_name}.wlshm ...
+mascot prototypes import /path/to/Shimeji.{first_name}.wlshm /path/to/Shimeji.{second_name}.wlshm ...
 ```
 
-If prototype already exists, shimejictl will skip it unless -f is used.
+If prototype already exists, mascot will skip it unless -f is used.
 
 # Listing available prototypes
 
 You can list all available mascot prototypes using the following command:
 
 ```sh
-shimejictl prototypes list
+mascot prototypes list
 ```
 
 # Summoning mascots
 
-To summon mascot, you need to know mascot's name, which you can get by using `shimejictl prototypes list` command. When you found mascot of your choice, you can summon using `shimejictl mascot summon {name}` command, where `{name}` is the name of the mascot you want to summon.
+To summon mascot, you need to know mascot's name, which you can get by using `mascot prototypes list` command. When you found mascot of your choice, you can summon using `mascot mascot summon {name}` command, where `{name}` is the name of the mascot you want to summon.
 
 For example, if you want to summon a mascot named Neuron, you can use the following command:
 
 ```sh
-shimejictl mascot summon Neuron
+mascot mascot summon Neuron
 ```
 
 If you want to summon mascot at specific location, you can use --select flag or pass your coordinates as -x -y or -position x,y
 
 ## Dismissing mascots
 
-To dismiss mascot, you can use `shimejictl mascot dismiss` command.
-shimejictl will ask you to click on target mascot.
+To dismiss mascot, you can use `mascot mascot dismiss` command.
+mascot will ask you to click on target mascot.
 Also we have flags that can be used to dismiss multiple mascots at once.
-Use shimejictl mascot dismiss --help to see all available flags.
+Use mascot mascot dismiss --help to see all available flags.
 
 ## Setting mascots behaviors
 
-You can replace mascot's behavior by using `shimejictl mascot set-behavior {behavior}` command, where `{behavior}` is the name of the behavior you want to set. shimejictl will ask you to click on target mascot.
+You can replace mascot's behavior by using `mascot mascot set-behavior {behavior}` command, where `{behavior}` is the name of the behavior you want to set. mascot will ask you to click on target mascot.
 
-You can get all available behaviors by using `shimejictl prototypes info {prototype_name}` command, where `{prototype_name}` is the name of the mascot prototype you want to get information about.
+You can get all available behaviors by using `mascot prototypes info {prototype_name}` command, where `{prototype_name}` is the name of the mascot prototype you want to get information about.
 
 # Exporting prototypes
 
-You can export mascot prototype by using `shimejictl prototypes export` command. It will produce .wlshm file that you can then share with others.
+You can export mascot prototype by using `mascot prototypes export` command. It will produce .wlshm file that you can then share with others.
 
 ```sh
-shimejictl prototypes export -i {prototype_name} -o {output_file}
+mascot prototypes export -i {prototype_name} -o {output_file}
 ```
 
 ## Stopping application
 
-You can stop the application by using `shimejictl stop` command.
+You can stop the application by using `mascot stop` command.
 
 ## Configuration
 
-You can configure some options of overlay by using `shimejictl config` command.
+You can configure some options of overlay by using `mascot config` command.
 
 ```sh
-shimejictl config set "option_name" "value"
+mascot config set "option_name" "value"
 ```
 
 You also can get option value by using `get` action:
 
 ```sh
-shimejictl config get "option_name"
+mascot config get "option_name"
 ```
 
 Or values of all options by using `list` action:
 
 ```sh
-shimejictl config list
+mascot config list
 ```
 
-Config file is usually located at .config/wl_shimeji/shimeji-overlayd.conf
+Config file is usually located at .config/mascot/mascotd.conf
 
 # Advanced usage
 
 ## Multihead usage
 
-wl_shimeji supports multiple screens. However, some features may be disabled by default. Config provides following options:
+mascot supports multiple screens. However, some features may be disabled by default. Config provides following options:
 
 - ALLOW_THROWING_MULTIHEAD: Allows throwing mascot between screens
 - ALLOW_DRAGGING_MULTIHEAD: Allows dragging mascot between screens
 - UNIFIED_OUTPUTS: Treats all outputs as one entity
 
-You may want block one of displays from being used by wl_shimeji in runtime, so we have `shimejictl environment close` to disable one of outputs. shimejictl will ask you to select one of outputs by clicking on it. After this operation, you can't restore display unless you restart wl_shimeji or reconnect display to the system.
+You may want block one of displays from being used by mascot in runtime, so we have `mascot environment close` to disable one of outputs. mascot will ask you to select one of outputs by clicking on it. After this operation, you can't restore display unless you restart mascot or reconnect display to the system.
 
 ## Interpolation
 
-wl_shimeji supports movement interpolation of mascots. You can enable it by setting INTERPOLATION_FRAMERATE to value that is not equal to 0. Values > 0 used as interpolation frame rate. -1 Picks output's refresh rate as interpolation frame rate. Values under -1 are not allowed.
+mascot supports movement interpolation of mascots. You can enable it by setting INTERPOLATION_FRAMERATE to value that is not equal to 0. Values > 0 used as interpolation frame rate. -1 Picks output's refresh rate as interpolation frame rate. Values under -1 are not allowed.
 
 ## Tablets
 
-wl_shimeji recognized pentablets as input method, so you can use it as input device. However, currently subsurfaces bugged under KDE when using them with wp-tablet-v2, so you may want to disable that feature by setting TABLETS_ENABLED to false.
+mascot recognized pentablets as input method, so you can use it as input device. However, currently subsurfaces bugged under KDE when using them with wp-tablet-v2, so you may want to disable that feature by setting TABLETS_ENABLED to false.
 
 ## Mapping mouse buttons
 
@@ -278,18 +278,18 @@ You can map mouse button and tablet events (stylus down, stylus up) to different
 
 ## Using systemd socket
 
-wl_shimeji can be activated on-demand through systemd socket. To enable it, use 'systemctl --use enable wl_shimeji.socket'.
+mascot can be activated on-demand through systemd socket. To enable it, use 'systemctl --use enable mascotd.socket'.
 
 ## Running overlay manually
 
-You can start overlay manually by running `shimeji-overlayd`. It's not recommended and *useless* in case you don't pass -se flag to it or
+You can start overlay manually by running `mascotd`. It's not recommended and *useless* in case you don't pass -se flag to it or
 if you don't pass unix fd using -cfd flag, unless you implementing another frontend for the overlay. If -se or -cfd not specified
 overlay will close immediately after start.
 
 Arguments:
 
 - `-s`, `--socket-path`  - path to the overlay socket file.
-- `-cd`, `--configuration-root`  - path to the configuration root of the wl_shimeji (/home/kotb/.local/share/wl_shimeji by default)
+- `-cd`, `--configuration-root`  - path to the configuration root of the mascot (/home/kotb/.local/share/mascot by default)
 - `-cfd`, `--caller-fd` - paired unix socket fd used for communication. If closed and no other clients connected nor no mascots exists, overlay will close.
 - `-c`   - config file path.
 - `-pl`  - path to the plugins directory.
@@ -297,7 +297,7 @@ Arguments:
 - `-se` - summon everyone. If specified, overlay will summon all known mascots upon start.
 - `-v`, `--version`  - version of the overlay.
 - `--no-tablets` - disable wp_tablet_v2 wayland protocol support. (broken on kwin right now anyway)
-- `--no-viewporter` - disable wp_viewporter wayland protocol support. wl_shimeji will use wl_surface.set_buffer_scale() instead.
+- `--no-viewporter` - disable wp_viewporter wayland protocol support. mascot will use wl_surface.set_buffer_scale() instead.
 - `--no-fractional-scale` - disable wp_fractional_scale wayland protocol support. Will use wl_output's scale info instead
 - `--no-cursor-shape` - disable wp_cursor_shape wayland protocol support. Will disable cursor shapes for different actions.
 - `--no-plugins` - disable plugins

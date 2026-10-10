@@ -1,5 +1,5 @@
 /*
-    environment-wayland.h - wl_shimeji's environment handling, wayland backend
+    environment-wayland.h - mascot's environment handling, wayland backend
 
     Copyright (C) 2025  CluelessCatBurger <github.com/CluelessCatBurger>
 

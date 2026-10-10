@@ -2,8 +2,8 @@
 override SRCDIR := src
 override BUILDDIR := build
 override UTILS_DIR := utils
-override TARGET = $(BUILDDIR)/shimeji-overlayd
-override PLUGINS_LIB = $(BUILDDIR)/libwayland-shimeji-plugins.so
+override TARGET = $(BUILDDIR)/mascotd
+override PLUGINS_LIB = $(BUILDDIR)/libmascot-plugins.so
 
 override PLUGINS_DIR := $(SRCDIR)/plugins
 override PLUGINS_OUT_DIR := $(BUILDDIR)/plugins
@@ -98,39 +98,39 @@ build-plugins: $(PLUGINS_SUBDIRS)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
-# Rule to build shimejictl
-$(UTILS_DIR)/shimejictl: $(SRCDIR)/shimejictl/client.py
-	@mkdir utils
+# Rule to build mascot
+$(UTILS_DIR)/mascot: $(SRCDIR)/mascotctl/client.py
+	@mkdir -p $(UTILS_DIR)
 	$(PYTHON3) scripts/py-compose.py -s $< -o $@
 
 $(SRC): protocols-autogen
 
 .PHONY: all
-all: $(TARGET) $(PLUGINS_LIB) $(UTILS_DIR)/shimejictl
+all: $(TARGET) $(PLUGINS_LIB) $(UTILS_DIR)/mascot
 
 .PHONY: clean
 clean:
-	@-rm -rf $(TARGET) $(PLUGINS_LIB) $(BUILDDIR) $(UTILS_DIR)/shimejictl $(UTILS_DIR)
+	@-rm -rf $(TARGET) $(PLUGINS_LIB) $(BUILDDIR) $(UTILS_DIR)/mascot $(UTILS_DIR)
 
 .PHONY: install
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin/
 	install -m755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/
-	install -m755 $(UTILS_DIR)/shimejictl $(DESTDIR)$(PREFIX)/bin/shimejictl
+	install -m755 $(UTILS_DIR)/mascot $(DESTDIR)$(PREFIX)/bin/mascot
 	install -d $(DESTDIR)$(PREFIX)/share/systemd/user/
-	install -m644 systemd/wl_shimeji.socket $(DESTDIR)$(PREFIX)/share/systemd/user/
-	install -m644 systemd/wl_shimeji.service $(DESTDIR)$(PREFIX)/share/systemd/user/
+	install -m644 systemd/mascotd.socket $(DESTDIR)$(PREFIX)/share/systemd/user/
+	install -m644 systemd/mascotd.service $(DESTDIR)$(PREFIX)/share/systemd/user/
 	install -d $(DESTDIR)$(PREFIX)/lib/
 	install -m755 $(PLUGINS_LIB) $(DESTDIR)$(PREFIX)/lib/
 	install -d $(DESTDIR)$(PREFIX)/include/
-	install -d $(DESTDIR)$(PREFIX)/include/wl_shimeji
-	install -m655 src/plugins.h $(DESTDIR)$(PREFIX)/include/wl_shimeji/plugins.h
-	install -m655 src/master_header.h $(DESTDIR)$(PREFIX)/include/wl_shimeji/master_header.h
+	install -d $(DESTDIR)$(PREFIX)/include/mascot
+	install -m644 src/plugins.h $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
+	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 
 .PHONY: install-plugins
 install-plugins: build-plugins
-	install -d $(DESTDIR)$(PREFIX)/lib/wl_shimeji/
-	install -m 0755 "$(PLUGINS_OUT_DIR)/"*.so "$(DESTDIR)$(PREFIX)/lib/wl_shimeji/"
+	install -d $(DESTDIR)$(PREFIX)/lib/mascot/
+	install -m 0755 "$(PLUGINS_OUT_DIR)/"*.so "$(DESTDIR)$(PREFIX)/lib/mascot/"
 
 # Handle header dependency rebuild
 sinclude $(DEPS)

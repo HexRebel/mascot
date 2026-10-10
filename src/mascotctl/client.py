@@ -225,7 +225,7 @@ class Client:
             logger.debug(f"Failed to connect to overlay at \"{self.address}\": {e}")
             logger.debug(f"Starting overlay with args {self.startup_options.get('cmdline', [])}")
             self.socket, overlay_side = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-            cmdline = ["shimeji-overlayd"]
+            cmdline = ["mascotd"]
             cmdline.extend(self.startup_options.get('cmdline', []))
             cmdline.append('-cfd')
             cmdline.append(str(overlay_side.fileno()))
@@ -703,7 +703,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     exit(1)
                 with open(input_file, "rb") as f:
                     if f.read(4) != b'WLPK':
-                        logger.warning(f"File '{input_file}' is not a valid wl_shimeji prototype, please first convert it to a wl_shimeji prototype using shimeji-convert command")
+                        logger.warning(f"File '{input_file}' is not a valid mascot prototype, please first convert it to a mascot prototype using shimeji-convert command")
                         continue
                     Import(f.fileno(), arguments.force, client.socket)
 
@@ -1163,11 +1163,11 @@ def local_config_handler(arguments: argparse.Namespace, parser):
 
     config_file_loc = arguments.config
     if config_file_loc is None:
-        basedir = os.path.expanduser("~/.local/share/wl_shimeji")
-        config_file_loc = os.path.join(basedir, "shimeji-overlayd.conf")
+        basedir = os.path.expanduser("~/.local/share/mascot")
+        config_file_loc = os.path.join(basedir, "mascotd.conf")
 
     if not os.path.exists(config_file_loc):
-        print(f"Config file not found at {config_file_loc}! Please start wl_shimeji at least once before editing it.")
+        print(f"Config file not found at {config_file_loc}! Please start mascot at least once before editing it.")
         exit(1)
 
     def parse_boolean(value):
@@ -1217,11 +1217,11 @@ def plugins_handler(arguments, client, plugins_category):
         client.queue_packet(packet)
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser(description="CLI client for the wl_shimeji overlay")
-    argparser.add_argument("-s", "--socket", help="Path to the shimeji-overlayd socket")
+    argparser = argparse.ArgumentParser(description="CLI client for the mascot overlay")
+    argparser.add_argument("-s", "--socket", help="Path to the mascotd socket")
     argparser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
-    argparser.add_argument("-c", "--config", help="Path to the shimeji-overlayd config")
-    argparser.add_argument("-cr", "--config-root", help="Path to the shimeji-overlayd config root directory")
+    argparser.add_argument("-c", "--config", help="Path to the mascotd config")
+    argparser.add_argument("-cr", "--config-root", help="Path to the mascotd config root directory")
     argparser.add_argument("--do-not-start", action="store_true", help="Do not start the overlay")
     argparser.add_argument("--do-start", action="store_true", help="Start the overlay")
 
@@ -1365,7 +1365,7 @@ if __name__ == "__main__":
         exit(1)
 
     socket_path = arguments.socket or (
-        os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "shimeji-overlayd.sock")
+        os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "mascotd.sock")
     )
 
     startopts: dict[str, Any] = {

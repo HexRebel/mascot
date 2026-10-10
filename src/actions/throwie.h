@@ -1,5 +1,5 @@
 /*
-    simple.h - wl_shimeji's simple action implementation
+    simple.h - mascot's simple action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

@@ -1,5 +1,5 @@
 /*
-    transform.c - wl_shimeji's transform action implementation
+    transform.c - mascot's transform action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 

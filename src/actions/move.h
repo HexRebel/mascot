@@ -1,5 +1,5 @@
 /*
-    move.h - wl_shimeji's move action implementation
+    move.h - mascot's move action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
 
