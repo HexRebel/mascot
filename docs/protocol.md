@@ -93,6 +93,7 @@ If object ID is NULL, the message is generic message
 | 0x56 | Stop | Ask overlay to stop | Serverbound |
 | 0x57 | prototype->withdraw() | Sent when prototype is withdrawn, acts as destructor for object | Serverbound |
 | 0x58 | popup.frame() | See frame callbacks in wayland | Clientbound |
+| 0x59 | mascot.tapped() | Triggered on primary button press and release on mascot without dragging it | Clientbound |
 
 # Client Hello - 0x00
 
@@ -325,6 +326,17 @@ Sent when user clicks on mascot using secondary mouse button. Creates new click_
 | Field | Type | Description | Notes |
 |-------|------|-------------|-------|
 | Object ID | uint32 | Object ID of the new click_event | |
+
+
+# mascot.tapped() - 0x59
+
+Sent to all clients when user presses and releases primary mouse button on mascot without moving the pointer far enough to start dragging it. Object ID in header refers to the mascot. Added in protocol version 0.1.0.
+
+| Field | Type | Description | Notes |
+|-------|------|-------------|-------|
+| Environment ID | uint32 | Object ID of the environment the mascot is in | |
+| X | uint32 | Pointer X position at release | Environment coordinates |
+| Y | uint32 | Pointer Y position at release | Environment coordinates, bottom-referenced like mascot Y |
 
 
 TODO:

@@ -60,6 +60,7 @@ ipc_packet_t* protocol_builder_mascot_migrated(struct mascot* mascot, environmen
 ipc_packet_t* protocol_builder_mascot_disposed(struct mascot* mascot);
 ipc_packet_t* protocol_builder_mascot_info(struct mascot* mascot);
 ipc_packet_t* protocol_builder_mascot_clicked(struct mascot* mascot, protocol_click_event_t* event);
+ipc_packet_t* protocol_builder_mascot_tapped(struct mascot* mascot, environment_t* environment, uint32_t x, uint32_t y);
 ipc_packet_t* protocol_builder_selection_done(protocol_selection_t* selection, struct mascot* mascot, environment_t* environment, uint32_t x, uint32_t y, uint32_t locx, uint32_t locy);
 ipc_packet_t* protocol_builder_selection_canceled(protocol_selection_t* selection);
 ipc_packet_t* protocol_builder_import_started(protocol_import_t* import);

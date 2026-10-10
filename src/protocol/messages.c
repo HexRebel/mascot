@@ -339,6 +339,23 @@ ipc_packet_t* protocol_builder_mascot_clicked(struct mascot* mascot, protocol_cl
     return packet;
 }
 
+ipc_packet_t* protocol_builder_mascot_tapped(struct mascot* mascot, environment_t* environment, uint32_t x, uint32_t y)
+{
+    ipc_packet_t* packet = ipc_allocate_packet(12);
+
+    uint32_t object_id = (mascot->id & 0x00FFFFFF) | (PROTOCOL_OBJECT_MASCOT << 24);
+    uint32_t environment_object_id = (environment_id(environment) & 0x00FFFFFF) | (PROTOCOL_OBJECT_ENVIRONMENT << 24);
+
+    ipc_packet_set_type(packet, 0x59);
+    ipc_packet_set_object(packet, object_id);
+
+    ENSURE_MARSHALLER(ipc_packet_write_uint32(packet, environment_object_id));
+    ENSURE_MARSHALLER(ipc_packet_write_uint32(packet, x));
+    ENSURE_MARSHALLER(ipc_packet_write_uint32(packet, y));
+
+    return packet;
+}
+
 ipc_packet_t* protocol_builder_selection_done(protocol_selection_t* selection, struct mascot* mascot, environment_t* environment, uint32_t x, uint32_t y, uint32_t locx, uint32_t locy)
 {
     ipc_packet_t* packet = ipc_allocate_packet(24);

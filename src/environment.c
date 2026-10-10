@@ -1591,8 +1591,9 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
       struct mascot *pressed = env_pointer->pending_press;
       env_pointer->pending_press = NULL;
       if (pressed == mascot) {
-        // TODO(fase 3, trin 2): send chat event to IPC clients
         INFO("<Mascot:%s:%u> Tapped", mascot->prototype->name, mascot->id);
+        protocol_server_announce_tap(mascot, env, env_pointer->x,
+                                     yconv(env, env_pointer->y));
       }
     } else if (env_pointer->grabbed_subsurface &&
                pressed_button == mascot_hotspot_button_left) {

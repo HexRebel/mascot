@@ -616,6 +616,19 @@ protocol_click_event_t* protocol_server_announce_new_click(struct mascot* mascot
     return event;
 }
 
+void protocol_server_announce_tap(struct mascot* mascot, environment_t* environment, uint32_t x, uint32_t y)
+{
+    pthread_mutex_lock(&server_state->clients_mutex);
+    for (uint32_t i = 0, c = list_count(server_state->clients); i < list_size(server_state->clients) && c; i++) {
+        struct protocol_client* client = list_get(server_state->clients, i);
+        if (!client) continue;
+        c--;
+        ipc_packet_t* tap_event = protocol_builder_mascot_tapped(mascot, environment, x, y);
+        ipc_connector_send(client->connector, tap_event);
+    }
+    pthread_mutex_unlock(&server_state->clients_mutex);
+}
+
 protocol_popup_t* protocol_server_click_accept(struct protocol_client* client, uint32_t popup_width, uint32_t popup_height, uint32_t id)
 {
     if (!client || !server_state->last_click_event) return NULL;

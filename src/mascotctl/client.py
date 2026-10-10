@@ -251,7 +251,7 @@ class Client:
 
         logger.debug("Connected to overlay")
 
-        self.queue_packet(ClientHello(0x01))
+        self.queue_packet(ClientHello(0x200000))  # protocol 0.1.0
         self.dispatch_events(until=lambda: self.initialized)
 
     def queue_packet(self, packet: Packet):

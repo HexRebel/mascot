@@ -111,6 +111,7 @@ void protocol_server_mascot_migrated(struct mascot* mascot, environment_t* new_e
 void protocol_server_mascot_destroyed(struct mascot* mascot);
 
 protocol_click_event_t* protocol_server_announce_new_click(struct mascot* mascot, uint32_t x, uint32_t y);
+void protocol_server_announce_tap(struct mascot* mascot, environment_t* environment, uint32_t x, uint32_t y);
 protocol_popup_t* protocol_server_click_accept(struct protocol_client* client, uint32_t popup_width, uint32_t popup_height, uint32_t id);
 
 protocol_selection_t* protocol_server_start_selection(struct list* environments, struct protocol_client* author, uint32_t id);

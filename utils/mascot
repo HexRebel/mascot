@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+import shutil
 import time
-from typing import Callable, Any
-import tempfile
-import logging
+import json
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-import pathlib
-import os
-from dataclasses import dataclass, field
-from xml.etree import ElementTree
 import subprocess
-import argparse
+import tarfile
+import stat
+import xml
+import socket
+from dataclasses import dataclass, field
 import random
 from typing import Dict, Optional
-import json
-import tarfile
-import struct
-import xml.etree.ElementTree as ET
-import stat
-import shutil
-import zipfile
 import enum
-import io
-import socket
+import os
+from xml.etree import ElementTree
 from PIL import Image
-import xml
+import pathlib
+import tempfile
+import logging
+import argparse
+import struct
+import io
+from typing import Callable, Any
+import zipfile
 
 
 
@@ -2750,7 +2750,7 @@ class Client:
 
         logger.debug("Connected to overlay")
 
-        self.queue_packet(ClientHello(0x01))
+        self.queue_packet(ClientHello(0x200000))  # protocol 0.1.0
         self.dispatch_events(until=lambda: self.initialized)
 
     def queue_packet(self, packet: Packet):
