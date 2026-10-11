@@ -453,7 +453,7 @@ class PrototypeAuthor(Packet):
     author: str
 
     def deserialize(self) -> None:
-        author_len = self.read_values("b")[0]
+        author_len = self.read_values("B")[0]
         self.author = self.read_values(f"{author_len}s")[0].decode()
 
 class PrototypeVersion(Packet):

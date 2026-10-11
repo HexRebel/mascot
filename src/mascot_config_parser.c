@@ -86,6 +86,7 @@ void mascot_prototype_unlink(const struct mascot_prototype* prototype)
 
         free((char*)p->name);
         free((char*)p->display_name);
+        free((char*)p->author);
         free((char*)p->path);
 
         free((struct mascot_behavior_reference*)p->root_behavior_list);
@@ -2344,6 +2345,16 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
             prototype->display_name = strdup(((struct json_string_s*)(element->value->payload))->string);
+        } else if (!strcmp(element->name->string, "artist")) {
+            // Optional, null when unknown
+            if (element->value->type == json_type_string && ((struct json_string_s*)(element->value->payload))->string_size > 255) {
+                WARN("Prototype %s: artist is longer than 255 bytes, ignoring it", filename_buf);
+            } else if (element->value->type == json_type_string) {
+                free((char*)prototype->author);
+                prototype->author = strdup(((struct json_string_s*)(element->value->payload))->string);
+            } else if (element->value->type != json_type_null) {
+                WARN("Prototype %s: artist expected to be a string or null, ignoring it", filename_buf);
+            }
         } else if (!strcmp(element->name->string, "programs")) {
             if (element->value->type != json_type_string) {
                 WARN("Cannot load prototype from %s: Invalid JSON: programs expected to be a string", filename_buf);

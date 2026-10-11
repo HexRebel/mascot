@@ -105,7 +105,8 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 # Rule to build mascot
-$(UTILS_DIR)/mascot: $(SRCDIR)/mascotctl/client.py
+# py-compose inlines every module client.py imports, so any of them changes the output
+$(UTILS_DIR)/mascot: $(SRCDIR)/mascotctl/client.py $(shell find $(SRCDIR)/mascotctl -name "*.py")
 	@mkdir -p $(UTILS_DIR)
 	$(PYTHON3) scripts/py-compose.py -s $< -o $@
 

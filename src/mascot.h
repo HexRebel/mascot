@@ -375,6 +375,7 @@ struct mascot_prototype {
     uint32_t id; // Prototype ID
     const char* name; // Internal name
     const char* display_name; // Display name
+    const char* author; // Artist from the manifest, NULL if not given
     const char* path; // Path to the prototype
     int32_t     path_fd; // Same as path, but via file descriptor
     int32_t     icon_fd; // Icon sprite

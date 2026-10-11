@@ -365,6 +365,10 @@ void protocol_server_announce_new_prototype(struct mascot_prototype* prototype, 
         ipc_connector_send(client->connector, prototype_packet);
         ipc_connector_send(client->connector, prototype_name_packet);
         ipc_connector_send(client->connector, prototype_display_name_packet);
+        if (prototype->author) {
+            ipc_packet_t* prototype_author_packet = protocol_builder_prototype_author(prototype);
+            if (prototype_author_packet) ipc_connector_send(client->connector, prototype_author_packet);
+        }
         ipc_connector_send(client->connector, prototype_path_packet);
         ipc_connector_send(client->connector, prototype_fd_packet);
         for (uint16_t i = 0; i < prototype->actions_count; i++) {
