@@ -308,6 +308,14 @@ def position(value: str) -> tuple[int, int]:
         raise argparse.ArgumentTypeError(f"'{value}' is not in the format x,y")
     return coordinate(x.strip()), coordinate(y.strip())
 
+# Object ids carry their protocol type in the top byte (PROTOCOL_OBJECT_MASCOT = 2 in
+# src/protocol/server.h); users give the number the daemon logs, "<Mascot:Shimeji:2>"
+MASCOT_OBJECT_TYPE = 2
+
+def mascot_by_id(value: str) -> Mascot | None:
+    number = int(value)
+    return mascots.get(number) or mascots.get(number | (MASCOT_OBJECT_TYPE << 24))
+
 def prototype_find(name: str) -> Prototype | None:
     if name.isdigit():
         if int(name) in prototypes:
@@ -839,7 +847,7 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                     print(f"Provided ID is not a number")
                     exit(1)
 
-                mascot = mascots.get(int(arguments.id))
+                mascot = mascot_by_id(arguments.id)
                 if not mascot:
                     print(f"Mascot with ID {arguments.id} not found")
                     exit(1)
@@ -886,7 +894,7 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 if not arguments.id.isdigit():
                     print("Invalid ID")
                     exit(1)
-                mascot = mascots.get(int(arguments.id))
+                mascot = mascot_by_id(arguments.id)
 
             if not mascot:
                 print("Mascot not found")
@@ -960,7 +968,7 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 if not arguments.id.isdigit():
                     print("Invalid ID")
                     exit(1)
-                mascot = mascots.get(int(arguments.id))
+                mascot = mascot_by_id(arguments.id)
 
             if not mascot:
                 print("Mascot not found")
