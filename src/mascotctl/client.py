@@ -536,7 +536,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     print(f"Name: {prototype.name}")
                     print(f"Display name: {prototype.display_name}")
                     print(f"Author: {prototype.author}")
-                    print(f"Version: {prototype.version}")
+                    print(f"Format version: {prototype.version}")
                     print(f"Prototype store path: {prototype.path}")
                     print("Actions:")
                     for action in prototype.actions:
@@ -570,7 +570,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                 print(f"Name: {prototype.name}")
                 print(f"Display name: {prototype.display_name}")
                 print(f"Author: {prototype.author}")
-                print(f"Version: {prototype.version}")
+                print(f"Format version: {prototype.version}")
                 print(f"Prototype store path: {prototype.path}")
                 print("Actions:")
                 for action in prototype.actions:

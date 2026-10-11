@@ -2,31 +2,31 @@
 
 from __future__ import annotations
 import json
-import struct
-import xml.etree.ElementTree as ET
-import zipfile
-import os
-from typing import Callable, Any
-import pathlib
 import shutil
-import random
-import time
-import argparse
-import tempfile
-import stat
-from typing import Dict, Optional
-import tarfile
-from dataclasses import dataclass
-import logging
-import subprocess
+import os
 import socket
+import subprocess
+import xml.etree.ElementTree as ET
+import logging
+from dataclasses import dataclass
+from xml.etree import ElementTree
 import io
 from PIL import Image
-import sys
+import random
+import tempfile
+import time
 import xml
-from xml.etree import ElementTree
+import zipfile
+from typing import Callable, Any
+import argparse
+import pathlib
+import stat
 import enum
+import struct
+import sys
+import tarfile
 from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 
 
@@ -3046,7 +3046,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     print(f"Name: {prototype.name}")
                     print(f"Display name: {prototype.display_name}")
                     print(f"Author: {prototype.author}")
-                    print(f"Version: {prototype.version}")
+                    print(f"Format version: {prototype.version}")
                     print(f"Prototype store path: {prototype.path}")
                     print("Actions:")
                     for action in prototype.actions:
@@ -3080,7 +3080,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                 print(f"Name: {prototype.name}")
                 print(f"Display name: {prototype.display_name}")
                 print(f"Author: {prototype.author}")
-                print(f"Version: {prototype.version}")
+                print(f"Format version: {prototype.version}")
                 print(f"Prototype store path: {prototype.path}")
                 print("Actions:")
                 for action in prototype.actions:
