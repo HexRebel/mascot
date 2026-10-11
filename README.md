@@ -2,6 +2,10 @@
 
 This is a reimplementation of the [Shimeji](https://kilkakon.com/shimeji/) for Wayland in C.
 
+Mascot is a fork of [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji) by CluelessCatBurger,
+licensed under GPL-2.0-or-later like the original. It adds a chat bubble: tap a mascot to talk to a
+local model through [aichat](https://github.com/sigoden/aichat). The git history shows what has changed.
+
 <p align="center">
   <img src="./docs/screenshot.png" style="width: 100%;">
 </p>
@@ -42,7 +46,7 @@ Shimejis on the screenshot by [paccha](https://linktr.ee/paccha_) and [Moneka](h
 
 Your compositor should *at least* support xdg-shell, wlr-layer-shell protocols, and provide wl_subcompositor interface.
 
-## Shimejictl requirements
+## mascot (CLI) requirements
 
 - python-pillow
   - Arch: `pacman -S python-pillow`
@@ -51,56 +55,24 @@ Your compositor should *at least* support xdg-shell, wlr-layer-shell protocols, 
 
 # Installing
 
-## Community packages
+## Packages
 
-Below are the community packages for mascot. They are not maintained by me, so if you have any issues with them, please contact the package maintainer.
-
-- Arch Linux (AUR): [mascot-git](https://aur.archlinux.org/packages/mascot-git)
-
-- Nix / NixOS:
-
-Add it to your flake inputs like so:
-```nix
-{
-  inputs = {
-    nixpkgs.url = "nixpkgs/nixos-unstable";
-
-    mascot = {
-      url = "git+https://github.com/CluelessCatBurger/wl_shimeji?submodules=1"; # We have to use git to pull the submodules
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-}
-```
-Then add it to your package list
-```nix
-{
-  # System-wide install
-  environment.systemPackages = with pkgs; [
-    inputs.mascot.packages.${stdenv.hostPlatform.system}.default
-  ];
-
-  # User side / Home Manager install
-  home.packages = with pkgs; [
-    inputs.mascot.packages.${stdenv.hostPlatform.system}.default
-  ];
-}
-```
-
-## Official packages
-
-### Plugins
-
-- kwinsupport: [mascot-kwinsupport](https://aur.archlinux.org/packages/mascot-plugin-kwinsupport) (AUR)
+There are no packages for Mascot yet; build it from source (below).
+The upstream project has packages of its own, which install wl_shimeji, not Mascot:
+[wl_shimeji-git](https://aur.archlinux.org/packages/wl_shimeji-git) and
+[wl_shimeji-plugin-kwinsupport](https://aur.archlinux.org/packages/wl_shimeji-plugin-kwinsupport) on the AUR,
+and a Nix flake (see the [upstream README](https://github.com/CluelessCatBurger/wl_shimeji#readme)).
 
 # Building
 
+From a checkout of this repository, with submodules (`git submodule update --init`):
+
 ```sh
-git clone --recursive https://github.com/CluelessCatBurger/wl_shimeji.git
-cd mascot
 make -j$(nproc)
 make install
 ```
+
+`make uninstall` removes the files again (pass the same `PREFIX`/`DESTDIR`).
 
 # Plugins
 
@@ -195,26 +167,26 @@ mascot prototypes list
 
 # Summoning mascots
 
-To summon mascot, you need to know mascot's name, which you can get by using `mascot prototypes list` command. When you found mascot of your choice, you can summon using `mascot mascot summon {name}` command, where `{name}` is the name of the mascot you want to summon.
+To summon mascot, you need to know mascot's name, which you can get by using `mascot prototypes list` command. When you found mascot of your choice, you can summon using `mascot summon {name}` command, where `{name}` is the name of the mascot you want to summon.
 
 For example, if you want to summon a mascot named Neuron, you can use the following command:
 
 ```sh
-mascot mascot summon Neuron
+mascot summon Neuron
 ```
 
 If you want to summon mascot at specific location, you can use --select flag or pass your coordinates as -x -y or -position x,y
 
 ## Dismissing mascots
 
-To dismiss mascot, you can use `mascot mascot dismiss` command.
+To dismiss mascot, you can use `mascot dismiss` command.
 mascot will ask you to click on target mascot.
 Also we have flags that can be used to dismiss multiple mascots at once.
-Use mascot mascot dismiss --help to see all available flags.
+Use `mascot dismiss --help` to see all available flags.
 
 ## Setting mascots behaviors
 
-You can replace mascot's behavior by using `mascot mascot set-behavior {behavior}` command, where `{behavior}` is the name of the behavior you want to set. mascot will ask you to click on target mascot.
+You can replace mascot's behavior by using `mascot set-behavior {behavior}` command, where `{behavior}` is the name of the behavior you want to set. mascot will ask you to click on target mascot.
 
 You can get all available behaviors by using `mascot prototypes info {prototype_name}` command, where `{prototype_name}` is the name of the mascot prototype you want to get information about.
 
@@ -250,7 +222,7 @@ Or values of all options by using `list` action:
 mascot config list
 ```
 
-Config file is usually located at .config/mascot/mascotd.conf
+Config file is usually located at `~/.local/share/mascot/mascotd.conf`
 
 # Advanced usage
 
@@ -289,7 +261,7 @@ overlay will close immediately after start.
 Arguments:
 
 - `-s`, `--socket-path`  - path to the overlay socket file.
-- `-cd`, `--configuration-root`  - path to the configuration root of the mascot (/home/kotb/.local/share/mascot by default)
+- `-cd`, `--configuration-root`  - path to the configuration root of the mascot (`~/.local/share/mascot` by default)
 - `-cfd`, `--caller-fd` - paired unix socket fd used for communication. If closed and no other clients connected nor no mascots exists, overlay will close.
 - `-c`   - config file path.
 - `-pl`  - path to the plugins directory.

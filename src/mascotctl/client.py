@@ -706,7 +706,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     exit(1)
                 with open(input_file, "rb") as f:
                     if f.read(4) != b'WLPK':
-                        logger.warning(f"File '{input_file}' is not a valid mascot prototype, please first convert it to a mascot prototype using shimeji-convert command")
+                        logger.warning(f"File '{input_file}' is not a valid mascot prototype, please first convert it to a mascot prototype using the convert command (mascot convert)")
                         continue
                     Import(f.fileno(), arguments.force, client.socket)
 
