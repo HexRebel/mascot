@@ -64,17 +64,17 @@
 #define DEFAULT_PROTOS_PATH "%s/shimejis"
 #endif
 
-// Relative to the directory mascotd is installed in, so it follows PREFIX at install time
+// Relative to the prefix mascotd is installed in (<prefix>/bin/mascotd), so it follows PREFIX at install time
 #ifndef SYSTEM_PROTOS_PATH
-#define SYSTEM_PROTOS_PATH "../share/mascot/prototypes"
+#define SYSTEM_PROTOS_PATH "share/mascot/prototypes"
 #endif
 
 // Where make install-plugins puts them, relative like SYSTEM_PROTOS_PATH
 #ifndef SYSTEM_PLUGINS_PATH
-#define SYSTEM_PLUGINS_PATH "../lib/mascot"
+#define SYSTEM_PLUGINS_PATH "lib/mascot"
 #endif
 
-// Used only if the binary's own location cannot be resolved
+// Used only if the prefix mascotd is installed in cannot be resolved
 #ifndef DEFAULT_PLUGINS_PATH
 #define DEFAULT_PLUGINS_PATH "/usr/lib/mascot/"
 #endif
@@ -300,10 +300,12 @@ size_t default_prototypes_location(const char* configuration_root, char* pathbuf
     return snprintf(pathbuf, pathbuf_len, DEFAULT_PROTOS_PATH, configuration_root);
 }
 
-// A path installed next to the binary, e.g. <prefix>/bin/mascotd + "../lib/mascot" -> <prefix>/lib/mascot.
-// False if it does not exist. pathbuf must hold PATH_MAX bytes (realpath)
+// A path in the prefix mascotd is installed in, e.g. "lib/mascot" -> <prefix>/lib/mascot.
+// Fills pathbuf (PATH_MAX bytes) whenever the prefix is known; returns whether the path exists
 bool installed_location(const char* relative, char* pathbuf)
 {
+    pathbuf[0] = '\0';
+
     char exe[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
     if (len <= 0) return false;
@@ -311,11 +313,17 @@ bool installed_location(const char* relative, char* pathbuf)
 
     char* slash = strrchr(exe, '/');
     if (!slash) return false;
-    *slash = '\0';
+    strcpy(slash, "/..");
 
-    char joined[PATH_MAX];
-    if ((size_t)snprintf(joined, sizeof(joined), "%s/%s", exe, relative) >= sizeof(joined)) return false;
-    return realpath(joined, pathbuf) != NULL;
+    char prefix[PATH_MAX];
+    if (!realpath(exe, prefix)) return false;
+    if ((size_t)snprintf(pathbuf, PATH_MAX, "%s/%s", prefix, relative) >= PATH_MAX) {
+        pathbuf[0] = '\0';
+        return false;
+    }
+
+    struct stat st;
+    return stat(pathbuf, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
 size_t default_socket_path(char* pathbuf, size_t pathbuf_len)
@@ -600,11 +608,10 @@ int main(int argc, const char** argv)
     bool plugins_location_chosen = plugins_location[0] || config_get_plugins_location();
     if (!plugins_location[0]) {
         if (!config_get_plugins_location()) {
+            // Even when it does not exist, so the log names where plugins would go
             char installed[PATH_MAX];
-            if (installed_location(SYSTEM_PLUGINS_PATH, installed))
-                strncpy(plugins_location, installed, PATH_MAX-1);
-            else
-                strncpy(plugins_location, DEFAULT_PLUGINS_PATH, PATH_MAX-1);
+            installed_location(SYSTEM_PLUGINS_PATH, installed);
+            strncpy(plugins_location, installed[0] ? installed : DEFAULT_PLUGINS_PATH, PATH_MAX-1);
         } else {
             strncpy(plugins_location, config_get_plugins_location(), PATH_MAX-1);
         }
