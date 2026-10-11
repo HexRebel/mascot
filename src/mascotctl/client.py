@@ -1167,7 +1167,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
 
     config_file_loc = arguments.config
     if config_file_loc is None:
-        basedir = os.path.expanduser("~/.local/share/mascot")
+        basedir = os.path.expanduser(arguments.config_root or "~/.local/share/mascot")
         config_file_loc = os.path.join(basedir, "mascotd.conf")
 
     if not os.path.exists(config_file_loc):

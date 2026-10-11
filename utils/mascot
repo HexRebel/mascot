@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import enum
-import shutil
-import json
-import socket
-import pathlib
-import xml.etree.ElementTree as ET
 import tempfile
-import stat
-import zipfile
-import logging
-import io
-import tarfile
-from typing import Callable, Any
-import random
-import subprocess
-from xml.etree import ElementTree
-import time
-from dataclasses import dataclass
 import argparse
-from PIL import Image
-from dataclasses import dataclass, field
-from typing import Dict, Optional
-import os
+import time
+import pathlib
+import json
 import xml
+import io
+from xml.etree import ElementTree
+from PIL import Image
+import os
+import enum
+import zipfile
+import xml.etree.ElementTree as ET
+from typing import Callable, Any
+import logging
+from typing import Dict, Optional
+import subprocess
+import random
+from dataclasses import dataclass
 import struct
+from dataclasses import dataclass, field
+import socket
+import tarfile
+import shutil
+import stat
 
 
 
@@ -3681,7 +3681,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
 
     config_file_loc = arguments.config
     if config_file_loc is None:
-        basedir = os.path.expanduser("~/.local/share/mascot")
+        basedir = os.path.expanduser(arguments.config_root or "~/.local/share/mascot")
         config_file_loc = os.path.join(basedir, "mascotd.conf")
 
     if not os.path.exists(config_file_loc):
