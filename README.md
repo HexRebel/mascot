@@ -277,7 +277,6 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.clear` | Clear the bubble |
 
 The model, role and session apply to every mascot until changed, and reset when `qs` restarts.
-The bubble's own messages are in Danish for now.
 
 ## Configuration
 

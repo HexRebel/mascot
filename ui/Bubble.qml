@@ -107,13 +107,13 @@ PanelWindow {
     property string session: ""
 
     readonly property string helpText: [
-        ".info                  vis aichats indstillinger",
-        ".models / .roles / .sessions   list dem",
-        ".model <navn>          skift model (fx openrouter:…)",
-        ".role <navn>           skift rolle",
-        ".session <navn>        start/fortsæt en session med hukommelse",
-        ".exit model|role|session   gå tilbage til standard",
-        ".clear                 ryd boblen"
+        ".info                  show aichat's settings",
+        ".models / .roles / .sessions   list them",
+        ".model <name>          switch model (e.g. openrouter:…)",
+        ".role <name>           switch role",
+        ".session <name>        start/continue a session with memory",
+        ".exit model|role|session   go back to the default",
+        ".clear                 clear the bubble"
     ].join("\n")
 
     function flags(): var {
@@ -169,22 +169,22 @@ PanelWindow {
                 const key = name.slice(1);
                 if (arg)
                     bubble[key] = arg;
-                say(`${key}: ${bubble[key] || "standard"}`);
+                say(`${key}: ${bubble[key] || "default"}`);
                 return;
             }
         case ".exit":
             if (!["model", "role", "session"].includes(arg)) {
-                say("brug .exit model, .exit role eller .exit session");
+                say("use .exit model, .exit role or .exit session");
                 return;
             }
             bubble[arg] = "";
-            say(`${arg}: standard`);
+            say(`${arg}: default`);
             return;
         case ".clear":
             bubble.transcript = "";
             return;
         default:
-            say(`ukendt kommando ${name} - prøv .help`);
+            say(`unknown command ${name} - try .help`);
             return;
         }
     }
@@ -270,7 +270,7 @@ PanelWindow {
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode !== 0)
-                bubble.errorText = chatErrors.text.trim() || `Kommandoen fejlede (exit ${exitCode})`;
+                bubble.errorText = chatErrors.text.trim() || `The command failed (exit ${exitCode})`;
         }
     }
 
@@ -389,7 +389,7 @@ PanelWindow {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !input.text
-                    text: bubble.busy ? "…" : `Skriv til ${bubble.event?.prototype ?? "mascotten"}…  (.help)`
+                    text: bubble.busy ? "…" : `Message ${bubble.event?.prototype ?? "the mascot"}…  (.help)`
                     color: theme.muted
                     font: input.font
                 }
