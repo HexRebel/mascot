@@ -1,26 +1,48 @@
-# mascot - Shimeji reimplementation for the Wayland
+# Mascot - Shimeji desktop mascots for Wayland that you can talk to
 
-This is a reimplementation of the [Shimeji](https://kilkakon.com/shimeji/) for Wayland in C.
+Mascot puts [Shimeji](https://kilkakon.com/shimeji/)-style characters on your Wayland desktop. They walk
+along the bottom of the screen, sit down and can be picked up and thrown. Tap one and a speech bubble
+opens next to it: type a message and the answer from a language model is streamed into the bubble,
+while the mascot sits still and talks. The answers come from
+[aichat](https://github.com/sigoden/aichat), so a local model through Ollama works as well as a hosted one.
 
 Mascot is a fork of [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji) by CluelessCatBurger,
-licensed under GPL-2.0-or-later like the original. It adds a chat bubble: tap a mascot to talk to a
-local model through [aichat](https://github.com/sigoden/aichat). Source files changed from upstream
-say so in their header, and the git history shows exactly what has changed.
+licensed under GPL-2.0-or-later like the original. The engine (prototypes, the condition VM, the
+Wayland overlay) is theirs; Mascot adds the chat bubble, tap-versus-drag input, a bundled mascot and
+the renaming. Source files changed from upstream say so in their header, and the git history shows
+exactly what has changed.
 
 <p align="center">
   <img src="./docs/screenshot.png" style="width: 100%;">
 </p>
 
-Shimejis on the screenshot by [paccha](https://linktr.ee/paccha_) and [Moneka](https://x.com/Monikaphobia)
+Shimejis on the screenshot (from upstream) by [paccha](https://linktr.ee/paccha_) and [Moneka](https://x.com/Monikaphobia)
 
-> [!IMPORTANT]
-> **mascot** currently does not officially support compositors that lack full support of Wayland core specification or violate it. Use at your own risk.
-> Notable examples:
->
-> - Gamescope (does not implement **wl_subcompositor**)
-> - Hyprland (violates the Wayland core specification regarding **wl_subsurface** clipping)
->
-> Additionally, mascot **will never support compositors that do not implement the wlr-layer-shell protocol, as it is a core part of mascot's implementation**, so no Mutter for now.
+## Compositor support
+
+Mascot needs a compositor with **wlr-layer-shell** and **wl_subcompositor**, so GNOME (Mutter) and
+Gamescope will not work.
+
+- **Hyprland** is what Mascot is developed and tested on (0.56). It works, with two known quirks:
+  a mascot that overlaps the right or bottom edge of the screen is squashed instead of clipped
+  ([hyprwm/Hyprland#10515](https://github.com/hyprwm/Hyprland/issues/10515)), and Mascot works around
+  a Hyprland crash when the bubble closes while the pointer is over a mascot.
+- **KDE Plasma, Sway and other wlroots compositors** are supported by upstream but have not been
+  tested with Mascot's changes.
+
+## Quick start
+
+```sh
+git clone --recurse-submodules https://github.com/Xedoc91/mascot.git
+cd mascot
+make -j$(nproc)
+make PREFIX=$HOME/.local install
+mascot summon Shimeji     # starts the daemon and the chat bubble
+mascot stop               # stops both again
+```
+
+Mascot ships with the original Shimeji. For the chat bubble you also need Quickshell and a
+configured aichat (see [Chat bubble](#chat-bubble)).
 
 # Requirements
 
@@ -73,14 +95,17 @@ From a checkout of this repository, with submodules (`git submodule update --ini
 
 ```sh
 make -j$(nproc)
-make install
+sudo make install                    # to /usr/local
+make PREFIX=$HOME/.local install     # or just for you, without sudo
 ```
 
+`$(PREFIX)/bin` must be in your `PATH`, since `mascot` starts `mascotd` from there.
 `make uninstall` removes the files again (pass the same `PREFIX`/`DESTDIR`).
 
 # Plugins
 
-You can also build plugins (everything in src/plugins subdirectories).
+You can also build plugins (everything in src/plugins subdirectories). They come from upstream
+and only work on KDE; they build with Mascot but have not been tested with it.
 Plugins are optional, but can provide such features as:
 
 - Interactions with other applications' windows
@@ -149,7 +174,7 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
 ```
 
 When you selected mascot types that you need, mascot will convert them to the mascot format and will save them to the output directory with names like
-`Shimeji.{mascot_name}.wlshm`
+`Shimeji.{mascot_name}.wlshm`. Converting does not start Mascot.
 
 # Importing .wlshm prototypes
 
@@ -353,7 +378,8 @@ You can map mouse button and tablet events (stylus down, stylus up) to different
 
 ## Using systemd socket
 
-mascot can be activated on-demand through systemd socket. To enable it, use 'systemctl --use enable mascotd.socket'.
+mascot can be activated on-demand through systemd socket. To enable it, use `systemctl --user enable --now mascotd.socket`.
+This is optional and has not been tested with Mascot's changes; `mascot summon` starts the daemon by itself.
 
 ## Running overlay manually
 
@@ -378,6 +404,8 @@ Arguments:
 - `--no-plugins` - disable plugins
 
 # Features
+
+These are upstream's features and measurements ("I" and "my implementation" refer to wl_shimeji's author).
 
 1. Less CPU
     - Because of C and Wayland, I was able to make this program as lightweight as possible.
@@ -410,6 +438,11 @@ IE Throw Policy and max number is integers.
 
 I will not explain possible values for IE Throw Policy for now.
 
+# Upstream's notes
+
+The rest of this README is by CluelessCatBurger, the author of wl_shimeji, kept as written.
+"I" is them, not the Mascot fork.
+
 ## TODO LIST
 
 - [ ] Write documentation for plugins API
@@ -429,13 +462,13 @@ I will not explain possible values for IE Throw Policy for now.
 - Windows support? After searching for a while, I found that there is a similar mechanism to wl_subcompositor in Windows called "DirectComposition".
   I will not implement it by myself, but if you want to try, you can do it.
 
-# Blabbering section
+## Blabbering section
 
-## What is Shimeji?
+### What is Shimeji?
 
 Shimeji is a program that creates a little character that wanders around your desktop. It can be customized with different skins and can be set to interact with the desktop environment.
 
-## Why did I start this project?
+### Why did I start this project?
 
 The original Shimeji is written in Java and very unoptimized. It uses a lot of CPU and memory.
 For example, from cold start, in some configurations, setup from 7 mascots can eat up 880MiB of RAM and ~19% of one cpu core (AMD Ryzen 9 5900HX)
@@ -446,7 +479,7 @@ compositor, with probaility of crashing it.
 
 Even if we close eyes on the graphics, the original Shimeji uses javascript for the conditions, so it's makes everything even slower.
 
-## How my reimplementation is better?
+### How my reimplementation is better?
 
 When I started this project, i started with the idea of making it as fast and as lightweight as possible.
 So i started to analyze the original Shimeji and found things that can be definitely improved.
@@ -461,7 +494,7 @@ So my entire reimplementation is based on this idea. I'm using prototypes for ma
 
 But what about language and graphics? Why I choose C and Wayland from all the possible options?
 
-### Wayland
+#### Wayland
 
 This is quite interesting story. When I started this project, i was very interested in the Wayland protocol and how it works.
 But this is not enough to choose it as a base for the project, so why Wayland? The answer is subcompositors.
@@ -491,14 +524,14 @@ But i don't want to render anything, what then I can do?
 Now we can return to the subcompositors. We can use subcompositor functionality to avoid manual rendering of mascots. Instead we create subsurface for each mascot
 and then attach it to our overlay. Now we can set position of our mascots freely and we don't need to render anything manually, because we use precreated buffers for each possible sprite.
 
-### C
+#### C
 
 Now, when we decided to use Wayland, we need to choose language.
 Oh, no language currently (Feb 2024) supports Wayland on same level as C (We need low level access to the Wayland protocol). Guess, I had no choice.
 Anyway, it will economize memory and CPU usage, so it's not that bad.
 That pretty much sums up why I choose C.
 
-### Conditions and expressions in configuration files
+#### Conditions and expressions in configuration files
 
 Original Shimeji includes a feature called "Using JavaScript in places where you should not use JavaScript". I not expert in Shimeji-ee, but i think that
 one of the reasons why 7 mascots can eat up 880MiB of RAM. I will not test it, but i decided that i will not include javascript in my project. Even if it means
