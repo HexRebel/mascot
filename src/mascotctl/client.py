@@ -365,7 +365,7 @@ def prototype_find(name: str) -> Prototype | None:
 
     return None
 
-def converter_handler(arguments: argparse.Namespace, client: Client, parser):
+def converter_handler(arguments: argparse.Namespace, parser):
     if not os.path.exists(arguments.input):
         print(f"Input file '{arguments.input}' does not exist.")
         exit(1)
@@ -445,8 +445,6 @@ def converter_handler(arguments: argparse.Namespace, client: Client, parser):
                 print(f"File {os.path.join(arguments.output, f'Shimeji.{prototype}.wlshm')} already exists")
                 continue
 
-        wlpak = open(os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm"), "wb")
-
         config_base_dir_name = os.path.join(instance_root, "conf")
 
         if os.path.exists(os.path.join(instance_root, "img", prototype, "conf")):
@@ -463,6 +461,8 @@ def converter_handler(arguments: argparse.Namespace, client: Client, parser):
         except Exception as e:
             print(f"Conversion failed for {prototype}: {e}")
             continue
+        finally:
+            os.close(config_dirfd)
 
         manifest = \
         {
@@ -481,46 +481,43 @@ def converter_handler(arguments: argparse.Namespace, client: Client, parser):
             "support": None
         }
 
-        # Try parse info.xml
-        try:
-            tree = ET.parse(os.path.join(prototype, "info.xml"))
+        # info.xml sits next to actions.xml, or in the image directory
+        info_path = None
+        for candidate in (config_base_dir_name, os.path.join(instance_root, "img", prototype)):
+            if os.path.isfile(os.path.join(candidate, "info.xml")):
+                info_path = os.path.join(candidate, "info.xml")
+                break
 
-            # Mascot/Information/Name
-            root = tree.getroot()
-            name = root.find("Information/Name")
-            if name is not None:
-                manifest["display_name"] = name.text
-            # Mascot/Information/Artist
-            artist = root.find("Information/Artist")
-            if artist is not None:
-                manifest["artist"] = artist.text
+        root = None
+        if info_path:
+            try:
+                root = ET.parse(info_path).getroot()
+            except ET.ParseError as e:
+                print(f"Ignoring {info_path}: {e}")
 
-            # Mascot/Information/Scripter
-            scripter = root.find("Information/Scripter")
-            if scripter is not None:
-                manifest["scripter"] = scripter.text
+        if root is not None:
+            # Shimeji-ee files use the http://www.group-finity.com/Mascot namespace
+            for element in root.iter():
+                element.tag = element.tag.rpartition("}")[2]
 
-            # Mascot/Information/Commissioner
-            commissioner = root.find("Information/Commissioner")
-            if commissioner is not None:
-                manifest["commissioner"] = commissioner.text
+            def info_text(tag):
+                element = root.find(f"Information/{tag}")
+                if element is None or not (element.text or "").strip():
+                    return None
+                return element.text.strip()
 
-            # Mascot/Information/Support
-            support = root.find("Information/Support")
-            if support is not None:
-                manifest["support"] = support.text
+            manifest["display_name"] = info_text("Name") or manifest["display_name"]
+            for key, tag in (("artist", "Artist"), ("scripter", "Scripter"),
+                             ("commissioner", "Commissioner"), ("support", "Support")):
+                manifest[key] = info_text(tag)
 
-            # Mascot/Information/PreviewImage
-            icon_name = root.find("Information/PreviewImage")
+            icon_name = info_text("PreviewImage")
             if icon_name is not None:
-                manifest["icon"] = icon_name.text.removesuffix(".png")\
+                manifest["icon"] = icon_name.removesuffix(".png")\
                 .removesuffix(".jpg")\
                 .removesuffix(".jpeg")\
                 .removesuffix(".gif")\
                 .removesuffix(".webp") + ".qoi"
-
-        except:
-            pass
 
         memfile = io.BytesIO()
         tar = tarfile.open(fileobj=memfile, mode="w")
@@ -575,8 +572,10 @@ def converter_handler(arguments: argparse.Namespace, client: Client, parser):
         wlpak_prefix += struct.pack(f"B{len(manifest['version'].encode('utf-8'))}s", len(manifest['version'].encode("utf-8")), manifest['version'].encode("utf-8"))
         wlpak_prefix += b"\x00" * (512 - len(wlpak_prefix))
 
-        wlpak.write(wlpak_prefix)
-        wlpak.write(memfile.getvalue())
+        # Only create the file once conversion has succeeded
+        with open(os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm"), "wb") as wlpak:
+            wlpak.write(wlpak_prefix)
+            wlpak.write(memfile.getvalue())
         print(f'Converted {prototype} to {os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")}')
 
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
@@ -1438,6 +1437,12 @@ if __name__ == "__main__":
         argparser.print_help()
         exit(1)
 
+    # Converting only writes files, so it must not need (or start) the overlay
+    if arguments.category == "convert":
+        logging.basicConfig(level=logging.DEBUG if arguments.verbose else logging.INFO)
+        converter_handler(arguments, convert_category)
+        exit(0)
+
     socket_path = arguments.socket or (
         os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "mascotd.sock")
     )
@@ -1513,8 +1518,6 @@ if __name__ == "__main__":
         match arguments.category:
             case "prototypes":
                 prototypes_handler(arguments, client, prototype_category)
-            case "convert":
-                converter_handler(arguments, client, convert_category)
             case "mascot":
                 mascot_handler(arguments, client, mascot_category)
             case "environment":
