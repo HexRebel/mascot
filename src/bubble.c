@@ -161,18 +161,35 @@ void bubble_exited(void)
     bubble_forget();
 }
 
+// Waits up to a second for the bubble to exit, then reaps it
+static bool bubble_wait(void)
+{
+    for (int i = 0; i < 20; i++) {
+        if (bubble_has_exited(NULL)) {
+            bubble_forget();
+            return true;
+        }
+        nanosleep(&(struct timespec){ .tv_nsec = 50 * 1000 * 1000 }, NULL);
+    }
+    return false;
+}
+
 void bubble_stop(void)
 {
     if (bubble_pid <= 0) return;
 
+    // A connected bubble quits by itself once the chat socket is closed, after
+    // unmapping its window: Hyprland 0.56 crashes when a layer surface holding
+    // the keyboard dies while mapped, which is what a signal would do
+    if (bubble_wait()) {
+        INFO("Chat bubble quit");
+        return;
+    }
+
     kill(-bubble_pid, SIGTERM);
-    for (int i = 0; i < 20; i++) {
-        if (bubble_has_exited(NULL)) {
-            INFO("Stopped chat bubble");
-            bubble_forget();
-            return;
-        }
-        nanosleep(&(struct timespec){ .tv_nsec = 50 * 1000 * 1000 }, NULL);
+    if (bubble_wait()) {
+        INFO("Stopped chat bubble");
+        return;
     }
 
     WARN("Chat bubble did not stop within a second, killing it");

@@ -51,8 +51,19 @@ ShellRoot {
             if (connected)
                 root.wasConnected = true;
             else if (root.managed && root.wasConnected)
-                Qt.quit();
+                quitTimer.start();
         }
+    }
+
+    // Hyprland 0.56 crashes when a layer surface holding the keyboard is
+    // destroyed while still mapped (the process exiting with the bubble open),
+    // so hide it first and give the compositor a moment to unmap it
+    Timer {
+        id: quitTimer
+
+        interval: 100
+        onRunningChanged: if (running) bubble.dismiss()
+        onTriggered: Qt.quit()
     }
 
     // Started by hand, the daemon may start after us or be restarted; keep trying

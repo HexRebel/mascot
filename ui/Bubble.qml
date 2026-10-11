@@ -93,9 +93,14 @@ PanelWindow {
             bubble.close();
     }
 
-    function close(): void {
+    // Hides the bubble without telling the daemon (it may be gone)
+    function dismiss(): void {
         chat.running = false;
         bubble.visible = false;
+    }
+
+    function close(): void {
+        bubble.dismiss();
         if (bubble.event)
             bubble.released(bubble.event.mascot);
     }

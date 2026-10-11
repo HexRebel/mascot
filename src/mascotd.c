@@ -974,9 +974,10 @@ int main(int argc, const char** argv)
         }
     }
 
+    // Closing the chat socket first lets the bubble hide and quit on its own
+    chat_close();
     bubble_stop();
     plugins_deinit();
-    chat_close();
     close(listen_fd);
     close(inhereted_fd);
     close(epfd);

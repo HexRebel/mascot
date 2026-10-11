@@ -33,8 +33,9 @@ int bubble_pidfd(void);
 // Reaps the bubble after its pidfd became readable and logs how it ended
 void bubble_exited(void);
 
-// Stops the bubble's whole process group (the bubble and any aichat it runs):
-// SIGTERM, then SIGKILL if it has not exited within a second
+// Stops the bubble's whole process group (the bubble and any aichat it runs).
+// Call chat_close() first: the bubble gets a second to quit by itself, then
+// SIGTERM, then SIGKILL if it has not exited within another second
 void bubble_stop(void);
 
 #endif
