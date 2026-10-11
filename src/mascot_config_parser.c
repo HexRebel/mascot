@@ -48,6 +48,9 @@ struct mascot_prototype_store_ {
 
     char* location;
     int32_t fd;
+
+    // Read-only prototypes installed with mascot; loaded after location, so the user's own copy wins
+    char* system_location;
 };
 
 struct mascot_prototype* mascot_prototype_new()
@@ -298,6 +301,7 @@ void mascot_prototype_store_free(mascot_prototype_store* store)
     }
 
     free(store->prototypes);
+    free(store->system_location);
     free(store);
 }
 
@@ -2581,34 +2585,29 @@ void mascot_prototype_store_set_location(mascot_prototype_store *store, const ch
     store->fd = open(path, O_DIRECTORY | O_PATH | O_RDONLY);
 }
 
-uint32_t mascot_prototype_store_reload(mascot_prototype_store *store)
+void mascot_prototype_store_set_system_location(mascot_prototype_store *store, const char *path)
 {
-    if (!store) return 0;
-    if (!store->location) return 0;
+    if (!store) return;
+    free(store->system_location);
+    store->system_location = path ? strdup(path) : NULL;
+}
 
-    // Clear existing prototypes
-    for (size_t i = 0, c = store->count; i < store->size && c; i++) {
-        struct mascot_prototype* prototype = store->prototypes[i];
-        if (prototype) {
-            c--;
-            mascot_prototype_store_remove(store, prototype);
-        }
-    }
-
+static void prototype_store_load_from(mascot_prototype_store *store, const char *location, bool optional)
+{
     char ** directories = NULL;
     int32_t count = 0;
 
-    int32_t result = io_find(store->location, "*", IO_FILE_TYPE_DIRECTORY, &directories, &count);
+    int32_t result = io_find(location, "*", IO_FILE_TYPE_DIRECTORY, &directories, &count);
     if (result != 0) {
-        WARN("Failed to locate prototypes in %s: %d", store->location, result);
-        return 0;
+        if (!optional) WARN("Failed to locate prototypes in %s: %d", location, result);
+        return;
     }
 
     for (int32_t i = 0; i < count; i++) {
         struct mascot_prototype *prototype = mascot_prototype_new();
         if (!prototype) ERROR("Failed to load prototypes: OUT OF MEMORY");
         enum mascot_prototype_load_result load_status =
-        mascot_prototype_load(prototype, store->location, directories[i]);
+        mascot_prototype_load(prototype, location, directories[i]);
 
         if (load_status != PROTOTYPE_LOAD_SUCCESS) {
             switch (load_status) {
@@ -2669,8 +2668,30 @@ uint32_t mascot_prototype_store_reload(mascot_prototype_store *store)
             mascot_prototype_unlink(prototype);
             continue;
         }
-        mascot_prototype_store_add(store, prototype);
+        if (!mascot_prototype_store_add(store, prototype)) {
+            DEBUG("[PROTOTYPES] Skipping %s/%s: a prototype named %s is already loaded", location, directories[i], prototype->name);
+            mascot_prototype_unlink(prototype);
+        }
     }
+}
+
+uint32_t mascot_prototype_store_reload(mascot_prototype_store *store)
+{
+    if (!store) return 0;
+    if (!store->location) return 0;
+
+    // Clear existing prototypes
+    for (size_t i = 0, c = store->count; i < store->size && c; i++) {
+        struct mascot_prototype* prototype = store->prototypes[i];
+        if (prototype) {
+            c--;
+            mascot_prototype_store_remove(store, prototype);
+        }
+    }
+
+    prototype_store_load_from(store, store->location, false);
+    if (store->system_location && strcmp(store->system_location, store->location))
+        prototype_store_load_from(store, store->system_location, true);
 
     return store->count;
 }

@@ -66,6 +66,7 @@ int mascot_prototype_store_count(mascot_prototype_store*);
 void mascot_prototype_store_free(mascot_prototype_store*);
 
 void mascot_prototype_store_set_location(mascot_prototype_store* store, const char* path);
+void mascot_prototype_store_set_system_location(mascot_prototype_store* store, const char* path);
 int32_t mascot_prototype_store_get_fd(mascot_prototype_store* store);
 uint32_t mascot_prototype_store_reload(mascot_prototype_store* store);
 

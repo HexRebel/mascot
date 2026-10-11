@@ -134,6 +134,8 @@ install: all
 	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -m644 ui/*.qml $(DESTDIR)$(PREFIX)/share/mascot/ui/
+	install -d $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
+	cp -R --no-preserve=ownership prototypes/. $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 
 # Removes only what install/install-plugins put there; directories are removed
 # only if empty, since $(PREFIX)/share/mascot is also the data root when PREFIX=~/.local
@@ -149,8 +151,9 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Bubble.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
-	-rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \
-		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null
+	rm -rf $(DESTDIR)$(PREFIX)/share/mascot/prototypes
+	rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \
+		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null || true
 
 .PHONY: install-plugins
 install-plugins: build-plugins

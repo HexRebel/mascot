@@ -64,6 +64,11 @@
 #define DEFAULT_PROTOS_PATH "%s/shimejis"
 #endif
 
+// Relative to the directory mascotd is installed in, so it follows PREFIX at install time
+#ifndef SYSTEM_PROTOS_PATH
+#define SYSTEM_PROTOS_PATH "../share/mascot/prototypes"
+#endif
+
 #ifndef DEFAULT_PLUGINS_PATH
 #define DEFAULT_PLUGINS_PATH "/usr/lib/mascot/"
 #endif
@@ -287,6 +292,24 @@ size_t default_configuration_file(const char* configuration_root, char* pathbuf,
 size_t default_prototypes_location(const char* configuration_root, char* pathbuf, size_t pathbuf_len)
 {
     return snprintf(pathbuf, pathbuf_len, DEFAULT_PROTOS_PATH, configuration_root);
+}
+
+// Prototypes installed next to the binary: <prefix>/bin/mascotd -> <prefix>/share/mascot/prototypes
+// pathbuf must hold PATH_MAX bytes (realpath)
+bool system_prototypes_location(char* pathbuf)
+{
+    char exe[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+    if (len <= 0) return false;
+    exe[len] = '\0';
+
+    char* slash = strrchr(exe, '/');
+    if (!slash) return false;
+    *slash = '\0';
+
+    char joined[PATH_MAX];
+    if ((size_t)snprintf(joined, sizeof(joined), "%s/%s", exe, SYSTEM_PROTOS_PATH) >= sizeof(joined)) return false;
+    return realpath(joined, pathbuf) != NULL;
 }
 
 size_t default_socket_path(char* pathbuf, size_t pathbuf_len)
@@ -678,6 +701,11 @@ int main(int argc, const char** argv)
 
     // Load mascot prototypes
     mascot_prototype_store_set_location(server_state.prototypes, server_state.prototypes_location);
+    char system_prototypes[PATH_MAX];
+    if (system_prototypes_location(system_prototypes)) {
+        INFO("Loading bundled prototypes from %s", system_prototypes);
+        mascot_prototype_store_set_system_location(server_state.prototypes, system_prototypes);
+    }
     uint32_t num_prototypes = mascot_prototype_store_reload(server_state.prototypes);
 
     UNUSED(num_prototypes); // TODO: Log prototype loading times
