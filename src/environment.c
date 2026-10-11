@@ -51,9 +51,6 @@ void pthread_scope_unlock(pthread_mutex_t **lockptr) {
   *lockptr = NULL;
 }
 
-// Workarounds section (SMH my head hyprland)
-bool we_on_hyprland = false;
-
 // Disable workarounds
 bool disable_tablet_workarounds = false;
 
@@ -1147,15 +1144,6 @@ static void on_pointer_frame(void *data, struct wl_pointer *pointer) {
           env_pointer->frame.surface_changed) {
         env_pointer->frame.mask &= ~EVENT_FRAME_BUTTONS;
       }
-    }
-  }
-  // Hyprland also sends empty frames while a press is still held, so they must
-  // not end a pending tap; the real release arrives as a button event
-  if (we_on_hyprland && !env_pointer->pending_press) {
-    // Empty frame, sent on mascot release
-    if (!env_pointer->frame.mask) {
-      env_pointer->frame.mask = EVENT_FRAME_BUTTONS;
-      env_pointer->frame.buttons_released = EVENT_FRAME_PRIMARY_BUTTON;
     }
   }
 
@@ -2443,15 +2431,6 @@ enum environment_init_status
 environment_init(int flags, void (*new_listener)(environment_t *),
                  void (*rem_listener)(environment_t *),
                  void (*orph_listener)(struct mascot *)) {
-
-  const char *session = getenv("XDG_CURRENT_DESKTOP");
-  if (session) {
-    if (!strcmp(session, "Hyprland")) {
-      WARN(
-          "Hyprland session detected, applying workaround for mascot dragging");
-      we_on_hyprland = true;
-    }
-  }
 
   // Wayland display connection and etc
   display = wl_display_connect(NULL);
