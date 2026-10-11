@@ -9,6 +9,12 @@ redistribution, and list it here (`git add -f`).
 
 | Prototype | Artist | Source | License |
 |---|---|---|---|
+| Shimeji.Shimeji | Yuki Yamada (Group Finity), 2009 | `DefaultMascot/` in [Shijima-Qt](https://github.com/pixelomer/Shijima-Qt); images identical to `img/Shimeji/` in [shimeji-ee](https://github.com/chaoskagami/shimeji-ee) | Original Shimeji license, zlib-style ([`LICENSE.txt`](Shimeji.Shimeji/LICENSE.txt)) |
+
+Changes to Shimeji.Shimeji (as its license requires them to be marked): converted from
+Shimeji-ee XML to this format with `mascot convert`, climbing/hanging behaviours disabled with
+`scripts/noclimb.py`, `artist`/`description` set in `manifest.json`. Images are unchanged
+apart from the conversion to QOI.
 
 Local only, not redistributable: Black Bunny and Brown Bear from
 <https://www.cachomon.com/> ("All rights reserved"; the Terms of Service forbid
