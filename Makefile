@@ -136,6 +136,7 @@ install: all
 	install -m644 ui/*.qml $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 	cp -R --no-preserve=ownership prototypes/. $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
+	chmod -R u=rwX,go=rX $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 
 # Removes only what install/install-plugins put there; directories are removed
 # only if empty, since $(PREFIX)/share/mascot is also the data root when PREFIX=~/.local
