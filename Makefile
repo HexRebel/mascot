@@ -132,6 +132,8 @@ install: all
 	install -d $(DESTDIR)$(PREFIX)/include/mascot
 	install -m644 src/plugins.h $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
 	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
+	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
+	install -m644 ui/*.qml $(DESTDIR)$(PREFIX)/share/mascot/ui/
 
 .PHONY: install-plugins
 install-plugins: build-plugins
