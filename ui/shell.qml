@@ -91,5 +91,6 @@ ShellRoot {
         onHiding: root.send({ event: "hiding" })
         onHidden: root.send({ event: "hidden" })
         onReleased: mascot => root.send({ event: "close", mascot: mascot })
+        onTalked: (mascot, active) => root.send({ event: "talking", mascot: mascot, active: active })
     }
 }

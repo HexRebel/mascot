@@ -13,10 +13,11 @@ redistribution, and list it here (`git add -f`).
 
 Changes to Shimeji.Shimeji (as its license requires them to be marked): converted from
 Shimeji-ee XML to this format with `mascot convert`, climbing/hanging behaviours disabled with
-`scripts/noclimb.py`, `artist`/`description` set in `manifest.json`. Images are unchanged
-apart from the conversion to QOI.
+`scripts/noclimb.py`, `artist`/`description` set in `manifest.json`, and a `Talk` behaviour
+(the existing `SitAndSpinHead` action, never picked at random) added for the chat bubble. Images
+are unchanged apart from the conversion to QOI.
 
 Local only, not redistributable: Black Bunny and Brown Bear from
 <https://www.cachomon.com/> ("All rights reserved"; the Terms of Service forbid
 offering them through third-party sites or apps). Modified locally with
-`scripts/noclimb.py`.
+`scripts/noclimb.py`; Black Bunny also has a `Talk` behaviour (its `Pet` action).

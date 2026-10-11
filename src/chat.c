@@ -176,8 +176,8 @@ int chat_accept(void)
     return fd;
 }
 
-// Handles one line from a client: {"event":"hiding"}, {"event":"hidden"} or
-// {"event":"close","mascot":N}
+// Handles one line from a client: {"event":"hiding"}, {"event":"hidden"},
+// {"event":"talking","mascot":N,"active":true|false} or {"event":"close","mascot":N}
 static void chat_handle_line(const char* line)
 {
     if (strstr(line, "\"event\":\"hiding\"")) {
@@ -188,15 +188,22 @@ static void chat_handle_line(const char* line)
         chat_suppress_sprites(false);
         return;
     }
-    if (!strstr(line, "\"event\":\"close\"")) return;
+    bool talking = strstr(line, "\"event\":\"talking\"");
+    if (!talking && !strstr(line, "\"event\":\"close\"")) return;
 
     const char* field = strstr(line, "\"mascot\":");
     if (!field) return;
     char* end = NULL;
     long id = strtol(field + strlen("\"mascot\":"), &end, 10);
     if (end == field + strlen("\"mascot\":")) return;
+    if (id != held_mascot_id) return;
 
-    if (id == held_mascot_id) chat_release_held();
+    if (!talking) {
+        chat_release_held();
+        return;
+    }
+    struct mascot* mascot = chat_find_mascot(held_mascot_id);
+    if (mascot) mascot_chat_talk(mascot, strstr(line, "\"active\":true") != NULL);
 }
 
 bool chat_client_readable(int fd)

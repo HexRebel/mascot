@@ -854,6 +854,17 @@
             "is_conditioner": true,
             "next_behavior_list_add": true,
             "frequency": 0
+        },
+        {
+            "name": "Talk",
+            "action": "SitAndSpinHead",
+            "next_behavior_list": [],
+            "next_behavior_list_count": 0,
+            "hidden": true,
+            "condition": null,
+            "is_conditioner": false,
+            "next_behavior_list_add": true,
+            "frequency": 0
         }
     ],
     "root_behavior_list": [

@@ -522,6 +522,10 @@ bool mascot_drag_ended(struct mascot* mascot, bool throw); // throw - if true, s
 // away when on the floor, otherwise once it lands. Returns false if the
 // prototype has no such behavior
 bool mascot_chat_hold(struct mascot* mascot, bool hold);
+// While a held mascot's reply streams, repeats its "Talk" behavior if the
+// prototype has one (otherwise it keeps sitting); talking=false sits it down
+// again. Returns false if the mascot is not held
+bool mascot_chat_talk(struct mascot* mascot, bool talking);
 
 // Callback for position change
 bool mascot_moved(struct mascot* mascot, int32_t x, int32_t y);

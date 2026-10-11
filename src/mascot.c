@@ -894,6 +894,18 @@ bool mascot_drag_ended(struct mascot *mascot, bool throw) {
   return true;
 }
 
+// Repeats behavior while held; switches now if on the floor, else on landing.
+// Caller holds tick_lock
+static void mascot_chat_switch(struct mascot *mascot,
+                               const struct mascot_behavior *behavior) {
+  mascot->chat_behavior = behavior;
+  if (!mascot->dragged &&
+      mascot_get_border_type(mascot) == environment_border_type_floor &&
+      mascot->current_behavior != behavior) {
+    mascot_set_behavior(mascot, behavior);
+  }
+}
+
 bool mascot_chat_hold(struct mascot *mascot, bool hold) {
   pthread_mutex_lock(&mascot->tick_lock);
   if (!hold) {
@@ -912,14 +924,28 @@ bool mascot_chat_hold(struct mascot *mascot, bool hold) {
     return false;
   }
 
-  mascot->chat_behavior = sit;
-  if (!mascot->dragged &&
-      mascot_get_border_type(mascot) == environment_border_type_floor &&
-      mascot->current_behavior != sit) {
-    mascot_set_behavior(mascot, sit);
-  }
+  mascot_chat_switch(mascot, sit);
   pthread_mutex_unlock(&mascot->tick_lock);
   return true;
+}
+
+bool mascot_chat_talk(struct mascot *mascot, bool talking) {
+  pthread_mutex_lock(&mascot->tick_lock);
+  // Not held (any more): leave its behaviors alone
+  if (!mascot->chat_behavior) {
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return false;
+  }
+
+  const struct mascot_behavior *behavior =
+      talking ? mascot_prototype_behavior_by_name(mascot->prototype, "Talk")
+              : NULL;
+  if (!behavior)
+    behavior = mascot_prototype_behavior_by_name(mascot->prototype, "SitDown");
+  if (behavior)
+    mascot_chat_switch(mascot, behavior);
+  pthread_mutex_unlock(&mascot->tick_lock);
+  return behavior != NULL;
 }
 
 // Set the environment of the mascot

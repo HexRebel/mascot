@@ -24,6 +24,13 @@ PanelWindow {
     signal hiding()
     signal hidden()
     property bool closing: false
+
+    // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
+    signal talked(int mascot, bool active)
+    property bool replying: false
+    readonly property bool talking: replying && chat.running && visible && !closing
+    onTalkingChanged: if (bubble.event)
+        bubble.talked(bubble.event.mascot, bubble.talking)
     property string transcript: ""
     property string errorText: ""
     readonly property bool busy: chat.running
@@ -173,7 +180,8 @@ PanelWindow {
 
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
     // parsed by the shell
-    function run(args: var): void {
+    function run(args: var, reply = false): void {
+        bubble.replying = reply;
         // Without CHAT_COMMAND use the bubble's own aichat config: the main one
         // asks to confirm tool calls, which nobody can answer from here
         const command = bubble.event?.command || 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat';
@@ -244,7 +252,7 @@ PanelWindow {
         if (text.startsWith("."))
             dotCommand(text);
         else
-            run(flags().concat("--", text)); // "--": a message may start with '-'
+            run(flags().concat("--", text), true); // "--": a message may start with '-'
     }
 
     visible: false
