@@ -96,10 +96,11 @@ $(PLUGINS_LIB): $(PLUGINS_LIB_OBJS)
 
 # Plugins written for wl_shimeji (e.g. the kwinsupport submodule) include <wl_shimeji/plugins.h> and
 # link -lwayland-shimeji-plugins: src/compat provides the header, and the symlink above the library.
-# Its soname keeps libmascot-plugins.so as the runtime dependency.
+# Its soname keeps libmascot-plugins.so as the runtime dependency, and the rpath finds it in
+# $(PREFIX)/lib from $(PREFIX)/lib/mascot without LD_LIBRARY_PATH.
 $(PLUGINS_SUBDIRS): $(PLUGINS_LIB)
 	@echo "-> Building plugin $@..."
-	$(MAKE) -s -C $(PLUGINS_DIR)/$@ BUILDDIR="$(abspath $(BUILDDIR))" PLUGINS_OUT_DIR="$(abspath $(PLUGINS_OUT_DIR))" CFLAGS="$(CFLAGS) -I$(abspath $(SRCDIR)/compat) -I$(DESTDIR)$(PREFIX)/include/" LDFLAGS="$(LDFLAGS) -L$(abspath $(BUILDDIR))"
+	$(MAKE) -s -C $(PLUGINS_DIR)/$@ BUILDDIR="$(abspath $(BUILDDIR))" PLUGINS_OUT_DIR="$(abspath $(PLUGINS_OUT_DIR))" CFLAGS="$(CFLAGS) -I$(abspath $(SRCDIR)/compat) -I$(DESTDIR)$(PREFIX)/include/" LDFLAGS="$(LDFLAGS) -L$(abspath $(BUILDDIR)) -Wl,-rpath,'\$$\$$ORIGIN/..'"
 
 .PHONY: build-plugins
 build-plugins: $(PLUGINS_SUBDIRS)

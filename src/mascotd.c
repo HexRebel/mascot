@@ -69,6 +69,12 @@
 #define SYSTEM_PROTOS_PATH "../share/mascot/prototypes"
 #endif
 
+// Where make install-plugins puts them, relative like SYSTEM_PROTOS_PATH
+#ifndef SYSTEM_PLUGINS_PATH
+#define SYSTEM_PLUGINS_PATH "../lib/mascot"
+#endif
+
+// Used only if the binary's own location cannot be resolved
 #ifndef DEFAULT_PLUGINS_PATH
 #define DEFAULT_PLUGINS_PATH "/usr/lib/mascot/"
 #endif
@@ -294,9 +300,9 @@ size_t default_prototypes_location(const char* configuration_root, char* pathbuf
     return snprintf(pathbuf, pathbuf_len, DEFAULT_PROTOS_PATH, configuration_root);
 }
 
-// Prototypes installed next to the binary: <prefix>/bin/mascotd -> <prefix>/share/mascot/prototypes
-// pathbuf must hold PATH_MAX bytes (realpath)
-bool system_prototypes_location(char* pathbuf)
+// A path installed next to the binary, e.g. <prefix>/bin/mascotd + "../lib/mascot" -> <prefix>/lib/mascot.
+// False if it does not exist. pathbuf must hold PATH_MAX bytes (realpath)
+bool installed_location(const char* relative, char* pathbuf)
 {
     char exe[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
@@ -308,7 +314,7 @@ bool system_prototypes_location(char* pathbuf)
     *slash = '\0';
 
     char joined[PATH_MAX];
-    if ((size_t)snprintf(joined, sizeof(joined), "%s/%s", exe, SYSTEM_PROTOS_PATH) >= sizeof(joined)) return false;
+    if ((size_t)snprintf(joined, sizeof(joined), "%s/%s", exe, relative) >= sizeof(joined)) return false;
     return realpath(joined, pathbuf) != NULL;
 }
 
@@ -589,9 +595,16 @@ int main(int argc, const char** argv)
         }
     }
 
+    // Plugins are installed files, never created by mascotd, so only a location the user chose is
+    // worth a warning when it is missing
+    bool plugins_location_chosen = plugins_location[0] || config_get_plugins_location();
     if (!plugins_location[0]) {
         if (!config_get_plugins_location()) {
-            strncpy(plugins_location, DEFAULT_PLUGINS_PATH, PATH_MAX-1);
+            char installed[PATH_MAX];
+            if (installed_location(SYSTEM_PLUGINS_PATH, installed))
+                strncpy(plugins_location, installed, PATH_MAX-1);
+            else
+                strncpy(plugins_location, DEFAULT_PLUGINS_PATH, PATH_MAX-1);
         } else {
             strncpy(plugins_location, config_get_plugins_location(), PATH_MAX-1);
         }
@@ -634,11 +647,11 @@ int main(int argc, const char** argv)
     if (stat(server_state.prototypes_location, &st) == -1) {
         ERROR("Failed to create prototypes storage at %s", server_state.prototypes_location);
     }
-    if (stat(server_state.plugins_location, &st) == -1) {
-        mkdir(server_state.plugins_location, 0700);
-    }
-    if (stat(server_state.plugins_location, &st) == -1) {
-        WARN("Failed to create plugins storage at %s, disabling plugins", server_state.plugins_location);
+    if (!disable_plugins && stat(server_state.plugins_location, &st) == -1) {
+        if (plugins_location_chosen)
+            WARN("Plugins directory %s does not exist, disabling plugins", server_state.plugins_location);
+        else
+            INFO("No plugins installed (%s does not exist)", server_state.plugins_location);
         disable_plugins = true;
     }
 
@@ -702,7 +715,7 @@ int main(int argc, const char** argv)
     // Load mascot prototypes
     mascot_prototype_store_set_location(server_state.prototypes, server_state.prototypes_location);
     char system_prototypes[PATH_MAX];
-    if (system_prototypes_location(system_prototypes)) {
+    if (installed_location(SYSTEM_PROTOS_PATH, system_prototypes)) {
         INFO("Loading bundled prototypes from %s", system_prototypes);
         mascot_prototype_store_set_system_location(server_state.prototypes, system_prototypes);
     }
