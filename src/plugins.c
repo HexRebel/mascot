@@ -1,3 +1,4 @@
+/* Modified for Mascot by Xedoc91, 2026; see the git history for details. */
 #include "plugins.h"
 #include <stdbool.h>
 #include <unistd.h>

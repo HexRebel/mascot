@@ -1,3 +1,4 @@
+/* Modified for Mascot by Xedoc91, 2026; see the git history for details. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

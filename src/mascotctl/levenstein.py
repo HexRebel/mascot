@@ -1,3 +1,4 @@
+# Modified for Mascot by Xedoc91, 2026; see the git history for details.
 def lv_distance(s1: str, s2: str) -> float:
     len1, len2 = len(s1), len(s2)
 

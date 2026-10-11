@@ -1,3 +1,4 @@
+# Modified for Mascot by Xedoc91, 2026; see the git history for details.
 
 
 from tokenizer import Tokenizer

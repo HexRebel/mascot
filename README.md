@@ -4,7 +4,8 @@ This is a reimplementation of the [Shimeji](https://kilkakon.com/shimeji/) for W
 
 Mascot is a fork of [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji) by CluelessCatBurger,
 licensed under GPL-2.0-or-later like the original. It adds a chat bubble: tap a mascot to talk to a
-local model through [aichat](https://github.com/sigoden/aichat). The git history shows what has changed.
+local model through [aichat](https://github.com/sigoden/aichat). Source files changed from upstream
+say so in their header, and the git history shows exactly what has changed.
 
 <p align="center">
   <img src="./docs/screenshot.png" style="width: 100%;">
@@ -62,6 +63,9 @@ The upstream project has packages of its own, which install wl_shimeji, not Masc
 [wl_shimeji-git](https://aur.archlinux.org/packages/wl_shimeji-git) and
 [wl_shimeji-plugin-kwinsupport](https://aur.archlinux.org/packages/wl_shimeji-plugin-kwinsupport) on the AUR,
 and a Nix flake (see the [upstream README](https://github.com/CluelessCatBurger/wl_shimeji#readme)).
+
+This repository still contains the upstream Nix flake, updated for the new names, but it has not
+been built or tested since the fork.
 
 # Building
 
