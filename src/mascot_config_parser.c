@@ -41,6 +41,10 @@
 
 static uint32_t prototype_id_counter = 0;
 
+// load_actions() defers actions that reference one defined later in the file and retries them,
+// so a missing action is only worth a warning on the retry
+static _Thread_local bool resolving_forward_references = false;
+
 struct mascot_prototype_store_ {
     struct mascot_prototype** prototypes;
     uint32_t size;
@@ -787,7 +791,8 @@ struct config_actionref_parse_result parse_action_reference(struct mascot_protot
                 }
             }
             if (!action_name_set) {
-                WARN("Action %.*s is not defined!", action_name->string_size, action_name->string);
+                if (!resolving_forward_references)
+                    WARN("Action %.*s is not defined!", action_name->string_size, action_name->string);
                 result.status = CONFIG_ACTIONREF_PARSE_ERROR_ACTION_NOT_FOUND;
                 goto actionref_generator_fail;
             }
@@ -1680,7 +1685,8 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
                         if (!strncasecmp("ActionReference", content_type->string, content_type->string_size)) {
                             struct config_actionref_parse_result action_reference = parse_action_reference(prototype, content_obj, action_definitions, count);
                             if (action_reference.status != CONFIG_ACTIONREF_PARSE_OK) {
-                                WARN("Failed to parse action reference");
+                                if (!resolving_forward_references || action_reference.status != CONFIG_ACTIONREF_PARSE_ERROR_ACTION_NOT_FOUND)
+                                    WARN("Failed to parse action reference");
                                 if (action_reference.status == CONFIG_ACTIONREF_PARSE_ERROR_ACTION_NOT_FOUND) {
                                     result.status = MASCOT_ACTION_PARSE_ERROR_NOT_DEFINED;
                                 }
@@ -1795,6 +1801,7 @@ struct config_action_loader_result load_actions(struct mascot_prototype* prototy
     int deferred_count = 0;
 
     struct json_array_element_s* action = actions->start;
+    resolving_forward_references = true;
     while (action) {
         if (result.count == size) {
             size *= 2;
@@ -1802,6 +1809,7 @@ struct config_action_loader_result load_actions(struct mascot_prototype* prototy
         }
         if (action->value->type != json_type_object) {
             WARN("Invalid syntax in actions.json: action should be an object");
+            resolving_forward_references = false;
             free(deferred_resolving);
             return result;
         }
@@ -1822,18 +1830,33 @@ struct config_action_loader_result load_actions(struct mascot_prototype* prototy
 
     DEBUG("Retrying load action with unresolved action names (%d)", deferred_count);
 
-    for (int i = 0; i < deferred_count; i++) {
-        if (result.count == size) {
-            size *= 2;
-            result.actions = realloc(result.actions, size * sizeof(struct mascot_action*));
+    // Retry until nothing more resolves, so chains of forward references work too. The last
+    // pass runs with warnings on: whatever is left there really references a missing action
+    bool progress = true;
+    while (deferred_count) {
+        if (!progress) resolving_forward_references = false;
+        progress = false;
+
+        int remaining = 0;
+        for (int i = 0; i < deferred_count; i++) {
+            if (result.count == size) {
+                size *= 2;
+                result.actions = realloc(result.actions, size * sizeof(struct mascot_action*));
+            }
+            struct config_action_parse_result action_obj = action_parse(prototype, deferred_resolving[i], result.actions, &result.count);
+            if (action_obj.status != MASCOT_ACTION_PARSE_OK) {
+                deferred_resolving[remaining++] = deferred_resolving[i];
+                continue;
+            }
+            DEBUG("Loaded action %s", action_obj.action->name);
+            result.actions[result.count++] = action_obj.action;
+            progress = true;
         }
-        struct config_action_parse_result action_obj = action_parse(prototype, deferred_resolving[i], result.actions, &result.count);
-        if (action_obj.status != MASCOT_ACTION_PARSE_OK) {
-            continue;
-        }
-        DEBUG("Loaded action %s", action_obj.action->name);
-        result.actions[result.count++] = action_obj.action;
+
+        if (!resolving_forward_references) break;
+        deferred_count = remaining;
     }
+    resolving_forward_references = false;
 
     free(deferred_resolving);
 
