@@ -17,3 +17,6 @@ result
 # Prototypes whose art may not be redistributed (e.g. cachomon.com) stay local;
 # make install still installs whatever is in prototypes/
 prototypes/*/
+
+# Local working notes for the maintainer, not part of the project
+HANDOFF.md
