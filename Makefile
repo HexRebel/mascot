@@ -131,7 +131,8 @@ install: all
 	install -m755 $(UTILS_DIR)/mascot $(DESTDIR)$(PREFIX)/bin/mascot
 	install -d $(DESTDIR)$(PREFIX)/share/systemd/user/
 	install -m644 systemd/mascotd.socket $(DESTDIR)$(PREFIX)/share/systemd/user/
-	install -m644 systemd/mascotd.service $(DESTDIR)$(PREFIX)/share/systemd/user/
+	sed 's|@BINDIR@|$(PREFIX)/bin|g' systemd/mascotd.service > $(DESTDIR)$(PREFIX)/share/systemd/user/mascotd.service
+	chmod 644 $(DESTDIR)$(PREFIX)/share/systemd/user/mascotd.service
 	install -d $(DESTDIR)$(PREFIX)/lib/
 	install -m755 $(PLUGINS_LIB) $(DESTDIR)$(PREFIX)/lib/
 	install -d $(DESTDIR)$(PREFIX)/include/

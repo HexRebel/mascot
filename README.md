@@ -243,17 +243,31 @@ so any model aichat supports works, including local ones through Ollama.
 - Quickshell (`pacman -S quickshell`)
 - aichat (`pacman -S aichat`), configured with at least one model
 
-## Running it
+## Starting and stopping
 
-Start the bubble next to the daemon (not as part of another Quickshell config):
+You do not start the bubble yourself: `mascotd` starts it (`qs -p $(PREFIX)/share/mascot/ui`) and
+stops it again, so it runs exactly as long as Mascot does.
+
+```sh
+mascot summon Shimeji   # starts mascotd, which starts the bubble
+mascot stop             # stops mascotd and the bubble, including an aichat that is answering
+```
+
+Nothing is left running in the background: the bubble runs in its own process group, which mascotd
+stops when it exits (also on SIGTERM, or when the last mascot is dismissed). If mascotd is killed
+outright, the kernel stops the bubble (`PR_SET_PDEATHSIG`) and the bubble quits when it loses the
+daemon.
+
+To run the bubble by hand instead, e.g. while working on `ui/`, set `BUBBLE_ENABLED` to `false` and
+start it next to the daemon (not as part of another Quickshell config):
 
 ```sh
 qs -p /usr/local/share/mascot/ui
 ```
 
-It connects to the daemon's chat socket, `$XDG_RUNTIME_DIR/mascotd-chat.sock`, and reconnects if the
-daemon is restarted. Set `MASCOT_CHAT_SOCKET` to use another socket. The daemon names the chat
-socket after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
+Started by hand, it reconnects if the daemon is restarted. It uses the daemon's chat socket,
+`$XDG_RUNTIME_DIR/mascotd-chat.sock`, or `MASCOT_CHAT_SOCKET`. The daemon names the chat socket
+after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 
 ## Using it
 
@@ -284,6 +298,8 @@ The model, role and session apply to every mascot until changed, and reset when 
 |---|---|---|
 | `CHAT_ENABLED` | `true` | `false` stops taps from opening the bubble. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
+| `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
+| `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 
 The message is appended to `CHAT_COMMAND` as an argument, never parsed by the shell, and stdin is
 closed. An empty `CHAT_COMMAND` means `AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat`:

@@ -74,6 +74,8 @@ struct config {
     // Chat bubble
     bool chat_enabled;
     char* chat_command;
+    bool bubble_enabled;
+    char* bubble_command;
 
     char* prototypes_location;
     char* plugins_location;
@@ -153,6 +155,11 @@ bool config_parse(const char* path)
     config.mascot_opacity = -1.0f;
     config.mascot_scale = -1.0f;
     config.chat_enabled = true;
+    config.bubble_enabled = true;
+
+    // Remember the path even if the file does not exist yet: mascotd then creates it,
+    // and config_set_by_key() must save to it
+    strncpy(config.config_location, path, PATH_MAX - 1);
 
     FILE* file = fopen(path, "r");
     if (!file) {
@@ -258,9 +265,12 @@ bool config_parse(const char* path)
             config_set_chat_enabled(parse_bool(value));
         } else if (strcasecmp(key, "chat_command") == 0) {
             config_set_chat_command(value);
+        } else if (strcasecmp(key, "bubble_enabled") == 0) {
+            config_set_bubble_enabled(parse_bool(value));
+        } else if (strcasecmp(key, "bubble_command") == 0) {
+            config_set_bubble_command(value);
         }
     }
-    strncpy(config.config_location, path, PATH_MAX);
     fclose(file);
     return true;
 }
@@ -308,6 +318,8 @@ void config_write(const char* path)
     if (config.mascot_opacity != -1.0f) fprintf(file, "mascot_opacity=%f\n", config.mascot_opacity);
     fprintf(file, "chat_enabled=%s\n", config.chat_enabled ? "true" : "false");
     if (config.chat_command) fprintf(file, "chat_command=%s\n", config.chat_command);
+    fprintf(file, "bubble_enabled=%s\n", config.bubble_enabled ? "true" : "false");
+    if (config.bubble_command) fprintf(file, "bubble_command=%s\n", config.bubble_command);
 
 
     fclose(file);
@@ -775,6 +787,30 @@ const char* config_get_chat_command()
     return config.chat_command;
 }
 
+bool config_set_bubble_enabled(int32_t value)
+{
+    config.bubble_enabled = value;
+    return true;
+}
+
+bool config_set_bubble_command(const char* value)
+{
+    if (value && strchr(value, '\n')) return false;
+    free(config.bubble_command);
+    config.bubble_command = (value && *value) ? strdup(value) : NULL;
+    return true;
+}
+
+int32_t config_get_bubble_enabled()
+{
+    return config.bubble_enabled;
+}
+
+const char* config_get_bubble_command()
+{
+    return config.bubble_command;
+}
+
 bool config_get_by_key(const char* key, char* dest, uint8_t size)
 {
     if (!strcmp(key, CONFIG_PARAM_BREEDING)) {
@@ -914,6 +950,12 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_COMMAND)) {
         snprintf(dest, size, "%s", config.chat_command ? config.chat_command : "");
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
+        snprintf(dest, size, "%s", config.bubble_enabled ? "true" : "false");
+        return true;
+    } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {
+        snprintf(dest, size, "%s", config.bubble_command ? config.bubble_command : "");
+        return true;
     }
     return false;
 }
@@ -1000,6 +1042,10 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_chat_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_COMMAND)) {
         res = config_set_chat_command(value);
+    } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
+        res = config_set_bubble_enabled(parse_bool(value));
+    } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {
+        res = config_set_bubble_command(value);
     }
     if (res) config_write(config.config_location);
     return res;

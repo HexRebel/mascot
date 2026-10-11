@@ -45,6 +45,7 @@
 
 #include "protocol/server.h"
 #include "chat.h"
+#include "bubble.h"
 
 #define MASCOT_OVERLAYD_INSTANCE_EXISTS -1
 #define MASCOT_OVERLAYD_INSTANCE_CREATE_ERROR -2
@@ -67,6 +68,11 @@
 // Relative to the prefix mascotd is installed in (<prefix>/bin/mascotd), so it follows PREFIX at install time
 #ifndef SYSTEM_PROTOS_PATH
 #define SYSTEM_PROTOS_PATH "share/mascot/prototypes"
+#endif
+
+// The chat bubble's QML, installed by make install
+#ifndef SYSTEM_UI_PATH
+#define SYSTEM_UI_PATH "share/mascot/ui"
 #endif
 
 // Where make install-plugins puts them, relative like SYSTEM_PROTOS_PATH
@@ -269,8 +275,8 @@ void sigaction_handler(int signum, siginfo_t* info, void* context)
         WARN("Segmentation fault occurred at address %p", info->si_addr);
         longjmp(recovery_point, 1);
         signal_code = signum;
-    } else if (signum == SIGINT) {
-        INFO("Received SIGINT, shutting down...");
+    } else if (signum == SIGINT || signum == SIGTERM) {
+        INFO("Received %s, shutting down...", signum == SIGINT ? "SIGINT" : "SIGTERM");
         server_state.stop = true;
     } else if (signum == SIGHUP) {
         INFO("Received SIGHUP, reloading configuration...");
@@ -404,6 +410,7 @@ struct socket_description {
         SOCKET_TYPE_ENVIRONMENT,
         SOCKET_TYPE_CHAT_LISTEN,
         SOCKET_TYPE_CHAT_CLIENT,
+        SOCKET_TYPE_BUBBLE,
     } type;
     struct protocol_client* client;
     ipc_connector_t* ipc_connector;
@@ -467,8 +474,12 @@ int main(int argc, const char** argv)
 
 
     default_configuration_root(configuration_root, PATH_MAX-1);
-    // Setup SIGINT handler early
+    // Setup SIGINT handler early; SIGTERM (systemd, kill) also shuts down cleanly,
+    // so the chat bubble is stopped with mascotd
     sigaction(SIGINT, &(struct sigaction) {
+        .sa_sigaction = sigaction_handler,
+    }, NULL);
+    sigaction(SIGTERM, &(struct sigaction) {
         .sa_sigaction = sigaction_handler,
     }, NULL);
 
@@ -809,6 +820,29 @@ int main(int argc, const char** argv)
         }
     }
 
+    // Start the chat bubble; it lives exactly as long as mascotd
+    struct socket_description bubble_sd = { .fd = -1, .type = SOCKET_TYPE_BUBBLE };
+    if (chat_fd != -1 && config_get_chat_enabled() && config_get_bubble_enabled()) {
+        char command[PATH_MAX + 16] = {0};
+        char ui[PATH_MAX];
+        if (config_get_bubble_command()) {
+            snprintf(command, sizeof(command), "%s", config_get_bubble_command());
+        } else if (installed_location(SYSTEM_UI_PATH, ui) && !strchr(ui, '\'')) {
+            snprintf(command, sizeof(command), "qs -p '%s'", ui);
+        } else {
+            INFO("Chat bubble is not installed (%s); set BUBBLE_COMMAND to start one", ui[0] ? ui : SYSTEM_UI_PATH);
+        }
+
+        if (command[0] && bubble_start(command, chat_path)) {
+            bubble_sd.fd = bubble_pidfd();
+            ev.events = EPOLLIN;
+            ev.data.ptr = &bubble_sd;
+            if (bubble_sd.fd != -1 && epoll_ctl(epfd, EPOLL_CTL_ADD, bubble_sd.fd, &ev) == -1) {
+                WARN("Failed to add chat bubble to epoll: %s", strerror(errno));
+            }
+        }
+    }
+
     // Add wayland fd to epoll
     int wayland_fd = environment_get_display_fd();
     struct socket_description wayland_sd = { .fd = wayland_fd, .type = SOCKET_TYPE_ENVIRONMENT };
@@ -919,6 +953,9 @@ int main(int argc, const char** argv)
             } else if (sd->type == SOCKET_TYPE_CHAT_CLIENT) {
                 // chat.c closes the fd (which also drops it from epoll); the description is ours
                 if (!chat_client_readable(sd->fd)) free(sd);
+            } else if (sd->type == SOCKET_TYPE_BUBBLE) {
+                // The bubble exited on its own; mascotd keeps running without it
+                bubble_exited();
             } else if (sd->type == SOCKET_TYPE_ENVIRONMENT) {
                 // Wayland event
                 if (events[i].events & EPOLLHUP) {
@@ -937,6 +974,7 @@ int main(int argc, const char** argv)
         }
     }
 
+    bubble_stop();
     plugins_deinit();
     chat_close();
     close(listen_fd);

@@ -3,5 +3,6 @@ Description=mascot's overlay daemon
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/mascotd
-Restart=never
+# make install fills in the bin directory of $(PREFIX)
+ExecStart=@BINDIR@/mascotd
+Restart=no

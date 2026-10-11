@@ -57,7 +57,9 @@
 #define CONFIG_PARAM_MASCOT_SCALE "MASCOT_SCALE"
 #define CONFIG_PARAM_CHAT_ENABLED "CHAT_ENABLED"
 #define CONFIG_PARAM_CHAT_COMMAND "CHAT_COMMAND"
-#define CONFIG_PARAM_COUNT 33
+#define CONFIG_PARAM_BUBBLE_ENABLED "BUBBLE_ENABLED"
+#define CONFIG_PARAM_BUBBLE_COMMAND "BUBBLE_COMMAND"
+#define CONFIG_PARAM_COUNT 35
 
 #define POINTER_PRIMARY_BUTTON 0x01
 #define POINTER_SECONDARY_BUTTON 0x02
@@ -141,6 +143,13 @@ int32_t config_get_chat_enabled();
 // NULL if unset
 const char* config_get_chat_command();
 
+// Whether mascotd starts the chat bubble, and the command to start it with
+bool config_set_bubble_enabled(int32_t value);
+bool config_set_bubble_command(const char* value);
+int32_t config_get_bubble_enabled();
+// NULL if unset (then mascotd uses qs on the installed ui/)
+const char* config_get_bubble_command();
+
 bool config_get_by_key(const char* key, char* dest, uint8_t size);
 bool config_set_by_key(const char* key, const char* value);
 
@@ -178,6 +187,8 @@ __attribute((unused)) static const char* config_keys[] = {
     CONFIG_PARAM_MASCOT_SCALE,
     CONFIG_PARAM_CHAT_ENABLED,
     CONFIG_PARAM_CHAT_COMMAND,
+    CONFIG_PARAM_BUBBLE_ENABLED,
+    CONFIG_PARAM_BUBBLE_COMMAND,
     NULL
 };
 

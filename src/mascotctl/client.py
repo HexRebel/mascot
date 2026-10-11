@@ -1082,7 +1082,9 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "OPACITY": "Opacity",
         "MASCOT_SCALE": "Scaling",
         "CHAT_ENABLED": "Chat Enabled",
-        "CHAT_COMMAND": "Chat Command"
+        "CHAT_COMMAND": "Chat Command",
+        "BUBBLE_ENABLED": "Bubble Enabled",
+        "BUBBLE_COMMAND": "Bubble Command"
     }
     starttime = time.time()
     wait_until_null_null = False
@@ -1164,6 +1166,8 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "SOCKET_LOCATION": "socket_location",
         "CHAT_ENABLED": "chat_enabled",
         "CHAT_COMMAND": "chat_command",
+        "BUBBLE_ENABLED": "bubble_enabled",
+        "BUBBLE_COMMAND": "bubble_command",
     }
 
     backmap = { v: k for k, v in name_cast.items() }
