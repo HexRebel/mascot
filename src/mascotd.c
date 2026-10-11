@@ -348,7 +348,7 @@ static int start_bubble(int epfd, void* epoll_ptr, const char* chat_path)
         INFO("Chat bubble is not installed (%s); set BUBBLE_COMMAND to start one", ui[0] ? ui : SYSTEM_UI_PATH);
     }
 
-    if (!command[0] || !bubble_start(command, chat_path)) return -1;
+    if (!command[0] || !bubble_start(command, chat_path, server_state.configuration_root)) return -1;
     int fd = bubble_pidfd();
     struct epoll_event ev = { .events = EPOLLIN, .data.ptr = epoll_ptr };
     if (fd != -1 && epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1) {

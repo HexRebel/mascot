@@ -45,7 +45,7 @@ static int bubble_fd = -1;
 static struct timespec stop_requested;
 static bool stop_termed;
 
-bool bubble_start(const char* command, const char* chat_socket)
+bool bubble_start(const char* command, const char* chat_socket, const char* data_dir)
 {
     if (bubble_pid > 0 || !command || !*command) return false;
 
@@ -59,19 +59,28 @@ bool bubble_start(const char* command, const char* chat_socket)
     // async-signal-safe calls (no malloc, no setenv) before exec
     size_t env_count = 0;
     while (environ[env_count]) env_count++;
-    char** envp = calloc(env_count + 3, sizeof(char*));
+    char** envp = calloc(env_count + 4, sizeof(char*));
     char* socket_var = NULL;
+    char* data_var = NULL;
     if (!envp || asprintf(&socket_var, "MASCOT_CHAT_SOCKET=%s", chat_socket) == -1) {
+        free(envp);
+        free(script);
+        return false;
+    }
+    if (asprintf(&data_var, "MASCOT_DATA_DIR=%s", data_dir) == -1) {
+        free(socket_var);
         free(envp);
         free(script);
         return false;
     }
     size_t n = 0;
     for (size_t i = 0; i < env_count; i++) {
-        if (strncmp(environ[i], "MASCOT_CHAT_SOCKET=", 19) && strncmp(environ[i], "MASCOT_BUBBLE_MANAGED=", 22))
+        if (strncmp(environ[i], "MASCOT_CHAT_SOCKET=", 19) && strncmp(environ[i], "MASCOT_BUBBLE_MANAGED=", 22) &&
+            strncmp(environ[i], "MASCOT_DATA_DIR=", 16))
             envp[n++] = environ[i];
     }
     envp[n++] = socket_var;
+    envp[n++] = data_var;
     envp[n++] = "MASCOT_BUBBLE_MANAGED=1";
     char* const argv[] = { "sh", "-c", script, NULL };
 
@@ -79,6 +88,7 @@ bool bubble_start(const char* command, const char* chat_socket)
     pid_t pid = fork();
     if (pid == -1) {
         WARN("Cannot start the chat bubble: %s", strerror(errno));
+        free(data_var);
         free(socket_var);
         free(envp);
         free(script);
@@ -108,6 +118,7 @@ bool bubble_start(const char* command, const char* chat_socket)
         _exit(127);
     }
 
+    free(data_var);
     free(socket_var);
     free(envp);
     free(script);

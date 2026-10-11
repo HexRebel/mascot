@@ -23,8 +23,9 @@
 #include <stdbool.h>
 
 // Runs `sh -c "exec <command>"` in its own process group with MASCOT_CHAT_SOCKET
-// set to chat_socket. Returns whether it was started
-bool bubble_start(const char* command, const char* chat_socket);
+// set to chat_socket and MASCOT_DATA_DIR to data_dir (where a user's prompt.md
+// lives). Returns whether it was started
+bool bubble_start(const char* command, const char* chat_socket, const char* data_dir);
 
 // A pidfd that becomes readable when the bubble exits (add it to epoll and call
 // bubble_exited()), or -1

@@ -161,7 +161,7 @@ PanelWindow {
         ".info                  show aichat's settings",
         ".models / .roles / .sessions   list them",
         ".model <name>          switch model (e.g. openrouter:…)",
-        ".role <name>           switch role",
+        ".role <name>           switch role (instead of Mascot's prompt)",
         ".session <name>        start/continue a session with memory",
         ".exit model|role|session   go back to the default",
         ".clear                 clear the bubble"
@@ -173,6 +173,8 @@ PanelWindow {
             args.push("-m", bubble.model);
         if (bubble.role)
             args.push("-r", bubble.role);
+        else if (bubble.prompt)
+            args.push("--prompt", bubble.prompt.replace(/\{name\}/g, bubble.event?.prototype || "a desktop mascot"));
         if (bubble.session)
             args.push("-s", bubble.session, "--save-session");
         return args;
@@ -296,6 +298,26 @@ PanelWindow {
             theme.accent = data.colors?.color4 ?? theme.accent;
             theme.muted = data.colors?.color8 ?? theme.muted;
         }
+    }
+
+    // Mascot's own system prompt, used unless a role is chosen with .role; {name}
+    // is the mascot's name. A prompt.md in the data directory replaces the
+    // bundled one (an empty one turns the prompt off). Read when the bubble starts
+    readonly property string dataDir: Quickshell.env("MASCOT_DATA_DIR")
+        || `${Quickshell.env("XDG_DATA_HOME") || Quickshell.env("HOME") + "/.local/share"}/mascot`
+    property var userPrompt: null // null: no prompt.md in dataDir
+    property string bundledPrompt: ""
+    readonly property string prompt: (userPrompt ?? bundledPrompt).trim()
+
+    FileView {
+        path: `${bubble.dataDir}/prompt.md`
+        printErrors: false
+        onLoaded: bubble.userPrompt = this.text()
+    }
+
+    FileView {
+        path: Quickshell.shellPath("prompt.md")
+        onLoaded: bubble.bundledPrompt = this.text()
     }
 
     FileView {

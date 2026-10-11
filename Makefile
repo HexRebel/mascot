@@ -140,7 +140,7 @@ install: all
 	install -m644 src/plugins.h $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
 	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
-	install -m644 ui/*.qml $(DESTDIR)$(PREFIX)/share/mascot/ui/
+	install -m644 ui/*.qml ui/prompt.md $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 	cp -R --no-preserve=ownership prototypes/. $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 	chmod -R u=rwX,go=rX $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
@@ -159,6 +159,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Bubble.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
+	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/prompt.md
 	rm -rf $(DESTDIR)$(PREFIX)/share/mascot/prototypes
 	rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \
 		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null || true

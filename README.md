@@ -314,12 +314,24 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.info` | Show aichat's settings |
 | `.models`, `.roles`, `.sessions` | List them |
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
-| `.role <name>` | Switch role |
+| `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
 | `.session <name>` | Start or continue a session, which gives the conversation memory |
 | `.exit model\|role\|session` | Go back to the default |
 | `.clear` | Clear the bubble |
 
 The model, role and session apply to every mascot until changed, and reset when `qs` restarts.
+
+## The mascot's personality
+
+Unless you pick a role with `.role`, every message is sent with Mascot's own system prompt
+(aichat's `--prompt`), so the mascot answers in character, briefly and in your language. `{name}` in
+the prompt becomes the mascot's name, so Brown Bear answers as Brown Bear. Your aichat roles and
+your `cmd_prelude` are left alone; the prompt simply takes their place in the bubble.
+
+The bundled prompt is `$(PREFIX)/share/mascot/ui/prompt.md`. To write your own, put a `prompt.md` in
+Mascot's data directory (`~/.local/share/mascot/prompt.md`); it replaces the bundled one, and an
+empty file turns the prompt off. The bubble reads it when it starts, so run `mascot stop` after
+changing it.
 
 ## Configuration
 
