@@ -439,11 +439,13 @@ def converter_handler(arguments: argparse.Namespace, parser):
         print("No prototypes selected")
         exit(1)
 
+    failed = 0
     for prototype in selected:
 
         if os.path.exists(os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")):
             if not arguments.force:
                 print(f"File {os.path.join(arguments.output, f'Shimeji.{prototype}.wlshm')} already exists")
+                failed += 1
                 continue
 
         config_base_dir_name = os.path.join(instance_root, "conf")
@@ -461,6 +463,7 @@ def converter_handler(arguments: argparse.Namespace, parser):
             )
         except Exception as e:
             print(f"Conversion failed for {prototype}: {e}")
+            failed += 1
             continue
         finally:
             os.close(config_dirfd)
@@ -578,6 +581,9 @@ def converter_handler(arguments: argparse.Namespace, parser):
             wlpak.write(wlpak_prefix)
             wlpak.write(memfile.getvalue())
         print(f'Converted {prototype} to {os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")}')
+
+    if failed:
+        exit(1)
 
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
     match arguments.action:

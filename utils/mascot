@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import struct
-import tempfile
-import argparse
-import stat
-from dataclasses import dataclass, field
-import json
-import tarfile
-import sys
-import pathlib
-import subprocess
-import io
-import xml
-from xml.etree import ElementTree
-import xml.etree.ElementTree as ET
-import zipfile
-from PIL import Image
-import logging
-from typing import Dict, Optional
-import enum
-import socket
-import time
-import shutil
-import os
 from typing import Callable, Any
 import random
+import time
+import subprocess
+import zipfile
+import enum
+import xml
+import struct
 from dataclasses import dataclass
+import os
+import logging
+import socket
+import xml.etree.ElementTree as ET
+import json
+import tempfile
+import tarfile
+from dataclasses import dataclass, field
+from xml.etree import ElementTree
+import pathlib
+import sys
+import stat
+import argparse
+from typing import Dict, Optional
+import io
+import shutil
+from PIL import Image
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -2971,11 +2971,13 @@ def converter_handler(arguments: argparse.Namespace, parser):
         print("No prototypes selected")
         exit(1)
 
+    failed = 0
     for prototype in selected:
 
         if os.path.exists(os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")):
             if not arguments.force:
                 print(f"File {os.path.join(arguments.output, f'Shimeji.{prototype}.wlshm')} already exists")
+                failed += 1
                 continue
 
         config_base_dir_name = os.path.join(instance_root, "conf")
@@ -2993,6 +2995,7 @@ def converter_handler(arguments: argparse.Namespace, parser):
             )
         except Exception as e:
             print(f"Conversion failed for {prototype}: {e}")
+            failed += 1
             continue
         finally:
             os.close(config_dirfd)
@@ -3113,6 +3116,9 @@ def converter_handler(arguments: argparse.Namespace, parser):
             wlpak.write(wlpak_prefix)
             wlpak.write(memfile.getvalue())
         print(f'Converted {prototype} to {os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")}')
+
+    if failed:
+        exit(1)
 
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
     match arguments.action:
