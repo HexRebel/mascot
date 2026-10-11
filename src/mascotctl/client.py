@@ -292,6 +292,22 @@ class Client:
     def register_callback(self, packet_type: type[Packet], callback: Callable):
         self.packet_callbacks[packet_type] = callback
 
+# Spawn packs coordinates as uint32, so they must be whole and non-negative
+def coordinate(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a whole number")
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"'{value}' is negative")
+    return number
+
+def position(value: str) -> tuple[int, int]:
+    x, sep, y = value.partition(",")
+    if not sep:
+        raise argparse.ArgumentTypeError(f"'{value}' is not in the format x,y")
+    return coordinate(x.strip()), coordinate(y.strip())
+
 def prototype_find(name: str) -> Prototype | None:
     if name.isdigit():
         if int(name) in prototypes:
@@ -733,12 +749,16 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 if envid in environments:
                     envs.append(environments[envid])
 
-            if not arguments.select and (not arguments.position or not arguments.x or not arguments.y):
+            if arguments.position is not None and (arguments.x is not None or arguments.y is not None):
+                logger.error("--position cannot be combined with -x or -y")
+                exit(1)
+
+            if not arguments.select:
                 if arguments.position is None:
-                    xpos = arguments.x or -1
-                    ypos = arguments.y or 128
+                    xpos = arguments.x if arguments.x is not None else -1
+                    ypos = arguments.y if arguments.y is not None else 128
                 else:
-                    xpos, ypos = arguments.position.split(',')
+                    xpos, ypos = arguments.position
 
                 random_env: Environment = random.choice(envs) if envs else random.choice(list(environments.values()))
                 if xpos == -1:
@@ -1247,9 +1267,9 @@ if __name__ == "__main__":
     summoner.add_argument("name", help="Name of the mascot to summon. You can see available mascot types using prototypes list")
     summoner.add_argument('-s', "--select", action="store_true", help="Use selection mechanism to select place where to summon")
     summoner.add_argument("-e", "--environment", action="append", help="Selects possible environments to summon in. If specified with select, will act as filter for the selection")
-    summoner.add_argument("-x", help="Selects X coordinates to summon in. Does nothing when select is specified.")
-    summoner.add_argument("-y", help="Selects Y coordinates to summon in. Does nothing when select is specified.")
-    summoner.add_argument("--position", help="Takes a position in the format x,y, mutually exclusive with -x and -y")
+    summoner.add_argument("-x", type=coordinate, help="Selects X coordinates to summon in. Does nothing when select is specified.")
+    summoner.add_argument("-y", type=coordinate, help="Selects Y coordinates to summon in. Does nothing when select is specified.")
+    summoner.add_argument("--position", type=position, help="Takes a position in the format x,y, mutually exclusive with -x and -y")
     summoner.add_argument("-b", "--behavior", help="Specifies starting behavior.", default="")
 
     dismisser = mascot_subparsers.add_parser("dismiss", help="Dismiss a mascot")
@@ -1339,9 +1359,9 @@ if __name__ == "__main__":
     summoner.add_argument("name", help="Name of the mascot to summon. You can see available mascot types using prototypes list")
     summoner.add_argument('-s', "--select", action="store_true", help="Use selection mechanism to select place where to summon")
     summoner.add_argument("-e", "--environment", action="append", help="Selects possible environments to summon in. If specified with select, will act as filter for the selection")
-    summoner.add_argument("-x", help="Selects X coordinates to summon in. Does nothing when select is specified.")
-    summoner.add_argument("-y", help="Selects Y coordinates to summon in. Does nothing when select is specified.")
-    summoner.add_argument("--position", help="Takes a position in the format x,y, mutually exclusive with -x and -y")
+    summoner.add_argument("-x", type=coordinate, help="Selects X coordinates to summon in. Does nothing when select is specified.")
+    summoner.add_argument("-y", type=coordinate, help="Selects Y coordinates to summon in. Does nothing when select is specified.")
+    summoner.add_argument("--position", type=position, help="Takes a position in the format x,y, mutually exclusive with -x and -y")
     summoner.add_argument("-b", "--behavior", help="Specifies starting behavior.", default="")
 
     dismisser = category.add_parser("dismiss", help="Dismiss a mascot")
