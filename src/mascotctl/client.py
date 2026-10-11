@@ -1,6 +1,7 @@
 from __future__ import annotations
 import socket
 import os
+import sys
 import shutil
 import struct
 import random
@@ -528,8 +529,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     print(f"{id & 0x00FFFFFF}: {prototype.display_name}")
                 else:
                     header = f"[Prototype \"{prototype.display_name}\" (aka \"{prototype.name}\")]"
-                    padding_left = round(os.get_terminal_size().columns / 4  - len(header) / 2)
-                    padding_right = round(os.get_terminal_size().columns / 4  - len(header) / 2)
+                    padding_left = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
+                    padding_right = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
                     print(f"{'-' * padding_left}{header}{'-' * padding_right}")
                     print(f"Id: {prototype.id & 0x00FFFFFF}")
                     print(f"Name: {prototype.name}")
@@ -546,8 +547,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     print()
                     print(f"Object id: {id}")
                     header = '[END]'
-                    padding_left = round(os.get_terminal_size().columns / 4  - len(header) / 2)
-                    padding_right = round(os.get_terminal_size().columns / 4  - len(header) / 2)
+                    padding_left = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
+                    padding_right = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
                     print(f"{'-' * padding_left}{header}{'-' * padding_right}")
                     print()
 
@@ -555,13 +556,15 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
             protos_selected = set([])
             for name in arguments.name or []:
                 proto = prototype_find(name)
-                if prototype_find:
+                if proto:
                     protos_selected.add(proto)
+                else:
+                    print(f"Unknown prototype: {name}", file=sys.stderr)
             prototype: Prototype
             for prototype in protos_selected:
                 header = f"[Prototype \"{prototype.display_name}\" (aka \"{prototype.name}\")]"
-                padding_left = round(os.get_terminal_size().columns / 4  - len(header) / 2)
-                padding_right = round(os.get_terminal_size().columns / 4  - len(header) / 2)
+                padding_left = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
+                padding_right = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
                 print(f"{'-' * padding_left}{header}{'-' * padding_right}")
                 print(f"Id: {prototype.id & 0x00FFFFFF}")
                 print(f"Name: {prototype.name}")
@@ -578,8 +581,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                 print()
                 print(f"Object id: {prototype.id}")
                 header = '[END]'
-                padding_left = round(os.get_terminal_size().columns / 4  - len(header) / 2)
-                padding_right = round(os.get_terminal_size().columns / 4  - len(header) / 2)
+                padding_left = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
+                padding_right = round(shutil.get_terminal_size().columns / 4  - len(header) / 2)
                 print(f"{'-' * padding_left}{header}{'-' * padding_right}")
                 print()
 
