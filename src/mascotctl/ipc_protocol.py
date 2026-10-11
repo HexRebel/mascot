@@ -727,6 +727,14 @@ class Stop(Packet):
     def __init__(self):
         Packet.__init__(self, self.type, 0, 0, b'')
 
+class Sync(Packet):
+    type: int = 0x5A
+
+    def __init__(self):
+        Packet.__init__(self, self.type, 0, 0, b'')
+
+class SyncDone(Packet): ...
+
 class PrototypeWithdraw(Packet): ...
 
 class PluginRestoreWindows(Packet):

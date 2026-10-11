@@ -94,6 +94,8 @@ If object ID is NULL, the message is generic message
 | 0x57 | prototype->withdraw() | Sent when prototype is withdrawn, acts as destructor for object | Serverbound |
 | 0x58 | popup.frame() | See frame callbacks in wayland | Clientbound |
 | 0x59 | mascot.tapped() | Triggered on primary button press and release on mascot without dragging it | Clientbound |
+| 0x5A | sync() | Ask the overlay to answer with sync.done() once earlier requests are handled | Serverbound |
+| 0x5B | sync.done() | Answer to sync() | Clientbound |
 
 # Client Hello - 0x00
 
@@ -337,6 +339,17 @@ Sent to all clients when user presses and releases primary mouse button on masco
 | Environment ID | uint32 | Object ID of the environment the mascot is in | |
 | X | uint32 | Pointer X position at release | Environment coordinates |
 | Y | uint32 | Pointer Y position at release | Environment coordinates, bottom-referenced like mascot Y |
+
+# sync() - 0x5A
+
+No fields. The overlay handles a client's requests in order and answers with sync.done(), so once
+that arrives, every notice caused by earlier requests has been sent. Requests that finish later on
+their own (import, export) are not covered. Older overlays do not know this request: wait with a
+timeout. Added after protocol version 0.1.0, without a version change.
+
+# sync.done() - 0x5B
+
+No fields. Answer to sync(); object ID is 0.
 
 
 TODO:

@@ -36,6 +36,7 @@ bool protocol_handler_list_config_keys(struct protocol_client* client, ipc_packe
 bool protocol_handler_import(struct protocol_client* client, ipc_packet_t* packet);
 bool protocol_handler_export(struct protocol_client* client, ipc_packet_t* packet);
 bool protocol_handler_stop(struct protocol_client* client, ipc_packet_t* packet);
+bool protocol_handler_sync(struct protocol_client* client, ipc_packet_t* packet);
 
 ipc_packet_t* protocol_builder_server_hello();
 ipc_packet_t* protocol_builder_disconnect();

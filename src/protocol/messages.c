@@ -1238,6 +1238,18 @@ bool protocol_handler_export(struct protocol_client* client, ipc_packet_t* packe
     return true;
 }
 
+// Requests are handled in order, so answering here tells the client that every
+// earlier request is done and its notices are sent (the CLI waits for this)
+bool protocol_handler_sync(struct protocol_client* client, ipc_packet_t* packet)
+{
+    UNUSED(packet);
+    ipc_packet_t* done = ipc_allocate_packet(0);
+    ipc_packet_set_type(done, 0x5B);
+    ipc_packet_set_object(done, 0);
+    ipc_connector_send(client->connector, done);
+    return true;
+}
+
 bool protocol_handler_stop(struct protocol_client* client, ipc_packet_t* packet)
 {
     UNUSED(client);

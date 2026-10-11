@@ -25,7 +25,7 @@ import random
 import logging
 
 from ipc_protocol import Packet,\
-ServerHello, ClientHello, Notice, StartSession, EnvironmentAnnouncement, EnvironmentChanged, EnvironmentMascot, EnvironmentWithdrawn, StartPrototype, PrototypeName, PrototypeDisplayName, PrototypePath, PrototypeFD, PrototypeAddAction, PrototypeAddBehavior, PrototypeIcon, PrototypeAuthor, PrototypeVersion, CommitPrototypes, MascotMigrated, MascotDisposed, MascotInfo, MascotClicked, SelectionDone, SelectionCancelled, ImportFailed, ImportStarted, ImportFinished, ImportProgress, ExportFailed, ExportFinished, ConfigKey, ClickEventExpired, PrototypeWithdraw, ReloadPrototype, Spawn, MascotGetInfo, MascotInfo, ApplyBehavior, Stop, GetConfigKey, ListConfigKeys, SetConfigKey, ConfigKey, Disconnect,\
+ServerHello, ClientHello, Notice, StartSession, EnvironmentAnnouncement, EnvironmentChanged, EnvironmentMascot, EnvironmentWithdrawn, StartPrototype, PrototypeName, PrototypeDisplayName, PrototypePath, PrototypeFD, PrototypeAddAction, PrototypeAddBehavior, PrototypeIcon, PrototypeAuthor, PrototypeVersion, CommitPrototypes, MascotMigrated, MascotDisposed, MascotInfo, MascotClicked, SelectionDone, SelectionCancelled, ImportFailed, ImportStarted, ImportFinished, ImportProgress, ExportFailed, ExportFinished, ConfigKey, ClickEventExpired, PrototypeWithdraw, ReloadPrototype, Spawn, MascotGetInfo, MascotInfo, ApplyBehavior, Stop, Sync, SyncDone, GetConfigKey, ListConfigKeys, SetConfigKey, ConfigKey, Disconnect,\
 Prototype, Environment, Mascot, Selection, Import, Export, PluginRestoreWindows,\
 objects, prototypes, environments, mascots, active_selection, imports, exports
 
@@ -67,7 +67,8 @@ class Client:
         0x29: ExportFinished,
         0x54: ConfigKey,
         0x55: ClickEventExpired,
-        0x57: PrototypeWithdraw
+        0x57: PrototypeWithdraw,
+        0x5B: SyncDone
     }
 
     prototypes_pending: dict[int, Prototype] = {}
@@ -75,6 +76,10 @@ class Client:
     packet_callbacks: dict[type[Packet], Callable] = {}
 
     initialized: bool = False
+    synced: bool = False
+
+    def SyncDone(self, packet: SyncDone):
+        self.synced = True
 
     def StartSession(self, packet: StartSession):
         self.initialized = True
@@ -176,7 +181,9 @@ class Client:
 
         strings = {
             "config.warning.get": "Config has no key named \"{}\"",
-            "config.warning.set": "Config has no key named \"{}\""
+            "config.warning.set": "Config has no key named \"{}\"",
+            "prototype.error.no_behavior": "Prototype has no behavior named \"{}\"",
+            "apply_behavior.error.no_mascot": "Mascot not found"
         }
 
         [logger.info, logger.warning, logger.error][packet.severity](strings.get(packet.message, packet.message).format(*packet.formating_values))
@@ -209,6 +216,7 @@ class Client:
             SelectionDone: Client.SelectionDone,
             SelectionCancelled: Client.SelectionCancelled,
             Notice: Client.Notice,
+            SyncDone: Client.SyncDone,
             Disconnect: Client.Disconnect,
         }
 
@@ -254,6 +262,33 @@ class Client:
 
         self.queue_packet(ClientHello(0x200000))  # protocol 0.1.0
         self.dispatch_events(until=lambda: self.initialized)
+
+    # Waits until the overlay has handled everything sent so far, so its notices
+    # (e.g. an unknown behavior) are shown before a one-shot command exits.
+    # Overlays without sync() never answer, hence the timeout
+    def sync(self, timeout: float = 2.0):
+        self.synced = False
+        self.queue_packet(Sync())
+        deadline = time.time() + timeout
+        previous = self.socket.gettimeout()
+        try:
+            while not self.synced:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    logger.debug("Overlay did not answer sync()")
+                    break
+                self.socket.settimeout(remaining)
+                try:
+                    buffer, fds, _, _ = socket.recv_fds(self.socket, 4096, 10)
+                except TimeoutError:
+                    continue
+                if not buffer:
+                    break
+                self.handle_packet(buffer, fds)
+        except OSError:
+            pass # the overlay went away (e.g. after stop)
+        finally:
+            self.socket.settimeout(previous)
 
     def queue_packet(self, packet: Packet):
         socket.send_fds(self.socket, [packet.encode()], packet.fds)
@@ -1519,5 +1554,7 @@ if __name__ == "__main__":
             case _:
                 argparser.print_help()
                 exit(1)
+        if arguments.category != "stop":
+            client.sync()
     except KeyboardInterrupt:
         logging.info("Interrupted.")
