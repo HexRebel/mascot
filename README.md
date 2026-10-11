@@ -302,12 +302,14 @@ The model, role and session apply to every mascot until changed, and reset when 
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 
 The message is appended to `CHAT_COMMAND` as an argument, never parsed by the shell, and stdin is
-closed. An empty `CHAT_COMMAND` means `AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat`:
-a separate aichat config, because the bubble cannot answer aichat's confirmation prompts (for
-example for tool calls). Create that directory, or point the bubble at your normal config:
+closed. An empty `CHAT_COMMAND` means plain `aichat` with your normal config.
+
+The bubble cannot answer aichat's prompts, so a reply that waits for one (for example to confirm a
+tool call) never arrives. If your config uses tools, give the bubble a separate aichat config
+without them, e.g. a copy with `function_calling: false` in `~/.config/aichat-bubble/`:
 
 ```sh
-mascot config set CHAT_COMMAND aichat
+mascot config set CHAT_COMMAND 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat'
 ```
 
 ## Blur on Hyprland (optional)

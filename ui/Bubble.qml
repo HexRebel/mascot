@@ -182,9 +182,7 @@ PanelWindow {
     // parsed by the shell
     function run(args: var, reply = false): void {
         bubble.replying = reply;
-        // Without CHAT_COMMAND use the bubble's own aichat config: the main one
-        // asks to confirm tool calls, which nobody can answer from here
-        const command = bubble.event?.command || 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat';
+        const command = bubble.event?.command || 'aichat';
         // stdin must be closed: aichat reads a non-tty stdin as extra input and
         // waits forever on the open pipe Process gives it
         chat.command = ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args);
