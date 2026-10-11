@@ -365,6 +365,8 @@ void protocol_server_announce_new_prototype(struct mascot_prototype* prototype, 
         ipc_connector_send(client->connector, prototype_packet);
         ipc_connector_send(client->connector, prototype_name_packet);
         ipc_connector_send(client->connector, prototype_display_name_packet);
+        ipc_packet_t* prototype_version_packet = protocol_builder_prototype_version(prototype);
+        if (prototype_version_packet) ipc_connector_send(client->connector, prototype_version_packet);
         if (prototype->author) {
             ipc_packet_t* prototype_author_packet = protocol_builder_prototype_author(prototype);
             if (prototype_author_packet) ipc_connector_send(client->connector, prototype_author_packet);

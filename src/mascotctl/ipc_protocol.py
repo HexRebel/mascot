@@ -130,7 +130,7 @@ class Prototype:
     behaviors: list[str]
     icon_fd: int
     author: str = ''
-    version: int = 0
+    version: str = ''
 
     socket: socket.socket
 
@@ -144,7 +144,7 @@ class Prototype:
         self.actions = []
         self.behaviors = []
         self.author = ''
-        self.version = 0
+        self.version = ''
 
     def withdrawn(self, packet: PrototypeWithdraw):
         objects.pop(self.id)
@@ -457,10 +457,12 @@ class PrototypeAuthor(Packet):
         self.author = self.read_values(f"{author_len}s")[0].decode()
 
 class PrototypeVersion(Packet):
-    version: int
+    version: str
 
     def deserialize(self) -> None:
-        self.version = self.read_values("Q")[0]
+        # 21 bits each for major, minor and patch (version_to_i64() in master_header.h)
+        packed = self.read_values("Q")[0]
+        self.version = f"{packed >> 42 & 0x1FFFFF}.{packed >> 21 & 0x1FFFFF}.{packed & 0x1FFFFF}"
 
 class CommitPrototypes(Packet): ...
 

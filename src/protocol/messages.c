@@ -241,7 +241,18 @@ ipc_packet_t* protocol_builder_prototype_author(struct mascot_prototype* prototy
     return packet;
 }
 
-ipc_packet_t* protocol_builder_prototype_version(struct mascot_prototype* prototype);
+ipc_packet_t* protocol_builder_prototype_version(struct mascot_prototype* prototype)
+{
+    ipc_packet_t* packet = ipc_allocate_packet(8);
+    uint32_t object_id = (prototype->id & 0x00FFFFFF) | (PROTOCOL_OBJECT_PROTOTYPE << 24);
+
+    ipc_packet_set_type(packet, 0x12);
+    ipc_packet_set_object(packet, object_id);
+
+    ENSURE_MARSHALLER(ipc_packet_write_uint64(packet, prototype->version));
+
+    return packet;
+}
 
 ipc_packet_t* protocol_builder_commit_prototypes()
 {
