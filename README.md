@@ -165,6 +165,10 @@ You can list all available mascot prototypes using the following command:
 mascot prototypes list
 ```
 
+Mascot ships with the original Shimeji by Yuki Yamada (Group Finity), installed to
+`$(PREFIX)/share/mascot/prototypes/`. Prototypes you import yourself go to
+`~/.local/share/mascot/shimejis/` and take precedence over a bundled one with the same name.
+
 # Summoning mascots
 
 To summon mascot, you need to know mascot's name, which you can get by using `mascot prototypes list` command. When you found mascot of your choice, you can summon using `mascot summon {name}` command, where `{name}` is the name of the mascot you want to summon.
@@ -223,6 +227,84 @@ mascot config list
 ```
 
 Config file is usually located at `~/.local/share/mascot/mascotd.conf`
+
+# Chat bubble
+
+Left-click (tap) a mascot and a speech bubble opens next to it. Type a message, press Enter, and
+the answer from a language model is streamed into the bubble. The mascot sits still while the
+bubble is open.
+
+The bubble is a separate [Quickshell](https://quickshell.org/) project in `ui/`; `make install`
+puts it in `$(PREFIX)/share/mascot/ui/`. The answers come from [aichat](https://github.com/sigoden/aichat),
+so any model aichat supports works, including local ones through Ollama.
+
+## Requirements
+
+- Quickshell (`pacman -S quickshell`)
+- aichat (`pacman -S aichat`), configured with at least one model
+
+## Running it
+
+Start the bubble next to the daemon (not as part of another Quickshell config):
+
+```sh
+qs -p /usr/local/share/mascot/ui
+```
+
+It connects to the daemon's chat socket, `$XDG_RUNTIME_DIR/mascotd-chat.sock`, and reconnects if the
+daemon is restarted. Set `MASCOT_CHAT_SOCKET` to use another socket. The daemon names the chat
+socket after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
+
+## Using it
+
+- **Tap** a mascot to open the bubble. Dragging a mascot does not open it, and dragging the mascot
+  away closes it.
+- The bubble takes the keyboard while it is open, so you can type straight away; your compositor's
+  key bindings still work.
+- **Enter** sends, **Esc** or **×** closes.
+
+Lines starting with `.` are commands, modelled on aichat's REPL:
+
+| Command | Effect |
+|---|---|
+| `.help` | List the commands |
+| `.info` | Show aichat's settings |
+| `.models`, `.roles`, `.sessions` | List them |
+| `.model <name>` | Switch model, e.g. `.model openrouter:…` |
+| `.role <name>` | Switch role |
+| `.session <name>` | Start or continue a session, which gives the conversation memory |
+| `.exit model\|role\|session` | Go back to the default |
+| `.clear` | Clear the bubble |
+
+The model, role and session apply to every mascot until changed, and reset when `qs` restarts.
+The bubble's own messages are in Danish for now.
+
+## Configuration
+
+| Option | Default | Description |
+|---|---|---|
+| `CHAT_ENABLED` | `true` | `false` stops taps from opening the bubble. Takes effect without a restart. |
+| `CHAT_COMMAND` | empty | The command that answers a message. |
+
+The message is appended to `CHAT_COMMAND` as an argument, never parsed by the shell, and stdin is
+closed. An empty `CHAT_COMMAND` means `AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat`:
+a separate aichat config, because the bubble cannot answer aichat's confirmation prompts (for
+example for tool calls). Create that directory, or point the bubble at your normal config:
+
+```sh
+mascot config set CHAT_COMMAND aichat
+```
+
+## Blur on Hyprland (optional)
+
+The bubble's layer namespace is `mascot-bubble`. With Hyprland 0.53 or newer:
+
+```
+layerrule = blur on, match:namespace mascot-bubble
+layerrule = ignore_alpha 0.3, match:namespace mascot-bubble
+```
+
+Colours are read from pywal (`~/.cache/wal/colors.json`) when it exists.
 
 # Advanced usage
 
