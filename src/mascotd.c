@@ -334,6 +334,29 @@ bool installed_location(const char* relative, char* pathbuf)
     return stat(pathbuf, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
+// Starts the chat bubble and watches its pidfd in epoll with epoll_ptr as
+// data. Returns the pidfd, or -1
+static int start_bubble(int epfd, void* epoll_ptr, const char* chat_path)
+{
+    char command[PATH_MAX + 16] = {0};
+    char ui[PATH_MAX];
+    if (config_get_bubble_command()) {
+        snprintf(command, sizeof(command), "%s", config_get_bubble_command());
+    } else if (installed_location(SYSTEM_UI_PATH, ui) && !strchr(ui, '\'')) {
+        snprintf(command, sizeof(command), "qs -p '%s'", ui);
+    } else {
+        INFO("Chat bubble is not installed (%s); set BUBBLE_COMMAND to start one", ui[0] ? ui : SYSTEM_UI_PATH);
+    }
+
+    if (!command[0] || !bubble_start(command, chat_path)) return -1;
+    int fd = bubble_pidfd();
+    struct epoll_event ev = { .events = EPOLLIN, .data.ptr = epoll_ptr };
+    if (fd != -1 && epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+        WARN("Failed to add chat bubble to epoll: %s", strerror(errno));
+    }
+    return fd;
+}
+
 size_t default_socket_path(char* pathbuf, size_t pathbuf_len)
 {
     const char *prefix = secure_getenv("XDG_RUNTIME_DIR");
@@ -823,27 +846,13 @@ int main(int argc, const char** argv)
         }
     }
 
-    // Start the chat bubble; it lives exactly as long as mascotd
+    // Start the chat bubble; it lives as long as mascotd, or until CHAT_ENABLED
+    // is turned off (and starts again when it is turned back on)
     struct socket_description bubble_sd = { .fd = -1, .type = SOCKET_TYPE_BUBBLE };
-    if (chat_fd != -1 && config_get_chat_enabled() && config_get_bubble_enabled()) {
-        char command[PATH_MAX + 16] = {0};
-        char ui[PATH_MAX];
-        if (config_get_bubble_command()) {
-            snprintf(command, sizeof(command), "%s", config_get_bubble_command());
-        } else if (installed_location(SYSTEM_UI_PATH, ui) && !strchr(ui, '\'')) {
-            snprintf(command, sizeof(command), "qs -p '%s'", ui);
-        } else {
-            INFO("Chat bubble is not installed (%s); set BUBBLE_COMMAND to start one", ui[0] ? ui : SYSTEM_UI_PATH);
-        }
-
-        if (command[0] && bubble_start(command, chat_path)) {
-            bubble_sd.fd = bubble_pidfd();
-            ev.events = EPOLLIN;
-            ev.data.ptr = &bubble_sd;
-            if (bubble_sd.fd != -1 && epoll_ctl(epfd, EPOLL_CTL_ADD, bubble_sd.fd, &ev) == -1) {
-                WARN("Failed to add chat bubble to epoll: %s", strerror(errno));
-            }
-        }
+    bool chat_was_enabled = config_get_chat_enabled();
+    bool bubble_wanted = false;
+    if (chat_fd != -1 && chat_was_enabled && config_get_bubble_enabled()) {
+        bubble_sd.fd = start_bubble(epfd, &bubble_sd, chat_path);
     }
 
     // Add wayland fd to epoll
@@ -958,8 +967,10 @@ int main(int argc, const char** argv)
                 // chat.c closes the fd (which also drops it from epoll); the description is ours
                 if (!chat_client_readable(sd->fd)) free(sd);
             } else if (sd->type == SOCKET_TYPE_BUBBLE) {
-                // The bubble exited on its own; mascotd keeps running without it
+                // The bubble exited (on its own, or after CHAT_ENABLED was turned
+                // off); mascotd keeps running without it
                 bubble_exited();
+                if (!bubble_running()) chat_restore_input();
             } else if (sd->type == SOCKET_TYPE_ENVIRONMENT) {
                 // Wayland event
                 if (events[i].events & EPOLLHUP) {
@@ -972,6 +983,23 @@ int main(int argc, const char** argv)
                 }
             }
         }
+
+        // CHAT_ENABLED can be changed while running (mascot config set); the
+        // bubble follows it. A bubble still quitting is restarted once it is gone
+        bool chat_enabled = config_get_chat_enabled();
+        if (chat_fd != -1 && chat_enabled != chat_was_enabled) {
+            chat_was_enabled = chat_enabled;
+            bubble_wanted = chat_enabled && config_get_bubble_enabled();
+            if (!chat_enabled) {
+                chat_disconnect_all();
+                bubble_request_stop();
+            }
+        }
+        if (bubble_wanted && !bubble_running()) {
+            bubble_wanted = false;
+            bubble_sd.fd = start_bubble(epfd, &bubble_sd, chat_path);
+        }
+        bubble_tick();
 
         if (!fds_count && !mascot_total_count) {
             break;

@@ -61,6 +61,8 @@ static int64_t held_mascot_id = -1;
 // on them (see environment_suppress_sprite_input())
 static bool sprites_suppressed = false;
 static struct timespec suppressed_at;
+// Set by chat_disconnect_all() until the bubble it cut off is gone
+static bool disconnecting = false;
 
 size_t chat_socket_path(const char* ipc_socket_path, char* pathbuf, size_t pathbuf_len)
 {
@@ -151,10 +153,11 @@ static void chat_remove_client(int index)
 {
     close(clients[index].fd);
     clients[index] = clients[--client_count];
-    // No bubble left to talk to the held mascot
+    // No bubble left to talk to the held mascot. After chat_disconnect_all()
+    // the bubble is still hiding, so input stays off until it is gone
     if (!client_count) {
         chat_release_held();
-        chat_suppress_sprites(false);
+        if (!disconnecting) chat_suppress_sprites(false);
     }
 }
 
@@ -251,6 +254,22 @@ void chat_tick(void)
     int64_t ms = (now.tv_sec - suppressed_at.tv_sec) * 1000 + (now.tv_nsec - suppressed_at.tv_nsec) / 1000000;
     if (ms < CHAT_SUPPRESS_TIMEOUT_MS) return;
     WARN("Chat bubble did not finish hiding, restoring mascot input");
+    chat_restore_input();
+}
+
+void chat_disconnect_all(void)
+{
+    if (!client_count) return;
+    // shutdown(), not close(): the clients go through chat_client_readable() as
+    // if they hung up, so mascotd frees their epoll entries as usual
+    for (int i = 0; i < client_count; i++) shutdown(clients[i].fd, SHUT_RDWR);
+    chat_suppress_sprites(true);
+    disconnecting = true;
+}
+
+void chat_restore_input(void)
+{
+    disconnecting = false;
     chat_suppress_sprites(false);
 }
 

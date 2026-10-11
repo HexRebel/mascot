@@ -325,7 +325,7 @@ The model, role and session apply to every mascot until changed, and reset when 
 
 | Option | Default | Description |
 |---|---|---|
-| `CHAT_ENABLED` | `true` | `false` stops taps from opening the bubble. Takes effect without a restart. |
+| `CHAT_ENABLED` | `true` | `false` closes the bubble and stops taps from opening it; `true` starts it again. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |

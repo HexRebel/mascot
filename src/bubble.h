@@ -38,4 +38,15 @@ void bubble_exited(void);
 // SIGTERM, then SIGKILL if it has not exited within another second
 void bubble_stop(void);
 
+// Whether a bubble started by bubble_start() has not been reaped yet
+bool bubble_running(void);
+
+// Like bubble_stop() without blocking, for when mascotd keeps running: call
+// chat_disconnect_all() first so the bubble quits by itself; bubble_tick()
+// sends SIGTERM after a second and SIGKILL after another
+void bubble_request_stop(void);
+
+// Escalates a bubble_request_stop(). Called from the main loop
+void bubble_tick(void);
+
 #endif

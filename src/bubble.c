@@ -41,6 +41,9 @@ extern char** environ;
 
 static pid_t bubble_pid = -1;
 static int bubble_fd = -1;
+// Set by bubble_request_stop(); 0 when no stop is pending
+static struct timespec stop_requested;
+static bool stop_termed;
 
 bool bubble_start(const char* command, const char* chat_socket)
 {
@@ -139,6 +142,8 @@ static void bubble_forget(void)
     if (bubble_fd != -1) close(bubble_fd);
     bubble_fd = -1;
     bubble_pid = -1;
+    stop_requested = (struct timespec){0};
+    stop_termed = false;
 }
 
 void bubble_exited(void)
@@ -194,4 +199,33 @@ void bubble_stop(void)
 
     WARN("Chat bubble did not stop within a second, killing it");
     bubble_forget();
+}
+
+bool bubble_running(void)
+{
+    return bubble_pid > 0;
+}
+
+void bubble_request_stop(void)
+{
+    if (bubble_pid <= 0 || stop_requested.tv_sec) return;
+    clock_gettime(CLOCK_MONOTONIC, &stop_requested);
+}
+
+void bubble_tick(void)
+{
+    if (bubble_pid <= 0 || !stop_requested.tv_sec) return;
+
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    int64_t ms = (now.tv_sec - stop_requested.tv_sec) * 1000 + (now.tv_nsec - stop_requested.tv_nsec) / 1000000;
+
+    if (ms >= 2000) {
+        WARN("Chat bubble did not stop, killing it");
+        bubble_forget();
+    } else if (ms >= 1000 && !stop_termed) {
+        // Not connected, so it never saw the socket go away
+        kill(-bubble_pid, SIGTERM);
+        stop_termed = true;
+    }
 }

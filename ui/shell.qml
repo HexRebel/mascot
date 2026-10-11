@@ -59,6 +59,9 @@ ShellRoot {
                 root.wasConnected = true;
             else if (root.managed && root.wasConnected)
                 quitTimer.start();
+            else
+                // The daemon went away or turned chat off (CHAT_ENABLED=false)
+                bubble.dismiss();
         }
     }
 

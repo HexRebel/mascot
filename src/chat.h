@@ -45,6 +45,14 @@ bool chat_client_readable(int fd);
 // Called from the main loop, which wakes at least once a second
 void chat_tick(void);
 
+// Disconnects every client, so a bubble started by mascotd hides and quits by
+// itself, and turns sprite input off while it hides. The socket keeps listening.
+// Input comes back with chat_restore_input() or after the chat_tick() timeout
+void chat_disconnect_all(void);
+
+// Turns sprite input back on, e.g. once the bubble has exited
+void chat_restore_input(void);
+
 // Closes all sockets and unlinks the socket path. Sprite input stays off, so
 // the bubble can hide safely while the daemon shuts down
 void chat_close(void);
