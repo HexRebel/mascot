@@ -18,6 +18,13 @@ ShellRoot {
     readonly property bool managed: Quickshell.env("MASCOT_BUBBLE_MANAGED") === "1"
     property bool wasConnected: false
 
+    function send(event: var): void {
+        if (!daemon.connected)
+            return;
+        daemon.write(JSON.stringify(event) + "\n");
+        daemon.flush();
+    }
+
     function handleLine(line: string): void {
         if (!line)
             return;
@@ -55,13 +62,13 @@ ShellRoot {
         }
     }
 
-    // Hyprland 0.56 crashes when a layer surface holding the keyboard is
-    // destroyed while still mapped (the process exiting with the bubble open),
-    // so hide it first and give the compositor a moment to unmap it
+    // Never exit with the bubble mapped: Hyprland 0.56 can crash when it goes
+    // away (see Bubble.hiding). dismiss() unmaps after 100 ms; the daemon has
+    // already turned sprite input off before closing the socket
     Timer {
         id: quitTimer
 
-        interval: 100
+        interval: 400
         onRunningChanged: if (running) bubble.dismiss()
         onTriggered: Qt.quit()
     }
@@ -81,9 +88,8 @@ ShellRoot {
     Bubble {
         id: bubble
 
-        onReleased: mascot => {
-            daemon.write(JSON.stringify({ event: "close", mascot: mascot }) + "\n");
-            daemon.flush();
-        }
+        onHiding: root.send({ event: "hiding" })
+        onHidden: root.send({ event: "hidden" })
+        onReleased: mascot => root.send({ event: "close", mascot: mascot })
     }
 }

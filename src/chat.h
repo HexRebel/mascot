@@ -41,7 +41,12 @@ int chat_accept(void);
 // Reads from a client; returns false once it is gone (fd already closed)
 bool chat_client_readable(int fd);
 
-// Closes all sockets and unlinks the socket path
+// Restores sprite input if a bubble said "hiding" and then went quiet.
+// Called from the main loop, which wakes at least once a second
+void chat_tick(void);
+
+// Closes all sockets and unlinks the socket path. Sprite input stays off, so
+// the bubble can hide safely while the daemon shuts down
 void chat_close(void);
 
 // Writes one line of JSON describing a tap to every connected client and, if

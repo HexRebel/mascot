@@ -35,10 +35,13 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CHAT_MAX_CLIENTS 16
 #define CHAT_LINE_MAX 512
+// A bubble that said "hiding" but never "hidden" gets its sprites back after this
+#define CHAT_SUPPRESS_TIMEOUT_MS 2000
 
 struct chat_client {
     int fd;
@@ -53,6 +56,11 @@ static char listen_path[PATH_MAX] = {0};
 
 // Mascot kept sitting for the open bubble, by id (pointers may be freed)
 static int64_t held_mascot_id = -1;
+
+// Sprites take no pointer input while a bubble hides, so Hyprland cannot crash
+// on them (see environment_suppress_sprite_input())
+static bool sprites_suppressed = false;
+static struct timespec suppressed_at;
 
 size_t chat_socket_path(const char* ipc_socket_path, char* pathbuf, size_t pathbuf_len)
 {
@@ -122,12 +130,32 @@ static void chat_hold(struct mascot* mascot)
     if (mascot_chat_hold(mascot, true)) held_mascot_id = mascot->id;
 }
 
+static void chat_suppress_sprites(bool suppress)
+{
+    if (sprites_suppressed == suppress) return;
+    sprites_suppressed = suppress;
+    if (suppress) clock_gettime(CLOCK_MONOTONIC, &suppressed_at);
+
+    struct protocol_server_state* state = protocol_get_server_state();
+    pthread_mutex_lock(&state->environment_mutex);
+    for (uint32_t i = 0, c = list_count(state->environments); i < list_size(state->environments) && c; i++) {
+        environment_t* environment = list_get(state->environments, i);
+        if (!environment) continue;
+        c--;
+        environment_suppress_sprite_input(environment, suppress);
+    }
+    pthread_mutex_unlock(&state->environment_mutex);
+}
+
 static void chat_remove_client(int index)
 {
     close(clients[index].fd);
     clients[index] = clients[--client_count];
     // No bubble left to talk to the held mascot
-    if (!client_count) chat_release_held();
+    if (!client_count) {
+        chat_release_held();
+        chat_suppress_sprites(false);
+    }
 }
 
 int chat_accept(void)
@@ -148,9 +176,18 @@ int chat_accept(void)
     return fd;
 }
 
-// Handles one line from a client. Only {"event":"close","mascot":N} for now
+// Handles one line from a client: {"event":"hiding"}, {"event":"hidden"} or
+// {"event":"close","mascot":N}
 static void chat_handle_line(const char* line)
 {
+    if (strstr(line, "\"event\":\"hiding\"")) {
+        chat_suppress_sprites(true);
+        return;
+    }
+    if (strstr(line, "\"event\":\"hidden\"")) {
+        chat_suppress_sprites(false);
+        return;
+    }
     if (!strstr(line, "\"event\":\"close\"")) return;
 
     const char* field = strstr(line, "\"mascot\":");
@@ -199,10 +236,25 @@ bool chat_client_readable(int fd)
     return true;
 }
 
+void chat_tick(void)
+{
+    if (!sprites_suppressed) return;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    int64_t ms = (now.tv_sec - suppressed_at.tv_sec) * 1000 + (now.tv_nsec - suppressed_at.tv_nsec) / 1000000;
+    if (ms < CHAT_SUPPRESS_TIMEOUT_MS) return;
+    WARN("Chat bubble did not finish hiding, restoring mascot input");
+    chat_suppress_sprites(false);
+}
+
 void chat_close(void)
 {
     while (client_count) chat_remove_client(client_count - 1);
-    if (listen_fd != -1) close(listen_fd);
+    // The bubble hides once the socket is gone; mascots stay until it has quit
+    if (listen_fd != -1) {
+        chat_suppress_sprites(true);
+        close(listen_fd);
+    }
     listen_fd = -1;
     if (listen_path[0]) unlink(listen_path);
     listen_path[0] = 0;

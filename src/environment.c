@@ -151,6 +151,8 @@ struct environment {
   environment_subsurface_t *root_environment_subsurface;
   bool pending_commit;
   int32_t interactive_window_count;
+  // Sprites take no pointer input, see environment_suppress_sprite_input()
+  bool sprite_input_suppressed;
 
   // unstable extensions
   struct zxdg_output_v1 *xdg_output;
@@ -2705,7 +2707,8 @@ void environment_subsurface_attach(environment_subsurface_t *surface,
 
   wl_surface_attach(surface->surface, sprite->buffer->buffer, 0, 0);
   wl_surface_damage_buffer(surface->surface, 0, 0, INT32_MAX, INT32_MAX);
-  if (!surface->drag_pointer && config_get_dragging()) {
+  if (!surface->drag_pointer && config_get_dragging() &&
+      !surface->env->sprite_input_suppressed) {
     environment_buffer_scale_input_region(
         sprite->buffer, (config_get_mascot_scale() * surface->env->scale));
     wl_surface_set_input_region(surface->surface, sprite->buffer->region);
@@ -2964,8 +2967,10 @@ void environment_subsurface_release(environment_subsurface_t *surface) {
   enable_input_on_environments(false);
   wl_surface_set_input_region(
       surface->surface,
-      surface->pose->sprite[surface->mascot->LookingRight->value.i]
-          ->buffer->region);
+      surface->env->sprite_input_suppressed
+          ? empty_region
+          : surface->pose->sprite[surface->mascot->LookingRight->value.i]
+                ->buffer->region);
   wl_subsurface_place_below(surface->subsurface,
                             surface->env->root_environment_subsurface->surface);
 
@@ -3354,6 +3359,48 @@ static void environment_subsurface_sprite_offset(environment_subsurface_t *surfa
        (config_get_mascot_scale() * surface->env->scale);
   *y = (float)surface_anchor_y /
        (config_get_mascot_scale() * surface->env->scale);
+}
+
+// Hyprland 0.56 segfaults when a focused layer surface (the chat bubble)
+// unmaps while the pointer is over a sprite: refocusLastWindow() hit-tests the
+// sprite, a subsurface of a layer surface it keeps no view for, and calls
+// keyboardFocusable() on that null view. The bubble therefore asks for sprite
+// input to be off while it closes; with nothing under the pointer the
+// compositor falls back to the last window
+void environment_suppress_sprite_input(environment_t *env, bool suppress) {
+  if (!env || !env->is_ready)
+    return;
+  if (env->sprite_input_suppressed == suppress)
+    return;
+  env->sprite_input_suppressed = suppress;
+
+  struct list *mascots = env->mascot_manager.referenced_mascots;
+  if (mascots) {
+    pthread_mutex_lock(&env->mascot_manager.mutex);
+    for (size_t i = 0; i < list_size(mascots); i++) {
+      struct mascot *mascot = list_get(mascots, i);
+      if (!mascot || !mascot->subsurface)
+        continue;
+      environment_subsurface_t *surface = mascot->subsurface;
+      // A dragged sprite has no input region; release() picks the right one
+      if (!surface->surface || !surface->pose || surface->drag_pointer)
+        continue;
+      struct mascot_sprite *sprite =
+          surface->pose->sprite[mascot->LookingRight->value.i];
+      if (!sprite)
+        continue;
+      wl_surface_set_input_region(surface->surface,
+                                  suppress || !config_get_dragging()
+                                      ? empty_region
+                                      : sprite->buffer->region);
+      wl_surface_commit(surface->surface);
+    }
+    pthread_mutex_unlock(&env->mascot_manager.mutex);
+  }
+
+  // Subsurface state is applied with the parent's commit
+  env->pending_commit = true;
+  environment_commit(env);
 }
 
 bool environment_subsurface_sprite_geometry(environment_subsurface_t *surface,

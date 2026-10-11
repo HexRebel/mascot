@@ -868,6 +868,7 @@ int main(int argc, const char** argv)
         // Process epoll
         struct epoll_event events[16];
         int nfds = epoll_wait(epfd, events, 16, 1000);
+        chat_tick();
         if (nfds == -1) {
             WARN("Failed to epoll_wait");
             continue;
