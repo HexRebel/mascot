@@ -135,6 +135,23 @@ install: all
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -m644 ui/*.qml $(DESTDIR)$(PREFIX)/share/mascot/ui/
 
+# Removes only what install/install-plugins put there; directories are removed
+# only if empty, since $(PREFIX)/share/mascot is also the data root when PREFIX=~/.local
+.PHONY: uninstall
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/mascotd
+	rm -f $(DESTDIR)$(PREFIX)/bin/mascot
+	rm -f $(DESTDIR)$(PREFIX)/share/systemd/user/mascotd.socket
+	rm -f $(DESTDIR)$(PREFIX)/share/systemd/user/mascotd.service
+	rm -f $(DESTDIR)$(PREFIX)/lib/libmascot-plugins.so
+	rm -f $(DESTDIR)$(PREFIX)/lib/mascot/*.so
+	rm -f $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
+	rm -f $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
+	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Bubble.qml
+	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
+	-rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \
+		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null
+
 .PHONY: install-plugins
 install-plugins: build-plugins
 	install -d $(DESTDIR)$(PREFIX)/lib/mascot/
