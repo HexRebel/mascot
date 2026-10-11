@@ -221,7 +221,9 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "mascot-bubble"
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    // OnDemand only focuses on click; the bubble is short-lived and Esc closes it,
+    // so take the keyboard while it is open and type straight away
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
     // Colours from pywal (read only), with fallbacks if the cache is missing
     QtObject {
