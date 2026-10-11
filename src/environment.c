@@ -51,9 +51,6 @@ void pthread_scope_unlock(pthread_mutex_t **lockptr) {
   *lockptr = NULL;
 }
 
-// Workarounds section (SMH my head hyprland)
-bool we_on_hyprland = false;
-
 // Disable workarounds
 bool disable_tablet_workarounds = false;
 
@@ -151,8 +148,11 @@ struct environment {
   environment_subsurface_t *root_environment_subsurface;
   bool pending_commit;
   int32_t interactive_window_count;
-  // Sprites take no pointer input, see environment_suppress_sprite_input()
-  bool sprite_input_suppressed;
+  // The layer surface takes all pointer input, see environment_update_input_region()
+  bool sprite_input_suppressed; // no sprite input, see environment_suppress_sprite_input()
+  bool input_full;              // whole surface (drag, selection)
+  uint64_t input_signature;     // of the region last set
+  pthread_mutex_t input_lock;
 
   // unstable extensions
   struct zxdg_output_v1 *xdg_output;
@@ -315,7 +315,13 @@ struct environment_pointer {
 
   environment_t *above_environment;
 
+  // Surface the events are handed to: the sprite under the pointer or the
+  // layer surface, see environment_pointer_retarget()
   struct wl_surface *above_surface;
+  // Surface the compositor actually reports, with its local position
+  struct wl_surface *real_surface;
+  wl_fixed_t real_x, real_y;
+  uint32_t real_enter_serial;
 
   // Cursor shapes
   enum wp_cursor_shape_device_v1_shape current_shape;
@@ -1118,6 +1124,80 @@ static void on_pointer_axis(void *data, struct wl_pointer *pointer,
   env_pointer->frame.mask |= EVENT_FRAME_AXIS;
 }
 
+static environment_subsurface_t *environment_sprite_at(environment_t *env,
+                                                       int32_t x, int32_t y);
+
+// A left press on a sprite widens the layer surface's input to all of it right
+// away: the first move of a fast drag may already be outside the sprite, and
+// leaving the surface while pressed gets a fake release from Hyprland
+static void environment_pointer_set_pending_press(environment_pointer_t *env_pointer,
+                                                  struct mascot *mascot) {
+  struct mascot *previous = env_pointer->pending_press;
+  env_pointer->pending_press = mascot;
+  struct mascot *owner = mascot ? mascot : previous;
+  if (!owner || !owner->subsurface || !owner->subsurface->env)
+    return;
+  environment_t *env = owner->subsurface->env;
+  environment_set_input_state(
+      env, mascot || env->select_active ||
+               __atomic_load_n(&active_grabbers_count, __ATOMIC_SEQ_CST) > 0);
+}
+
+// Sprites take no pointer input: the layer surface gets it all (see
+// environment_update_input_region()), and the sprite under the pointer is picked
+// here and handed the events as if it had them, in its own coordinates.
+// Pointer focus therefore never moves while a button is held. Hyprland sends a
+// fake button release whenever it does, and then never the real one, which made
+// a drag end on whatever empty wl_pointer.frame() came next
+static void environment_pointer_retarget(environment_pointer_t *env_pointer) {
+  struct environment_event_frame *frame = &env_pointer->frame;
+  if (frame->mask & EVENT_FRAME_SURFACE) {
+    env_pointer->real_surface = frame->surface_changed;
+    env_pointer->real_enter_serial = frame->enter_serial;
+  }
+  if (frame->mask & (EVENT_FRAME_SURFACE | EVENT_FRAME_MOTIONS)) {
+    env_pointer->real_x = frame->surface_local_x;
+    env_pointer->real_y = frame->surface_local_y;
+  }
+
+  struct wl_surface *target = env_pointer->real_surface;
+  environment_t *env = environment_from_surface(target);
+  environment_subsurface_t *sprite = NULL;
+  // During a drag everything goes to the layer surface; a selection still
+  // needs to know which sprite was clicked
+  if (env && env->root_surface && target == env->root_surface->surface &&
+      !env_pointer->grabbed_subsurface) {
+    // A press stays with its sprite until released or dragged, even if the
+    // mascot moves out from under the pointer
+    if (env_pointer->pending_press && env_pointer->pending_press->subsurface &&
+        env_pointer->pending_press->subsurface->env == env)
+      sprite = env_pointer->pending_press->subsurface;
+    else
+      sprite = environment_sprite_at(env, wl_fixed_to_int(env_pointer->real_x),
+                                     wl_fixed_to_int(env_pointer->real_y));
+  }
+
+  wl_fixed_t local_x = env_pointer->real_x, local_y = env_pointer->real_y;
+  struct bounding_box box;
+  if (sprite && environment_subsurface_sprite_geometry(sprite, &box)) {
+    target = sprite->surface;
+    local_x -= wl_fixed_from_int(box.x);
+    local_y -= wl_fixed_from_int(box.y);
+    // Sprites move under a still pointer, so they always get a position
+    frame->mask |= EVENT_FRAME_MOTIONS;
+  }
+
+  if (target != env_pointer->above_surface) {
+    frame->mask |= EVENT_FRAME_SURFACE;
+    frame->surface_changed = target;
+    frame->enter_serial = env_pointer->real_enter_serial;
+  }
+  if (frame->mask & (EVENT_FRAME_SURFACE | EVENT_FRAME_MOTIONS)) {
+    frame->surface_local_x = local_x;
+    frame->surface_local_y = local_y;
+  }
+}
+
 static void on_pointer_frame(void *data, struct wl_pointer *pointer) {
   UNUSED(pointer);
 
@@ -1127,6 +1207,7 @@ static void on_pointer_frame(void *data, struct wl_pointer *pointer) {
   }
 
   ACTIVATE_POINTER(env_pointer);
+  environment_pointer_retarget(env_pointer);
 
   environment_t *env = env_pointer->above_environment;
   environment_subsurface_t *env_subsurface = NULL;
@@ -1136,28 +1217,6 @@ static void on_pointer_frame(void *data, struct wl_pointer *pointer) {
       environment_subsurface_from_surface(env_pointer->above_surface);
   surface_pointer_callbacks =
       wl_surface_get_callbacks(env_pointer->above_surface);
-
-  // Workaround for hyprland
-  if (env_pointer->grabbed_subsurface) {
-    if ((env_pointer->frame.mask &
-         (EVENT_FRAME_BUTTONS | EVENT_FRAME_SURFACE)) ==
-        (EVENT_FRAME_BUTTONS | EVENT_FRAME_SURFACE)) {
-      if (env_pointer->above_surface ==
-              env_pointer->grabbed_subsurface->surface &&
-          env_pointer->frame.surface_changed) {
-        env_pointer->frame.mask &= ~EVENT_FRAME_BUTTONS;
-      }
-    }
-  }
-  // Hyprland also sends empty frames while a press is still held, so they must
-  // not end a pending tap; the real release arrives as a button event
-  if (we_on_hyprland && !env_pointer->pending_press) {
-    // Empty frame, sent on mascot release
-    if (!env_pointer->frame.mask) {
-      env_pointer->frame.mask = EVENT_FRAME_BUTTONS;
-      env_pointer->frame.buttons_released = EVENT_FRAME_PRIMARY_BUTTON;
-    }
-  }
 
   // Once we leave the surface, we do not send any callbacks aside (leave)
   if (env_pointer->frame.mask & EVENT_FRAME_SURFACE) {
@@ -1425,8 +1484,10 @@ static void mascot_on_pointer_motion(void *data, struct wl_pointer *pointer,
     if (travel_x * travel_x + travel_y * travel_y >
         ENVIRONMENT_TAP_THRESHOLD * ENVIRONMENT_TAP_THRESHOLD) {
       struct mascot *pressed = env_pointer->pending_press;
-      env_pointer->pending_press = NULL;
-      if (mascot_drag_started(pressed, env_pointer))
+      // Start the drag before clearing the press, so the input stays whole
+      bool dragging = mascot_drag_started(pressed, env_pointer);
+      environment_pointer_set_pending_press(env_pointer, NULL);
+      if (dragging)
         chat_mascot_dragged(pressed);
     }
     return;
@@ -1506,7 +1567,7 @@ static void mascot_on_pointer_leave(void *data, struct wl_pointer *pointer,
 
   // Implicit grab should keep us on the surface while pressed; if not, it is
   // neither a tap nor a drag
-  env_pointer->pending_press = NULL;
+  environment_pointer_set_pending_press(env_pointer, NULL);
 
   environment_subsurface_t *env_surface =
       environment_subsurface_from_surface(surface);
@@ -1576,7 +1637,7 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
       if (!hotspot_press_result &&
           pressed_button == mascot_hotspot_button_left) {
         // Defer the drag until the pointer moves, see mascot_on_pointer_motion
-        env_pointer->pending_press = mascot;
+        environment_pointer_set_pending_press(env_pointer, mascot);
         env_pointer->press_x = env_pointer->x;
         env_pointer->press_y = env_pointer->y;
       }
@@ -1593,7 +1654,7 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
     if (env_pointer->pending_press &&
         pressed_button == mascot_hotspot_button_left) {
       struct mascot *pressed = env_pointer->pending_press;
-      env_pointer->pending_press = NULL;
+      environment_pointer_set_pending_press(env_pointer, NULL);
       if (pressed == mascot) {
         INFO("<Mascot:%s:%u> Tapped", mascot->prototype->name, mascot->id);
         if (config_get_chat_enabled()) {
@@ -2346,6 +2407,7 @@ static void handle_output(void *data, uint32_t id, uint32_t version) {
     env->mascot_manager.referenced_mascots = list_init(256);
     env->neighbors = list_init(4);
     pthread_mutex_init(&env->mascot_manager.mutex, &attrs);
+    pthread_mutex_init(&env->input_lock, &attrs);
     wl_output_add_listener(output, &wl_output_listener, (void *)env);
     wl_output_set_user_data(output, (void *)env);
     new_environment(env);
@@ -2443,15 +2505,6 @@ enum environment_init_status
 environment_init(int flags, void (*new_listener)(environment_t *),
                  void (*rem_listener)(environment_t *),
                  void (*orph_listener)(struct mascot *)) {
-
-  const char *session = getenv("XDG_CURRENT_DESKTOP");
-  if (session) {
-    if (!strcmp(session, "Hyprland")) {
-      WARN(
-          "Hyprland session detected, applying workaround for mascot dragging");
-      we_on_hyprland = true;
-    }
-  }
 
   // Wayland display connection and etc
   display = wl_display_connect(NULL);
@@ -2606,6 +2659,15 @@ environment_subsurface_t *environment_create_subsurface(environment_t *env) {
 
   wl_surface_set_data(subsurface->surface, WL_SURFACE_ROLE_SUBSURFACE,
                       subsurface, env);
+  // A new surface takes input everywhere; the layer surface takes it instead.
+  // Never pass NULL: that means "everywhere" too
+  if (empty_region)
+    wl_surface_set_input_region(subsurface->surface, empty_region);
+  else {
+    struct wl_region *none = wl_compositor_create_region(compositor);
+    wl_surface_set_input_region(subsurface->surface, none);
+    wl_region_destroy(none);
+  }
 
   subsurface->subsurface = wl_subcompositor_get_subsurface(
       subcompositor, subsurface->surface, env->root_surface->surface);
@@ -2707,14 +2769,8 @@ void environment_subsurface_attach(environment_subsurface_t *surface,
 
   wl_surface_attach(surface->surface, sprite->buffer->buffer, 0, 0);
   wl_surface_damage_buffer(surface->surface, 0, 0, INT32_MAX, INT32_MAX);
-  if (!surface->drag_pointer && config_get_dragging() &&
-      !surface->env->sprite_input_suppressed) {
-    environment_buffer_scale_input_region(
-        sprite->buffer, (config_get_mascot_scale() * surface->env->scale));
-    wl_surface_set_input_region(surface->surface, sprite->buffer->region);
-  } else {
-    wl_surface_set_input_region(surface->surface, empty_region);
-  }
+  // The layer surface takes the input instead, see environment_pointer_retarget()
+  wl_surface_set_input_region(surface->surface, empty_region);
 
   if (!surface->pose) {
     wl_subsurface_place_below(
@@ -2935,7 +2991,6 @@ void environment_subsurface_drag(environment_subsurface_t *surface,
   }
   surface->is_grabbed = true;
   enable_input_on_environments(true);
-  wl_surface_set_input_region(surface->surface, empty_region);
   wl_subsurface_place_above(surface->subsurface,
                             surface->env->root_environment_subsurface->surface);
   surface->drag_pointer = pointer;
@@ -2965,12 +3020,6 @@ void environment_subsurface_release(environment_subsurface_t *surface) {
 
   surface->is_grabbed = false;
   enable_input_on_environments(false);
-  wl_surface_set_input_region(
-      surface->surface,
-      surface->env->sprite_input_suppressed
-          ? empty_region
-          : surface->pose->sprite[surface->mascot->LookingRight->value.i]
-                ->buffer->region);
   wl_subsurface_place_below(surface->subsurface,
                             surface->env->root_environment_subsurface->surface);
 
@@ -3186,8 +3235,10 @@ void environment_set_input_state(environment_t *env, bool active) {
   if (!env->root_surface)
     return;
 
-  layer_surface_enable_input(env->root_surface, active);
-  env->pending_commit = true;
+  env->input_full = active;
+  environment_update_input_region(env);
+  // Right away: a drag that outruns its sprite must not leave the surface first
+  environment_commit(env);
 }
 
 int environment_get_display_fd() { return wl_display_get_fd(display); }
@@ -3373,34 +3424,113 @@ void environment_suppress_sprite_input(environment_t *env, bool suppress) {
   if (env->sprite_input_suppressed == suppress)
     return;
   env->sprite_input_suppressed = suppress;
+  environment_update_input_region(env);
+  environment_commit(env);
+}
 
+// Sprite's input rectangle (its non-transparent bounds) in environment-local
+// logical coordinates, top-referenced
+static bool environment_sprite_input_box(environment_subsurface_t *surface,
+                                         struct bounding_box *out) {
+  if (!surface || !surface->pose || !surface->mascot)
+    return false;
+  struct mascot_sprite *sprite =
+      surface->pose->sprite[surface->mascot->LookingRight->value.i];
+  if (!sprite || !sprite->buffer)
+    return false;
+  struct bounding_box box;
+  if (!environment_subsurface_sprite_geometry(surface, &box))
+    return false;
+
+  float scale = config_get_mascot_scale() * surface->env->scale;
+  out->x = box.x + sprite->buffer->input_region_desc.x / scale;
+  out->y = box.y + sprite->buffer->input_region_desc.y / scale;
+  out->width = sprite->buffer->input_region_desc.width / scale;
+  out->height = sprite->buffer->input_region_desc.height / scale;
+  return out->width > 0 && out->height > 0;
+}
+
+// Topmost sprite whose input rectangle contains (x, y), environment-local
+static environment_subsurface_t *environment_sprite_at(environment_t *env,
+                                                       int32_t x, int32_t y) {
+  if (!env || !env->is_ready || !env->mascot_manager.referenced_mascots)
+    return NULL;
+  if (env->sprite_input_suppressed || !config_get_dragging())
+    return NULL;
+
+  environment_subsurface_t *found = NULL;
   struct list *mascots = env->mascot_manager.referenced_mascots;
-  if (mascots) {
+  pthread_mutex_lock(&env->mascot_manager.mutex);
+  for (size_t i = 0; i < list_size(mascots); i++) {
+    struct mascot *mascot = list_get(mascots, i);
+    if (!mascot || mascot->dragged || !mascot->subsurface)
+      continue;
+    struct bounding_box box;
+    if (!environment_sprite_input_box(mascot->subsurface, &box))
+      continue;
+    // Later mascots are drawn on top
+    if (x >= box.x && x < box.x + box.width && y >= box.y &&
+        y < box.y + box.height)
+      found = mascot->subsurface;
+  }
+  pthread_mutex_unlock(&env->mascot_manager.mutex);
+  return found;
+}
+
+void environment_update_input_region(environment_t *env) {
+  if (!env || !env->is_ready || !env->root_surface ||
+      !env->root_surface->configure_serial)
+    return;
+
+  pthread_mutex_lock(&env->input_lock);
+
+  // FNV-1a over what goes into the region: rebuilt only when it changes
+  uint64_t signature = 1469598103934665603ULL;
+#define INPUT_MIX(v)                                                           \
+  signature = (signature ^ (uint64_t)(uint32_t)(v)) * 1099511628211ULL
+
+  struct bounding_box *boxes = NULL;
+  size_t box_count = 0;
+  if (env->input_full) {
+    INPUT_MIX(0xFFFFFFFF);
+    INPUT_MIX(env->root_surface->width);
+    INPUT_MIX(env->root_surface->height);
+  } else if (!env->sprite_input_suppressed && config_get_dragging() &&
+             env->mascot_manager.referenced_mascots) {
+    struct list *mascots = env->mascot_manager.referenced_mascots;
     pthread_mutex_lock(&env->mascot_manager.mutex);
-    for (size_t i = 0; i < list_size(mascots); i++) {
+    boxes = calloc(list_size(mascots) + 1, sizeof(*boxes));
+    for (size_t i = 0; boxes && i < list_size(mascots); i++) {
       struct mascot *mascot = list_get(mascots, i);
-      if (!mascot || !mascot->subsurface)
+      if (!mascot || mascot->dragged || !mascot->subsurface)
         continue;
-      environment_subsurface_t *surface = mascot->subsurface;
-      // A dragged sprite has no input region; release() picks the right one
-      if (!surface->surface || !surface->pose || surface->drag_pointer)
+      if (!environment_sprite_input_box(mascot->subsurface, &boxes[box_count]))
         continue;
-      struct mascot_sprite *sprite =
-          surface->pose->sprite[mascot->LookingRight->value.i];
-      if (!sprite)
-        continue;
-      wl_surface_set_input_region(surface->surface,
-                                  suppress || !config_get_dragging()
-                                      ? empty_region
-                                      : sprite->buffer->region);
-      wl_surface_commit(surface->surface);
+      INPUT_MIX(boxes[box_count].x);
+      INPUT_MIX(boxes[box_count].y);
+      INPUT_MIX(boxes[box_count].width);
+      INPUT_MIX(boxes[box_count].height);
+      box_count++;
     }
     pthread_mutex_unlock(&env->mascot_manager.mutex);
   }
+#undef INPUT_MIX
 
-  // Subsurface state is applied with the parent's commit
-  env->pending_commit = true;
-  environment_commit(env);
+  if (signature != env->input_signature) {
+    struct wl_region *region = wl_compositor_create_region(compositor);
+    if (env->input_full)
+      wl_region_add(region, 0, 0, env->root_surface->width,
+                    env->root_surface->height);
+    for (size_t i = 0; i < box_count; i++)
+      wl_region_add(region, boxes[i].x, boxes[i].y, boxes[i].width,
+                    boxes[i].height);
+    wl_surface_set_input_region(env->root_surface->surface, region);
+    wl_region_destroy(region);
+    env->input_signature = signature;
+    env->pending_commit = true;
+  }
+  free(boxes);
+  pthread_mutex_unlock(&env->input_lock);
 }
 
 bool environment_subsurface_sprite_geometry(environment_subsurface_t *surface,

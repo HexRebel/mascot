@@ -42,6 +42,9 @@ static void configure(void* data, struct zwlr_layer_surface_v1* wlr_layer_surfac
 
     _layer_surface->configure_serial = serial;
 
+    // Starts without input; after that the owner manages the input region
+    // (environment_update_input_region()), so a resize must not reset it
+    bool first_configure = !_layer_surface->buffer;
     if (_layer_surface->buffer) wl_buffer_destroy(_layer_surface->buffer);
 
     int memfd = memfd_create("layer_surface", 0);
@@ -57,7 +60,7 @@ static void configure(void* data, struct zwlr_layer_surface_v1* wlr_layer_surfac
     close(memfd);
 
     wl_surface_attach(_layer_surface->surface, _layer_surface->buffer, 0, 0);
-    wl_surface_set_input_region(_layer_surface->surface, _layer_surface->region);
+    if (first_configure) wl_surface_set_input_region(_layer_surface->surface, _layer_surface->region);
     wl_surface_damage(_layer_surface->surface, 0, 0, width, height);
 
     wl_surface_commit(_layer_surface->surface);

@@ -113,6 +113,9 @@ bool environment_subsurface_sprite_geometry(environment_subsurface_t* surface, s
 environment_t* environment_subsurface_get_environment(environment_subsurface_t* surface);
 // Turns pointer input on every sprite off (true) or back on, see environment.c
 void environment_suppress_sprite_input(environment_t* env, bool suppress);
+// Sets the layer surface's input region to the sprites' rectangles (or all of
+// it during a drag); call before environment_commit() as sprites move
+void environment_update_input_region(environment_t* env);
 bool environment_subsurface_move_to_pointer(environment_subsurface_t* surface);
 void environment_subsurface_set_offset(environment_subsurface_t* surface, int32_t x, int32_t y);
 void environment_subsurface_associate_mascot(environment_subsurface_t* surface, struct mascot* mascot_ptr);

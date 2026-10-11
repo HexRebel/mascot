@@ -221,6 +221,7 @@ void* env_interpolation_thread(void* data)
     uint64_t sleep_time;
     while (!env_data->stop) {
         sleep_time = environment_interpolate(env);
+        environment_update_input_region(env);
         environment_commit(env);
 
         if (!sleep_time) sleep_time = 40000;
@@ -427,6 +428,7 @@ void* mascot_manager_thread(void* arg)
             c--;
             // environment_pre_tick(environment, tick);
             environment_tick(environment, tick);
+            environment_update_input_region(environment);
             environment_commit(environment);
         }
         pthread_mutex_unlock(&server_state.environment_mutex);
