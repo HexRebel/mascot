@@ -78,6 +78,18 @@ static void setup_handlers(bool setup) {
     }
 }
 
+// Plugins built for wl_shimeji, which Mascot is forked from, use the old prefix
+static void* plugin_symbol(void* dlhandle, const char* name)
+{
+    char symbol[64];
+    snprintf(symbol, sizeof(symbol), "mascotd_plugin_%s", name);
+    void* found = dlsym(dlhandle, symbol);
+    if (found) return found;
+
+    snprintf(symbol, sizeof(symbol), "wl_shimeji_plugin_%s", name);
+    return dlsym(dlhandle, symbol);
+}
+
 static plugin_t* plugin_load(const char* path, set_cursor_pos_func posfn, set_active_ie_func iefn, window_moved_hint_func window_moved_hint_cb) {
     plugin_t* plugin = calloc(1, sizeof(plugin_t));
     if (!plugin) ERROR("OOM");
@@ -89,12 +101,12 @@ static plugin_t* plugin_load(const char* path, set_cursor_pos_func posfn, set_ac
     }
 
     plugin->dl_handle = dlhandle;
-    plugin->init = dlsym(dlhandle, "mascotd_plugin_init");
-    plugin->deinit = dlsym(dlhandle, "mascotd_plugin_deinit");
-    plugin->tick = dlsym(dlhandle, "mascotd_plugin_tick");
-    plugin->move = dlsym(dlhandle, "mascotd_plugin_move");
-    plugin->restore = dlsym(dlhandle, "mascotd_plugin_restore");
-    plugin->activate = dlsym(dlhandle, "mascotd_plugin_activate");
+    plugin->init = plugin_symbol(dlhandle, "init");
+    plugin->deinit = plugin_symbol(dlhandle, "deinit");
+    plugin->tick = plugin_symbol(dlhandle, "tick");
+    plugin->move = plugin_symbol(dlhandle, "move");
+    plugin->restore = plugin_symbol(dlhandle, "restore");
+    plugin->activate = plugin_symbol(dlhandle, "activate");
 
     if (!plugin->init) {
         WARN("[Plugins] Failed to load plugin at %s: Unable to locate init function", path);
