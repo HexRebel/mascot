@@ -30,7 +30,13 @@ PanelWindow {
     readonly property bool talking: replying && chat.running && visible
     onTalkingChanged: if (bubble.event)
         bubble.talked(bubble.event.mascot, bubble.talking)
-    property string transcript: ""
+    // The conversation, one entry per message: kind is "you" (typed by the
+    // user), "reply" (the model's answer) or "system" (the bubble's own notes and
+    // dot command output), each drawn in its own pywal colour
+    ListModel {
+        id: entries
+    }
+    property int streaming: -1 // entry the running command writes into
     property string errorText: ""
     readonly property bool busy: chat.running
 
@@ -92,7 +98,7 @@ PanelWindow {
 
         chat.running = false;
         bubble.event = e;
-        bubble.transcript = "";
+        bubble.clearEntries();
         bubble.errorText = "";
         input.text = "";
         bubble.visible = true;
@@ -174,11 +180,18 @@ PanelWindow {
         // stdin must be closed: aichat reads a non-tty stdin as extra input and
         // waits forever on the open pipe Process gives it
         chat.command = ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args);
+        entries.append({ kind: reply ? "reply" : "system", body: "" });
+        bubble.streaming = entries.count - 1;
         chat.running = true;
     }
 
     function say(text: string): void {
-        bubble.transcript += text + "\n";
+        entries.append({ kind: "system", body: text });
+    }
+
+    function clearEntries(): void {
+        entries.clear();
+        bubble.streaming = -1;
     }
 
     function dotCommand(text: string): void {
@@ -230,7 +243,7 @@ PanelWindow {
                 bubble.swapRequested(bubble.event.mascot, arg);
             return;
         case ".clear":
-            bubble.transcript = "";
+            bubble.clearEntries();
             return;
         default:
             say(`unknown command ${name} - try .help`);
@@ -244,7 +257,7 @@ PanelWindow {
             return;
 
         bubble.errorText = "";
-        bubble.transcript += (bubble.transcript ? "\n\n" : "") + "› " + text + "\n";
+        entries.append({ kind: "you", body: text });
         input.text = "";
         if (text.startsWith("."))
             dotCommand(text);
@@ -331,7 +344,10 @@ PanelWindow {
 
         stdout: SplitParser {
             splitMarker: "" // stream: append chunks as they arrive
-            onRead: data => bubble.transcript += data
+            onRead: data => {
+                if (bubble.streaming >= 0 && bubble.streaming < entries.count)
+                    entries.setProperty(bubble.streaming, "body", entries.get(bubble.streaming).body + data);
+            }
         }
         stderr: StdioCollector {
             id: chatErrors
@@ -402,22 +418,35 @@ PanelWindow {
 
             width: parent.width
             height: Math.min(log.implicitHeight, 220)
-            visible: bubble.transcript !== ""
+            visible: entries.count > 0
             contentHeight: log.implicitHeight
             clip: true
 
-            Text {
+            Column {
                 id: log
 
                 width: scroller.width
-                text: bubble.transcript
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                color: theme.foreground
-                font.pixelSize: 13
+                spacing: 8
 
                 // Follow the streamed answer
                 onImplicitHeightChanged: scroller.contentY = Math.max(0, implicitHeight - scroller.height)
+
+                Repeater {
+                    model: entries
+
+                    Text {
+                        required property string kind
+                        required property string body
+
+                        width: log.width
+                        visible: text !== "" // a command that has printed nothing yet
+                        text: (kind === "you" ? "› " : "") + body.trim()
+                        textFormat: Text.PlainText // model output is never markup
+                        wrapMode: Text.Wrap
+                        color: kind === "you" ? theme.accent : kind === "reply" ? theme.foreground : theme.muted
+                        font.pixelSize: 13
+                    }
+                }
             }
         }
 
