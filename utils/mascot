@@ -2,31 +2,31 @@
 
 from __future__ import annotations
 from typing import Callable, Any
-import random
-import time
-import subprocess
-import zipfile
-import enum
-import xml
-import struct
-from dataclasses import dataclass
-import os
-import logging
-import socket
+import argparse
 import xml.etree.ElementTree as ET
-import json
-import tempfile
-import tarfile
+from dataclasses import dataclass
+import xml
+import zipfile
 from dataclasses import dataclass, field
+import sys
+import io
+import enum
+import random
+import logging
 from xml.etree import ElementTree
 import pathlib
-import sys
-import stat
-import argparse
-from typing import Dict, Optional
-import io
+import json
+import time
+import socket
 import shutil
+import struct
+import tarfile
 from PIL import Image
+import stat
+from typing import Dict, Optional
+import tempfile
+import subprocess
+import os
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -2469,7 +2469,7 @@ class EnvironmentClose(Packet):
         Packet.__init__(self, self.type, 0, id, b'')
 
 class SelectionCancel(Packet):
-    type: int = 0x3C
+    type: int = 0x3D
 
     def __init__(self, id: int):
         Packet.__init__(self, self.type, 0, id, b'')

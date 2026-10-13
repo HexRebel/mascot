@@ -664,7 +664,7 @@ class EnvironmentClose(Packet):
         Packet.__init__(self, self.type, 0, id, b'')
 
 class SelectionCancel(Packet):
-    type: int = 0x3C
+    type: int = 0x3D
 
     def __init__(self, id: int):
         Packet.__init__(self, self.type, 0, id, b'')
