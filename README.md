@@ -303,8 +303,8 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 
 - **Tap** a mascot to open the bubble. Dragging a mascot does not open it, and dragging the mascot
   away closes it.
-- The bubble takes the keyboard while it is open, so you can type straight away; your compositor's
-  key bindings still work.
+- The bubble takes the keyboard when it opens, so you can type straight away. Click another window
+  to type there while the bubble stays open; click the bubble (or tap the mascot) to go back.
 - **Enter** sends, **Esc** or **×** closes.
 
 Lines starting with `.` are commands, modelled on aichat's REPL:
