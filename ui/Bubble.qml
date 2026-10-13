@@ -92,6 +92,7 @@ PanelWindow {
     function openFor(e: var): void {
         // Double clicks arrive as two taps: keep the open conversation
         if (bubble.visible && bubble.event && bubble.event.mascot === e.mascot) {
+            bubble.grabKeyboard();
             input.forceActiveFocus();
             return;
         }
@@ -102,7 +103,23 @@ PanelWindow {
         bubble.errorText = "";
         input.text = "";
         bubble.visible = true;
+        bubble.grabKeyboard();
         input.forceActiveFocus();
+    }
+
+    // Take the keyboard briefly, then let go to OnDemand, so a click elsewhere
+    // (e.g. a terminal) can take it while the bubble stays open
+    property bool grabbing: false
+
+    function grabKeyboard(): void {
+        bubble.grabbing = true;
+        releaseGrab.restart();
+    }
+
+    Timer {
+        id: releaseGrab
+        interval: 300
+        onTriggered: bubble.grabbing = false
     }
 
     // The mascot was dragged away from under the bubble
@@ -283,9 +300,9 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "mascot-bubble"
-    // OnDemand only focuses on click; the bubble is short-lived and Esc closes it,
-    // so take the keyboard while it is open and type straight away
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    // OnDemand alone only focuses on click, so open as Exclusive to type straight
+    // away, then drop to OnDemand (see grabKeyboard())
+    WlrLayershell.keyboardFocus: bubble.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
 
     // Colours from pywal (read only), with fallbacks if the cache is missing
     QtObject {
