@@ -162,6 +162,7 @@ PanelWindow {
     // ones with aichat's CLI flags. Kept across bubbles until changed
     property string model: ""
     property string role: "" // empty: CHAT_ROLE (event.role), else Mascot's prompt
+    property bool noRole: false // .exit role: no role at all, not even CHAT_ROLE
     property string session: ""
 
     readonly property string helpText: [
@@ -170,7 +171,8 @@ PanelWindow {
         ".model <name>          switch model (e.g. openrouter:…)",
         ".role <name>           switch role (instead of the default)",
         ".session <name>        start/continue a session with memory",
-        ".exit model|role|session   go back to the default",
+        ".exit model|session    go back to the default",
+        ".exit role             leave the role (also CHAT_ROLE's)",
         ".mascots               list the mascots you have",
         ".mascot <name>         swap this mascot for another one",
         ".clear                 clear the bubble"
@@ -180,7 +182,7 @@ PanelWindow {
         let args = [];
         if (bubble.model)
             args.push("-m", bubble.model);
-        const role = bubble.role || bubble.event?.role;
+        const role = bubble.role || (bubble.noRole ? "" : bubble.event?.role);
         if (role)
             args.push("-r", role); // only ever one -r: aichat refuses two
         else if (bubble.prompt)
@@ -213,7 +215,11 @@ PanelWindow {
     }
 
     function defaultName(key: string): string {
-        return key === "role" && bubble.event?.role ? `${bubble.event.role} (default)` : "default";
+        if (key !== "role")
+            return "default";
+        if (bubble.event?.role && !bubble.noRole)
+            return `${bubble.event.role} (default)`;
+        return bubble.prompt ? "none (Mascot's prompt)" : "none (aichat's default)";
     }
 
     function dotCommand(text: string): void {
@@ -240,8 +246,11 @@ PanelWindow {
         case ".session":
             {
                 const key = name.slice(1);
-                if (arg)
+                if (arg) {
                     bubble[key] = arg;
+                    if (key === "role")
+                        bubble.noRole = false;
+                }
                 say(`${key}: ${bubble[key] || defaultName(key)}`);
                 return;
             }
@@ -251,6 +260,8 @@ PanelWindow {
                 return;
             }
             bubble[arg] = "";
+            if (arg === "role")
+                bubble.noRole = true;
             say(`${arg}: ${defaultName(arg)}`);
             return;
         case ".mascots":

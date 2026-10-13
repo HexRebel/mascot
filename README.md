@@ -317,7 +317,8 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
 | `.session <name>` | Start or continue a session, which gives the conversation memory |
-| `.exit model\|role\|session` | Go back to the default |
+| `.exit model\|session` | Go back to the default |
+| `.exit role` | Leave the role, also the one from `CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
 | `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot Black Bunny` |
 | `.clear` | Clear the bubble |
@@ -341,8 +342,8 @@ empty file turns the prompt off. The bubble reads it when it starts, so run `mas
 changing it.
 
 To start with one of your aichat roles instead, set `CHAT_ROLE`, e.g. `mascot config set CHAT_ROLE
-Gemma4`. It replaces the prompt from the next tap; `.role` overrides it, and `.exit role` goes back
-to it.
+Gemma4`. It replaces the prompt from the next tap; `.role` overrides it, and `.exit role` leaves it
+until you pick a role again or `qs` restarts.
 
 ## Configuration
 
