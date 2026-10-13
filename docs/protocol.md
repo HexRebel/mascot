@@ -1,18 +1,66 @@
+# mascotd IPC protocol
+
+Protocol version **0.1.0**. This is also the minimum version the overlay accepts.
+
+mascotd listens on an `AF_UNIX` `SOCK_SEQPACKET` socket, by default
+`$XDG_RUNTIME_DIR/mascotd.sock` (`-s` changes it). Each packet is one message. All integers are in
+host byte order, and file descriptors are passed with `SCM_RIGHTS`. Clients must close the
+descriptors they receive.
+
+The overlay also has a separate, much simpler line-JSON socket for chat front-ends. See
+[Chat socket](#chat-socket) at the end.
+
 # Types
 
-string - byte-prefixed char string, uint8 n + n * char
-variable - uint8 KIND, float or uint32 value, bool used, bool evaluated once, uint16 script_id
+string - byte-prefixed char string, uint8 n + n * char (so at most 255 bytes, no terminating NUL)
+variable - 9 bytes: uint8 KIND, float or uint32 value, bool used, bool evaluated once, uint16 script_id
 
 # Header
+
+8 bytes, followed by the payload:
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | Type | uint8 | Type of the message |
 | Flags | uint8 | Flags |
-| Length | uint16 | Length of the message |
+| Length | uint16 | Length of the whole message, **including** this header |
 | Object ID | uint32 | ID of the object |
 
-If object ID is NULL, the message is generic message
+If object ID is 0, the message is a generic message.
+
+The top byte of an object ID is the object's type, and the lower 24 bits are its index:
+
+| Top byte | Object type |
+| -------- | ----------- |
+| 0 | none (generic) |
+| 1 | environment |
+| 2 | mascot |
+| 3 | plugin |
+| 4 | prototype |
+| 5 | selection |
+| 6 | import |
+| 7 | export |
+| 8 | shm_pool |
+| 9 | buffer |
+| 10 | popup |
+| 11 | click_event |
+
+The overlay looks up a request's handler from the object type and the message type, so a request
+is only understood when it is sent on the right kind of object. Requests it does not know are
+logged as unhandled and ignored.
+
+# Versions
+
+Versions are sent as uint64: 21 bits each for major, minor and patch (`major << 42 | minor << 21 |
+patch`). 0.1.0 is `0x200000`. A client whose version is newer than the overlay's, or older than
+its minimum, gets an ERROR notice `connector.error.version.too_new` or
+`connector.error.version.too_old` (values: client version, server version, minimum version) and
+is disconnected.
+
+# Messages
+
+Messages marked *not implemented* are reserved. The overlay does not handle these requests, and
+it never sends these events.
 
 | Packet ID | Packet Name | Packet Description | Direction |
 | --------- | ----------- | ------------------ | --------- |
@@ -50,40 +98,39 @@ If object ID is NULL, the message is generic message
 | 0x1F | selection.done() | Selection completed, contains information about the selected point | Clientbound |
 | 0x20 | selection.cancel() | Selection cancelled, for example by explicit request or if another selection is started | Clientbound |
 | 0x21 | Reload prototype | Reloads prototype by its path, if path is empty, reloads all prototypes | Serverbound |
-| 0x22 | Import prototype | Imports prototype by file descriptor, creates new Object of type import | Clientbound |
+| 0x22 | Import prototype | Imports prototype by file descriptor, creates new Object of type import | Serverbound |
 | 0x23 | import.failed() | Import failed, can be sent if prototype with same name already exists, then import can be retried with replace flag, acts as destructor for object | Clientbound |
 | 0x24 | import.started() | Import started | Clientbound |
 | 0x25 | import.finished() | Import finished, acts as destructor for object | Clientbound |
 | 0x26 | import.progress() | Import progress | Clientbound |
-| 0x27 | Export | Exports prototype by its id, creates new Object of type export | Clientbound |
+| 0x27 | Export | Exports prototype by its id, creates new Object of type export | Serverbound |
 | 0x28 | export.failed() | Export failed, acts as destructor for object | Clientbound |
 | 0x29 | export.finished() | Export finished, acts as destructor for object | Clientbound |
 | 0x2A | Spawn | Summons mascot | Serverbound |
 | 0x2B | Dispose | Disposes mascot referred by its id | Serverbound |
-| 0x2D | environment->close() | Asks environment to close | Serverbound |
-| 0x2E | plugin->set_policy() | Sets policy for plugin | Serverbound |
-| 0x2F | plugin->restore_windows() | Moves windows to center of screen if possible | Serverbound |
-| 0x3A | plugin->deactivate() | Deactivates plugin | Serverbound |
-| 0x3B | plugin->activate() | Activates plugin | Serverbound |
-| 0x3C | plugin.status() | Status of plugin changed | Clientbound |
+| 0x2E | environment->close() | Asks environment to close (sent on an environment object) | Serverbound |
+| 0x2F | plugin->restore_windows() | Moves windows to center of screen if possible (generic message) | Serverbound |
+| 0x3A | plugin->deactivate() | *Not implemented* | Serverbound |
+| 0x3B | plugin->activate() | *Not implemented* | Serverbound |
+| 0x3C | plugin.status() | *Not implemented* | Clientbound |
 | 0x3D | selection->cancel() | Cancels selection | Serverbound |
-| 0x3E | Share shm pool | Shares shared memory pool, creates new Object of type shm_pool | Serverbound |
-| 0x3F | shm_pool->create_buffer() | Creates buffer in shared memory pool, returns new Object of type buffer | Serverbound |
-| 0x40 | shm_pool.imported() | Server imported shared memory pool successfully | Clientbound |
-| 0x41 | shm_pool.failed() | Server failed to import shared memory pool | Clientbound |
-| 0x42 | shm_pool->destroy() | Destroys shared memory pool referenced by Object ID | Serverbound |
-| 0x43 | buffer->destroy() | Destroys buffer referenced by Object ID | Serverbound |
-| 0x44 | click_event->accept() | Opens popup menu at click position, creates new Object of type popup, acts as destructor for object | Serverbound |
-| 0x46 | popup->child_popup() | Creates child popup menu at specified position, creates new Object of type popup | Serverbound |
-| 0x47 | popup->attach() | Attaches buffer to popup and immediately renders it | Serverbound |
-| 0x48 | popup.mapped() | Sent when popup is mapped | Clientbound |
-| 0x49 | popup.wheel() | Sent when mouse wheel is scrolled within popup | Clientbound |
-| 0x4A | popup.dismissed() | Sent when popup is dismissed, acts as destructor for object | Clientbound |
-| 0x4B | popup.enter() | Sent when mouse enters popup | Clientbound |
-| 0x4C | popup.leave() | Sent when mouse exits popup | Clientbound |
-| 0x4D | popup.motion() | Sent when mouse moves within popup | Clientbound |
-| 0x4E | popup.clicked() | Sent when mouse clicks popup | Clientbound |
-| 0x4F | popup->dismiss() | Sent when popup is discarded, acts as destructor for object | Serverbound |
+| 0x3E | Share shm pool | *Not implemented*: Shares shared memory pool, creates new Object of type shm_pool | Serverbound |
+| 0x3F | shm_pool->create_buffer() | *Not implemented*: Creates buffer in shared memory pool, returns new Object of type buffer | Serverbound |
+| 0x40 | shm_pool.imported() | *Not implemented*: Server imported shared memory pool successfully | Clientbound |
+| 0x41 | shm_pool.failed() | *Not implemented*: Server failed to import shared memory pool | Clientbound |
+| 0x42 | shm_pool->destroy() | *Not implemented*: Destroys shared memory pool referenced by Object ID | Serverbound |
+| 0x43 | buffer->destroy() | *Not implemented*: Destroys buffer referenced by Object ID | Serverbound |
+| 0x44 | click_event->accept() | *Not implemented*: Opens popup menu at click position, creates new Object of type popup, acts as destructor for object | Serverbound |
+| 0x46 | popup->child_popup() | *Not implemented*: Creates child popup menu at specified position, creates new Object of type popup | Serverbound |
+| 0x47 | popup->attach() | *Not implemented*: Attaches buffer to popup and immediately renders it | Serverbound |
+| 0x48 | popup.mapped() | *Not implemented*: Sent when popup is mapped | Clientbound |
+| 0x49 | popup.wheel() | *Not implemented*: Sent when mouse wheel is scrolled within popup | Clientbound |
+| 0x4A | popup.dismissed() | *Not implemented*: Sent when popup is dismissed, acts as destructor for object | Clientbound |
+| 0x4B | popup.enter() | *Not implemented*: Sent when mouse enters popup | Clientbound |
+| 0x4C | popup.leave() | *Not implemented*: Sent when mouse exits popup | Clientbound |
+| 0x4D | popup.motion() | *Not implemented*: Sent when mouse moves within popup | Clientbound |
+| 0x4E | popup.clicked() | *Not implemented*: Sent when mouse clicks popup | Clientbound |
+| 0x4F | popup->dismiss() | *Not implemented*: Sent when popup is discarded, acts as destructor for object | Serverbound |
 | 0x50 | Apply behavior | Applies behavior to mascot | Serverbound |
 | 0x51 | Get config key | Gets config value by key | Serverbound |
 | 0x52 | Set config key | Sets config value by key | Serverbound |
@@ -91,8 +138,8 @@ If object ID is NULL, the message is generic message
 | 0x54 | Config key | Sends config key along with value, sent if client calls get, set or list (sent for each key in that case), clients should expect new keys at any time | Clientbound |
 | 0x55 | click_event.expired() | Sent when click event expires, for example if new click event is created or some client is accepted click event| Clientbound |
 | 0x56 | Stop | Ask overlay to stop | Serverbound |
-| 0x57 | prototype->withdraw() | Sent when prototype is withdrawn, acts as destructor for object | Serverbound |
-| 0x58 | popup.frame() | See frame callbacks in wayland | Clientbound |
+| 0x57 | prototype.withdrawn() | Sent when prototype is withdrawn, acts as destructor for object | Clientbound |
+| 0x58 | popup.frame() | *Not implemented*: See frame callbacks in wayland | Clientbound |
 | 0x59 | mascot.tapped() | Triggered on primary button press and release on mascot without dragging it | Clientbound |
 | 0x5A | sync() | Ask the overlay to answer with sync.done() once earlier requests are handled | Serverbound |
 | 0x5B | sync.done() | Answer to sync() | Clientbound |
@@ -103,7 +150,7 @@ Should be first message sent by client to server, is protocol violation to sent 
 
 | Field | Type | Description | Notes |
 |-------|------|-------------|-------|
-| Version | uint64 | Version of protocol | |
+| Version | uint64 | Version of protocol | See [Versions](#versions); currently 0.1.0 |
 
 # Server Hello - 0x01
 
@@ -260,7 +307,7 @@ Relative path from fd to sprite that should be used as icon.
 
 # prototype.author() - 0x11
 
-Name of the author of the mascot.
+Name of the author of the mascot. Only sent if the prototype's manifest sets `artist`.
 
 | Field | Type | Description | Notes |
 |-------|------|-------------|-------|
@@ -268,11 +315,12 @@ Name of the author of the mascot.
 
 # prototype.version() - 0x12
 
-Version of the mascot.
+Version of the prototype's format, from the manifest's `version` (encoded as in
+[Versions](#versions)). The overlay currently accepts only 0.0.1.
 
 | Field | Type | Description | Notes |
 |-------|------|-------------|-------|
-| Version | uint64 | Version of the mascot | |
+| Version | uint64 | Format version of the prototype | |
 
 # Commit prototypes - 0x13
 
@@ -498,7 +546,7 @@ Any errors reported via Notice Warning with Alert = 1.
 
 Object ID referenced in header used as mascot ID.
 
-# environment->close()
+# environment->close() - 0x2E
 
 Suggest environment to close. Acts same as display disconnect. NOTICE: If environment is closed, it not possible to later reopen it, only possible workaround is to reconnect display.
 
@@ -506,15 +554,18 @@ Object ID referenced in header used as environment ID.
 
 Any errors reported via Notice Warning with Alert = 1.
 
+# plugin->restore_windows() - 0x2F
+
+Generic message (object ID 0) without payload. Asks the loaded plugins to move their windows back
+on screen.
+
 TODO:
-plugin->set_policy()
-plugin->restore_windows()
 plugin->deactivate()
 plugin->activate()
 plugin.status()
 
 
-# selection->cancel() - 0x3C
+# selection->cancel() - 0x3D
 
 Cancel selection **caused by client**.
 
@@ -522,7 +573,16 @@ Object ID referenced in header used as selection ID.
 
 Any errors reported via Notice Warning with Alert = 1.
 
-# Share shm pool - 0x3E
+# Popup API (not implemented)
+
+The messages from 0x3E to 0x4F and 0x58 are a sketch of a popup-menu API and **do not work**.
+The overlay does not register handlers for the requests (0x3E, 0x3F, 0x42, 0x43, 0x44, 0x46,
+0x47, 0x4F), so they are logged as unhandled and ignored. It never sends 0x48, 0x49, 0x4B to 0x4E
+or 0x58. A popup would also have no keyboard input. `mascot.clicked()` (0x18) and
+`click_event.expired()` (0x55) are sent, but a click event cannot be accepted. The descriptions
+below are kept as a reference for the design only.
+
+## Share shm pool - 0x3E
 
 Shares shared memory pool, creates new Object of type shm_pool.
 
@@ -532,7 +592,7 @@ Shares shared memory pool, creates new Object of type shm_pool.
 | New Object ID | uint32 | New Object ID of shared memory pool | |
 | Size | uint32 | Size of shared memory pool | |
 
-# shm_pool->create_buffer() - 0x3F
+## shm_pool->create_buffer() - 0x3F
 
 Create new buffer from shared memory pool
 
@@ -545,27 +605,27 @@ Create new buffer from shared memory pool
 | Stride | uint32 | Stride of buffer | |
 | Format | uint32 | Wayland-specific format of buffer | Recommended to use `WL_SHM_FORMAT_ARGB8888` or `WL_SHM_FORMAT_XRGB8888` |
 
-# shm_pool.imported() - 0x40
+## shm_pool.imported() - 0x40
 
 Marks pool as successfully imported.
 
-# shm_pool.failed() - 0x41
+## shm_pool.failed() - 0x41
 
 Marks pool as failed to import.
 No additional information provided.
 Acts as destructor for Object
 
-# shm_pool->destroy() - 0x42
+## shm_pool->destroy() - 0x42
 
 Destroy shared memory pool.
 Object ID referenced in header used as shm_pool ID.
 
-# buffer->destroy() - 0x43
+## buffer->destroy() - 0x43
 
 Destroy buffer.
 Object ID referenced in header used as buffer ID.
 
-# click_event->accept() - 0x44
+## click_event->accept() - 0x44
 
 Accepts click event and immediately creates a new Popup Object.
 All other clients will receive a `click_event.expired()` event.
@@ -576,10 +636,10 @@ Object ID from header used as click_event ID.
 | Field | Type | Description | Note |
 |-------|------|-------------|-------|
 | Popup ID | uint32 | ID of created popup | |
-| Width | uint32 | Height of popup | |
-| Height | uint32 | Width of popup | |
+| Width | uint32 | Width of popup | |
+| Height | uint32 | Height of popup | |
 
-# popup->child_popup() - 0x46
+## popup->child_popup() - 0x46
 
 Creates a new child popup.
 Object ID from header used as parent Popup ID.
@@ -587,12 +647,12 @@ Object ID from header used as parent Popup ID.
 | Field | Type | Description | Note |
 |-------|------|-------------|-------|
 | Popup ID | uint32 | ID of created popup | |
-| Width | uint32 | Height of popup | |
-| Height | uint32 | Width of popup | |
+| Width | uint32 | Width of popup | |
+| Height | uint32 | Height of popup | |
 | X | uint32 | X of popup | Surface local coordinates of the parent |
 | Y | uint32 | Y of popup | Surface local coordinates of the parent |
 
-# popup->attach() - 0x47
+## popup->attach() - 0x47
 
 Attaches buffer to the popup.
 Object ID from header used as popup ID.
@@ -605,13 +665,13 @@ Object ID from header used as popup ID.
 | Width Damage | uint32 | Width of damage rectangle | Surface local coordinates |
 | Height Damage | uint32 | Height of damage rectangle | Surface local coordinates |
 
-# popup.mapped() - 0x48
+## popup.mapped() - 0x48
 
 Sent when popup is mapped.
 
 Object ID from header used as popup ID.
 
-# popup.wheel() - 0x49
+## popup.wheel() - 0x49
 
 Sent when mouse wheel is scrolled within popup.
 
@@ -621,13 +681,13 @@ Object ID from header used as popup ID.
 |-------|------|-------------|-------|
 | Delta | int32 | Scroll delta | |
 
-# popup.dismissed() - 0x4A
+## popup.dismissed() - 0x4A
 
 Sent when popup is dismissed.
 
 Object ID from header used as popup ID.
 
-# popup.enter() - 0x4B
+## popup.enter() - 0x4B
 
 Sent when popup is entered.
 
@@ -638,7 +698,7 @@ Object ID from header used as popup ID.
 | X | uint32 | X location of pointer | Surface local coordinates |
 | Y | uint32 | Y location of pointer | Surface local coordinates |
 
-# popup.leave() - 0x4C
+## popup.leave() - 0x4C
 
 Sent when popup is left.
 
@@ -649,7 +709,7 @@ Object ID from header used as popup ID.
 | X | uint32 | X location of pointer | Surface local coordinates |
 | Y | uint32 | Y location of pointer | Surface local coordinates |
 
-# popup.motion() - 0x4D
+## popup.motion() - 0x4D
 
 Sent when popup is moved.
 
@@ -660,7 +720,7 @@ Object ID from header used as popup ID.
 | X | uint32 | X location of pointer | Surface local coordinates |
 | Y | uint32 | Y location of pointer | Surface local coordinates |
 
-# popup.clicked() - 0x4E
+## popup.clicked() - 0x4E
 
 Sent when popup is clicked.
 
@@ -672,12 +732,21 @@ Object ID from header used as popup ID.
 | Y | uint32 | Y location of pointer | Surface local coordinates |
 | Button | uint32 | Button that was clicked | linux input keycode |
 
-# popup->dismiss() - 0x4F
+## popup->dismiss() - 0x4F
 
 Dismiss popup.
 Will dismiss all child popups as well.
 
 Object ID from header used as popup ID.
+
+## popup.frame() - 0x58
+
+Same as frame callbacks in
+wayland, but client doesn't requests it explicitly.
+
+| Field | Type | Description | Note |
+|-------|------|-------------|-------|
+| Time | uint32 | Time in unspecified clock | |
 
 # Apply behavior - 0x50
 
@@ -724,21 +793,95 @@ Sent when click event is invalidated by any cause.
 
 Object ID referenced in header used as click event ID.
 
-| 0x56 | Stop | Ask overlay to stop | Serverbound |
-| 0x57 | prototype->withdraw() | Sent when prototype is withdrawn, acts as destructor for object | Serverbound |
-
 # Stop - 0x56
 
 Ask overlay to stop.
 
-# prototype->withdraw() - 0x57
+# prototype.withdrawn() - 0x57
 
 Sent when prototype is withdrawn, acts as destructor for object.
 
-# popup.frame() - 0x58
+# Chat socket
 
-Same as frame callbacks in wayland, but client doesn't requests it explicitly.
+Besides the binary protocol, mascotd listens on a plain `SOCK_STREAM` Unix socket for chat
+front-ends such as the bundled speech bubble. Its path is derived from the IPC socket: `foo.sock`
+becomes `foo-chat.sock`, and any other name gets `-chat` appended. By default that is
+`$XDG_RUNTIME_DIR/mascotd-chat.sock`. Several clients may be connected at once.
 
-| Field | Type | Description | Note |
-|-------|------|-------------|-------|
-| Time | uint32 | Time in unspecified clock | |
+Each message, in both directions, is one JSON object on one line ending with `\n`. Send **compact**
+JSON (`{"event":"close","mascot":3}`): the overlay recognises an event by the exact text
+`"event":"<name>"`, without whitespace. Lines longer than 511 bytes are dropped.
+
+All coordinates are in logical pixels, local to the mascot's environment (output), with **y
+measured from the top**. This differs from the binary protocol, where mascot y is
+bottom-referenced.
+
+When the `chat_enabled` setting is false, the overlay sends no `tap` events and disconnects every
+chat client, but keeps listening, so clients can reconnect once it is turned on again.
+
+## Overlay to client
+
+### tap
+
+Sent to every client when a mascot is tapped (primary button pressed and released without dragging).
+If at least one client received it, the mascot is *held*: it sits down (behaviour `SitDown`) and
+keeps sitting until the client sends `close`, the mascot is dragged, or the last chat client
+disconnects. Only one mascot is held at a time. A double click gives two `tap` events.
+
+```json
+{"event":"tap","mascot":1,"prototype":"Shimeji","output":"DP-1",
+ "pointer":{"x":285,"y":1403},"anchor":{"x":285,"y":1440},"looking_right":true,
+ "sprite":{"x":220,"y":1312,"width":128,"height":128},
+ "surface":{"width":2560,"height":1440},"command":null}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| mascot | number | Mascot ID (the lower 24 bits of its object ID) |
+| prototype | string | Display name of the mascot's prototype, or its name if it has none |
+| output | string | Name of the output the mascot is on |
+| pointer | {x, y} | Pointer position at release |
+| anchor | {x, y} | The mascot's anchor point (where its feet are) |
+| looking_right | bool | Which way the mascot faces |
+| sprite | {x, y, width, height} or null | The box the current sprite is drawn in; null if it has no pose yet |
+| surface | {width, height} | Size of the overlay's surface on that output |
+| command | string or null | The `chat_command` setting, or null if it is empty. The overlay does not run it |
+
+### dragged
+
+`{"event":"dragged","mascot":N}`: the user started dragging mascot N. The mascot is no longer
+held; a client showing a conversation for it will usually close it.
+
+### prototypes
+
+`{"event":"prototypes","names":["Shimeji","Black Bunny"]}`: answer to `list`, sent only to the
+client that asked. Lists the display names of all loaded prototypes.
+
+### swapped
+
+`{"event":"swapped","mascot":N,"to":M,"prototype":"Black Bunny"}`: answer to `swap`, sent to every
+client. Mascot N has been replaced by mascot M, of the named prototype. If N was held, M is now
+held instead.
+
+### swap_failed
+
+`{"event":"swap_failed","mascot":N,"reason":"..."}`: sent only to the client whose `swap` failed.
+`reason` is a human-readable English sentence.
+
+## Client to overlay
+
+| Message | Effect |
+|---------|--------|
+| `{"event":"close","mascot":N}` | The conversation with mascot N is over; it is no longer held |
+| `{"event":"talking","mascot":N,"active":true}` | While `active` is true, the held mascot N plays its `Talk` behaviour (if the prototype defines one; otherwise it keeps sitting). Send `false` when the answer is complete |
+| `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
+| `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
+| `{"event":"hiding"}` | The client is about to unmap a window. The overlay stops sprites from taking pointer input |
+| `{"event":"hidden"}` | The window is unmapped. Sprites take input again; the overlay also restores it after 2 s, or when the last chat client disconnects |
+
+`hiding` and `hidden` exist because some compositors crash when a focused layer surface unmaps
+while the pointer is over a subsurface of another layer surface. A client that shows a focused
+window should send `hiding`, wait about 100 ms, unmap, wait a little longer, and send `hidden`.
+
+A prototype opts into talking by defining a behaviour named `Talk` with frequency 0 (so it is
+never picked at random) that refers to an existing action.
