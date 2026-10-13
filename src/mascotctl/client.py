@@ -1152,6 +1152,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "MASCOT_SCALE": "Scaling",
         "CHAT_ENABLED": "Chat Enabled",
         "CHAT_COMMAND": "Chat Command",
+        "CHAT_ROLE": "Chat Role",
         "BUBBLE_ENABLED": "Bubble Enabled",
         "BUBBLE_COMMAND": "Bubble Command"
     }
@@ -1235,6 +1236,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "SOCKET_LOCATION": "socket_location",
         "CHAT_ENABLED": "chat_enabled",
         "CHAT_COMMAND": "chat_command",
+        "CHAT_ROLE": "chat_role",
         "BUBBLE_ENABLED": "bubble_enabled",
         "BUBBLE_COMMAND": "bubble_command",
     }

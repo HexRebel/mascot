@@ -330,7 +330,7 @@ mascot; with Mascot's prompt it answers under its new name from the next message
 
 ## The mascot's personality
 
-Unless you pick a role with `.role`, every message is sent with Mascot's own system prompt
+Unless you pick a role with `.role` or set `CHAT_ROLE`, every message is sent with Mascot's own system prompt
 (aichat's `--prompt`), so the mascot answers in character, briefly and in your language. `{name}` in
 the prompt becomes the mascot's name, so Brown Bear answers as Brown Bear. Your aichat roles and
 your `cmd_prelude` are left alone; the prompt simply takes their place in the bubble.
@@ -340,12 +340,17 @@ Mascot's data directory (`~/.local/share/mascot/prompt.md`); it replaces the bun
 empty file turns the prompt off. The bubble reads it when it starts, so run `mascot stop` after
 changing it.
 
+To start with one of your aichat roles instead, set `CHAT_ROLE`, e.g. `mascot config set CHAT_ROLE
+Gemma4`. It replaces the prompt from the next tap; `.role` overrides it, and `.exit role` goes back
+to it.
+
 ## Configuration
 
 | Option | Default | Description |
 |---|---|---|
 | `CHAT_ENABLED` | `true` | `false` closes the bubble and stops taps from opening it; `true` starts it again. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
+| `CHAT_ROLE` | empty | The aichat role the bubble starts with (`-r`); empty means Mascot's prompt. Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 

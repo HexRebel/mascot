@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from typing import Callable, Any
-import argparse
-import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 import xml
-import zipfile
-from dataclasses import dataclass, field
-import sys
-import io
-import enum
+import stat
+import pathlib
 import random
+import struct
+import tempfile
+import sys
+import shutil
+import tarfile
+from dataclasses import dataclass, field
+import argparse
 import logging
 from xml.etree import ElementTree
-import pathlib
-import json
 import time
-import socket
-import shutil
-import struct
-import tarfile
-from PIL import Image
-import stat
-from typing import Dict, Optional
-import tempfile
-import subprocess
 import os
+import socket
+import enum
+import json
+import io
+from typing import Callable, Any
+from PIL import Image
+from typing import Dict, Optional
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+import zipfile
+import subprocess
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -3694,6 +3694,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "MASCOT_SCALE": "Scaling",
         "CHAT_ENABLED": "Chat Enabled",
         "CHAT_COMMAND": "Chat Command",
+        "CHAT_ROLE": "Chat Role",
         "BUBBLE_ENABLED": "Bubble Enabled",
         "BUBBLE_COMMAND": "Bubble Command"
     }
@@ -3777,6 +3778,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "SOCKET_LOCATION": "socket_location",
         "CHAT_ENABLED": "chat_enabled",
         "CHAT_COMMAND": "chat_command",
+        "CHAT_ROLE": "chat_role",
         "BUBBLE_ENABLED": "bubble_enabled",
         "BUBBLE_COMMAND": "bubble_command",
     }

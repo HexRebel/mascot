@@ -311,6 +311,15 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
         snprintf(command, sizeof(command), "\"%s\"", escaped);
     }
 
+    // Same for CHAT_ROLE
+    char role[512] = "null";
+    const char* chat_role = config_get_chat_role();
+    if (chat_role) {
+        char escaped[504];
+        json_escape(chat_role, escaped, sizeof(escaped));
+        snprintf(role, sizeof(role), "\"%s\"", escaped);
+    }
+
     char sprite[128] = "null";
     struct bounding_box box;
     if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
@@ -326,14 +335,14 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s}\n",
+        "\"command\":%s,\"role\":%s}\n",
         mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command);
+        command, role);
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;

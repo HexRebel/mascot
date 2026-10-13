@@ -75,6 +75,7 @@ struct config {
     // Chat bubble
     bool chat_enabled;
     char* chat_command;
+    char* chat_role;
     bool bubble_enabled;
     char* bubble_command;
 
@@ -266,6 +267,8 @@ bool config_parse(const char* path)
             config_set_chat_enabled(parse_bool(value));
         } else if (strcasecmp(key, "chat_command") == 0) {
             config_set_chat_command(value);
+        } else if (strcasecmp(key, "chat_role") == 0) {
+            config_set_chat_role(value);
         } else if (strcasecmp(key, "bubble_enabled") == 0) {
             config_set_bubble_enabled(parse_bool(value));
         } else if (strcasecmp(key, "bubble_command") == 0) {
@@ -319,6 +322,7 @@ void config_write(const char* path)
     if (config.mascot_opacity != -1.0f) fprintf(file, "mascot_opacity=%f\n", config.mascot_opacity);
     fprintf(file, "chat_enabled=%s\n", config.chat_enabled ? "true" : "false");
     if (config.chat_command) fprintf(file, "chat_command=%s\n", config.chat_command);
+    if (config.chat_role) fprintf(file, "chat_role=%s\n", config.chat_role);
     fprintf(file, "bubble_enabled=%s\n", config.bubble_enabled ? "true" : "false");
     if (config.bubble_command) fprintf(file, "bubble_command=%s\n", config.bubble_command);
 
@@ -788,6 +792,19 @@ const char* config_get_chat_command()
     return config.chat_command;
 }
 
+bool config_set_chat_role(const char* value)
+{
+    if (value && strchr(value, '\n')) return false;
+    free(config.chat_role);
+    config.chat_role = (value && *value) ? strdup(value) : NULL;
+    return true;
+}
+
+const char* config_get_chat_role()
+{
+    return config.chat_role;
+}
+
 bool config_set_bubble_enabled(int32_t value)
 {
     config.bubble_enabled = value;
@@ -951,6 +968,9 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_COMMAND)) {
         snprintf(dest, size, "%s", config.chat_command ? config.chat_command : "");
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_ROLE)) {
+        snprintf(dest, size, "%s", config.chat_role ? config.chat_role : "");
+        return true;
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         snprintf(dest, size, "%s", config.bubble_enabled ? "true" : "false");
         return true;
@@ -1043,6 +1063,8 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_chat_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_COMMAND)) {
         res = config_set_chat_command(value);
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_ROLE)) {
+        res = config_set_chat_role(value);
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         res = config_set_bubble_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {

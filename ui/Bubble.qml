@@ -161,14 +161,14 @@ PanelWindow {
     // aichat's REPL dot commands need a tty, so the bubble emulates the useful
     // ones with aichat's CLI flags. Kept across bubbles until changed
     property string model: ""
-    property string role: ""
+    property string role: "" // empty: CHAT_ROLE (event.role), else Mascot's prompt
     property string session: ""
 
     readonly property string helpText: [
         ".info                  show aichat's settings",
         ".models / .roles / .sessions   list them",
         ".model <name>          switch model (e.g. openrouter:…)",
-        ".role <name>           switch role (instead of Mascot's prompt)",
+        ".role <name>           switch role (instead of the default)",
         ".session <name>        start/continue a session with memory",
         ".exit model|role|session   go back to the default",
         ".mascots               list the mascots you have",
@@ -180,8 +180,9 @@ PanelWindow {
         let args = [];
         if (bubble.model)
             args.push("-m", bubble.model);
-        if (bubble.role)
-            args.push("-r", bubble.role);
+        const role = bubble.role || bubble.event?.role;
+        if (role)
+            args.push("-r", role); // only ever one -r: aichat refuses two
         else if (bubble.prompt)
             args.push("--prompt", bubble.prompt.replace(/\{name\}/g, bubble.event?.prototype || "a desktop mascot"));
         if (bubble.session)
@@ -211,6 +212,10 @@ PanelWindow {
         bubble.streaming = -1;
     }
 
+    function defaultName(key: string): string {
+        return key === "role" && bubble.event?.role ? `${bubble.event.role} (default)` : "default";
+    }
+
     function dotCommand(text: string): void {
         const [name, ...rest] = text.split(/\s+/);
         const arg = rest.join(" ");
@@ -237,7 +242,7 @@ PanelWindow {
                 const key = name.slice(1);
                 if (arg)
                     bubble[key] = arg;
-                say(`${key}: ${bubble[key] || "default"}`);
+                say(`${key}: ${bubble[key] || defaultName(key)}`);
                 return;
             }
         case ".exit":
@@ -246,7 +251,7 @@ PanelWindow {
                 return;
             }
             bubble[arg] = "";
-            say(`${arg}: default`);
+            say(`${arg}: ${defaultName(arg)}`);
             return;
         case ".mascots":
             bubble.listRequested();
