@@ -25,6 +25,11 @@ PanelWindow {
     signal hidden()
     property bool closing: false
 
+    // .mascots asks the daemon for its prototypes; .mascot <name> swaps the
+    // mascot for another one in the same spot (see chat_swap() in mascotd)
+    signal listRequested()
+    signal swapRequested(int mascot, string prototype)
+
     // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
     signal talked(int mascot, bool active)
     property bool replying: false
@@ -113,6 +118,24 @@ PanelWindow {
             bubble.close();
     }
 
+    function prototypesListed(names: var): void {
+        if (bubble.visible)
+            say(names.length ? names.join("\n") : "no mascots loaded");
+    }
+
+    // The daemon replaced our mascot; keep the conversation going with the new one
+    function swapped(e: var): void {
+        if (!bubble.event || bubble.event.mascot !== e.mascot)
+            return;
+        bubble.event = Object.assign({}, bubble.event, { mascot: e.to, prototype: e.prototype });
+        say(`mascot: ${e.prototype}`);
+    }
+
+    function swapFailed(e: var): void {
+        if (bubble.visible && bubble.event?.mascot === e.mascot)
+            say(e.reason);
+    }
+
     // Hides the bubble without releasing the mascot (the daemon may be gone).
     // Looks closed at once, but unmaps only once the daemon has had time to
     // turn sprite input off
@@ -164,6 +187,8 @@ PanelWindow {
         ".role <name>           switch role (instead of Mascot's prompt)",
         ".session <name>        start/continue a session with memory",
         ".exit model|role|session   go back to the default",
+        ".mascots               list the mascots you have",
+        ".mascot <name>         swap this mascot for another one",
         ".clear                 clear the bubble"
     ].join("\n")
 
@@ -231,6 +256,17 @@ PanelWindow {
             }
             bubble[arg] = "";
             say(`${arg}: default`);
+            return;
+        case ".mascots":
+            bubble.listRequested();
+            return;
+        case ".mascot":
+            if (!arg)
+                say(`mascot: ${bubble.event?.prototype} - .mascot <name> to swap, .mascots to list`);
+            else if (arg.toLowerCase() === bubble.event?.prototype?.toLowerCase())
+                say(`already ${bubble.event.prototype}`);
+            else
+                bubble.swapRequested(bubble.event.mascot, arg);
             return;
         case ".clear":
             bubble.transcript = "";

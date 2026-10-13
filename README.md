@@ -317,9 +317,15 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
 | `.session <name>` | Start or continue a session, which gives the conversation memory |
 | `.exit model\|role\|session` | Go back to the default |
+| `.mascots` | List the mascots you have installed |
+| `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot Black Bunny` |
 | `.clear` | Clear the bubble |
 
 The model, role and session apply to every mascot until changed, and reset when `qs` restarts.
+
+`.mascot` replaces the mascot by the bubble with a new one of the given type (any letter case) in the
+same spot, facing the same way. The bubble stays open and the conversation carries on with the new
+mascot; with Mascot's prompt it answers under its new name from the next message.
 
 ## The mascot's personality
 

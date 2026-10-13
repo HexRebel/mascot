@@ -41,6 +41,12 @@ ShellRoot {
             bubble.openFor(event);
         else if (event.event === "dragged")
             bubble.closeFor(event.mascot);
+        else if (event.event === "prototypes")
+            bubble.prototypesListed(event.names);
+        else if (event.event === "swapped")
+            bubble.swapped(event);
+        else if (event.event === "swap_failed")
+            bubble.swapFailed(event);
     }
 
     Socket {
@@ -95,5 +101,7 @@ ShellRoot {
         onHidden: root.send({ event: "hidden" })
         onReleased: mascot => root.send({ event: "close", mascot: mascot })
         onTalked: (mascot, active) => root.send({ event: "talking", mascot: mascot, active: active })
+        onListRequested: root.send({ event: "list" })
+        onSwapRequested: (mascot, prototype) => root.send({ event: "swap", mascot: mascot, prototype: prototype })
     }
 }

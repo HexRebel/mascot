@@ -27,12 +27,14 @@
 #include "list.h"
 #include "mascot.h"
 #include "protocol/server.h"
+#include "third_party/json.h/json.h"
 #include <errno.h>
 #include <linux/limits.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <time.h>
@@ -179,10 +181,22 @@ int chat_accept(void)
     return fd;
 }
 
+static void chat_send_prototypes(int fd);
+static void chat_swap(int fd, const char* line);
+
 // Handles one line from a client: {"event":"hiding"}, {"event":"hidden"},
-// {"event":"talking","mascot":N,"active":true|false} or {"event":"close","mascot":N}
-static void chat_handle_line(const char* line)
+// {"event":"talking","mascot":N,"active":true|false}, {"event":"close","mascot":N},
+// {"event":"list"} or {"event":"swap","mascot":N,"prototype":"name"}
+static void chat_handle_line(int fd, const char* line)
 {
+    if (strstr(line, "\"event\":\"list\"")) {
+        chat_send_prototypes(fd);
+        return;
+    }
+    if (strstr(line, "\"event\":\"swap\"")) {
+        chat_swap(fd, line);
+        return;
+    }
     if (strstr(line, "\"event\":\"hiding\"")) {
         chat_suppress_sprites(true);
         return;
@@ -235,7 +249,7 @@ bool chat_client_readable(int fd)
     char* newline;
     while ((newline = strchr(line, '\n'))) {
         *newline = 0;
-        chat_handle_line(line);
+        chat_handle_line(fd, line);
         line = newline + 1;
     }
     client->len = strlen(line);
@@ -390,4 +404,136 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
     // Keep the mascot still while someone is talking to it
     if (delivered) chat_hold(mascot);
     return delivered;
+}
+
+static void chat_send_to(int fd, const char* line, size_t len)
+{
+    ssize_t sent = send(fd, line, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (sent == (ssize_t)len) return;
+    if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        WARN("Chat client is not reading, event dropped");
+        return;
+    }
+    shutdown(fd, SHUT_RDWR);
+}
+
+static const char* chat_prototype_name(const struct mascot_prototype* prototype)
+{
+    return prototype->display_name ? prototype->display_name : prototype->name;
+}
+
+// Replies {"event":"prototypes","names":[...]} with every loaded prototype
+static void chat_send_prototypes(int fd)
+{
+    char* line = NULL;
+    size_t len = 0;
+    FILE* out = open_memstream(&line, &len);
+    if (!out) return;
+
+    fputs("{\"event\":\"prototypes\",\"names\":[", out);
+    struct protocol_server_state* state = protocol_get_server_state();
+    bool first = true;
+    pthread_mutex_lock(&state->prototypes_mutex);
+    for (int32_t i = 0; i < mascot_prototype_store_count(state->prototypes); i++) {
+        struct mascot_prototype* prototype = mascot_prototype_store_get_index(state->prototypes, i);
+        if (!prototype) continue;
+        char name[1600];
+        json_escape(chat_prototype_name(prototype), name, sizeof(name));
+        fprintf(out, "%s\"%s\"", first ? "" : ",", name);
+        first = false;
+    }
+    pthread_mutex_unlock(&state->prototypes_mutex);
+    fputs("]}\n", out);
+    fclose(out);
+
+    chat_send_to(fd, line, len);
+    free(line);
+}
+
+static void chat_swap_failed(int fd, long mascot_id, const char* reason)
+{
+    char escaped[1600], line[2048];
+    json_escape(reason, escaped, sizeof(escaped));
+    int len = snprintf(line, sizeof(line), "{\"event\":\"swap_failed\",\"mascot\":%ld,\"reason\":\"%s\"}\n",
+                       mascot_id, escaped);
+    if (len > 0 && len < (int)sizeof(line)) chat_send_to(fd, line, len);
+}
+
+static void chat_swap_summoned(struct mascot* mascot, void* data)
+{
+    *(struct mascot**)data = mascot;
+}
+
+// Replaces mascot N with a new one of the named prototype (display or internal
+// name, any case) at the same spot, facing the same way. The new one takes over
+// the chat hold and every client gets {"event":"swapped","mascot":N,"to":M,
+// "prototype":"name"}; the sender gets {"event":"swap_failed",...} otherwise
+static void chat_swap(int fd, const char* line)
+{
+    struct json_value_s* root = json_parse(line, strlen(line));
+    struct json_object_s* object = root ? json_value_as_object(root) : NULL;
+    struct json_number_s* id_value = NULL;
+    struct json_string_s* name_value = NULL;
+    for (struct json_object_element_s* e = object ? object->start : NULL; e; e = e->next) {
+        if (!strcmp(e->name->string, "mascot")) id_value = json_value_as_number(e->value);
+        if (!strcmp(e->name->string, "prototype")) name_value = json_value_as_string(e->value);
+    }
+    if (!id_value || !name_value) {
+        WARN("Malformed swap request from chat client");
+        free(root);
+        return;
+    }
+    long mascot_id = strtol(id_value->number, NULL, 10);
+
+    struct mascot* old = chat_find_mascot(mascot_id);
+    if (!old) {
+        chat_swap_failed(fd, mascot_id, "That mascot is gone");
+        free(root);
+        return;
+    }
+
+    struct protocol_server_state* state = protocol_get_server_state();
+    struct mascot_prototype* prototype = NULL;
+    pthread_mutex_lock(&state->prototypes_mutex);
+    for (int32_t i = 0; i < mascot_prototype_store_count(state->prototypes) && !prototype; i++) {
+        struct mascot_prototype* candidate = mascot_prototype_store_get_index(state->prototypes, i);
+        if (!candidate) continue;
+        if (!strcasecmp(chat_prototype_name(candidate), name_value->string) ||
+            !strcasecmp(candidate->name, name_value->string)) {
+            prototype = candidate;
+        }
+    }
+    pthread_mutex_unlock(&state->prototypes_mutex);
+
+    if (!prototype) {
+        char reason[512];
+        snprintf(reason, sizeof(reason), "No mascot called \"%s\" - try .mascots", name_value->string);
+        chat_swap_failed(fd, mascot_id, reason);
+        free(root);
+        return;
+    }
+    free(root);
+
+    environment_t* environment = old->environment;
+    struct mascot* replacement = NULL;
+    environment_summon_mascot(environment, prototype, old->X->value.i, old->Y->value.i,
+                              chat_swap_summoned, &replacement);
+    if (!replacement) {
+        chat_swap_failed(fd, mascot_id, "Could not create the new mascot");
+        return;
+    }
+    pthread_mutex_lock(&replacement->tick_lock);
+    replacement->LookingRight->value.i = old->LookingRight->value.i;
+    pthread_mutex_unlock(&replacement->tick_lock);
+
+    // Hold the new one first: chat_hold() releases the old one
+    if (held_mascot_id == old->id) chat_hold(replacement);
+    INFO("<Mascot:%s:%u> Swapped for %s from the chat bubble", old->prototype->name, old->id, prototype->name);
+    environment_remove_mascot(environment, old);
+
+    char name[1600], reply[2048];
+    json_escape(chat_prototype_name(prototype), name, sizeof(name));
+    int len = snprintf(reply, sizeof(reply), "{\"event\":\"swapped\",\"mascot\":%ld,\"to\":%u,\"prototype\":\"%s\"}\n",
+                       mascot_id, replacement->id, name);
+    if (len > 0 && len < (int)sizeof(reply)) chat_broadcast(reply, len);
 }
