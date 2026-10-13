@@ -880,7 +880,6 @@ int main(int argc, const char** argv)
         // Process epoll
         struct epoll_event events[16];
         int nfds = epoll_wait(epfd, events, 16, 1000);
-        chat_tick();
         if (nfds == -1) {
             WARN("Failed to epoll_wait");
             continue;
@@ -970,7 +969,6 @@ int main(int argc, const char** argv)
                 // The bubble exited (on its own, or after CHAT_ENABLED was turned
                 // off); mascotd keeps running without it
                 bubble_exited();
-                if (!bubble_running()) chat_restore_input();
             } else if (sd->type == SOCKET_TYPE_ENVIRONMENT) {
                 // Wayland event
                 if (events[i].events & EPOLLHUP) {

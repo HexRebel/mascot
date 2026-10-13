@@ -150,7 +150,6 @@ struct environment {
   bool pending_commit;
   int32_t interactive_window_count;
   // The layer surface takes all pointer input, see environment_update_input_region()
-  bool sprite_input_suppressed; // no sprite input, see environment_suppress_sprite_input()
   bool input_full;              // whole surface (drag, selection)
   uint64_t input_signature;     // of the region last set
   pthread_mutex_t input_lock;
@@ -2661,7 +2660,16 @@ environment_subsurface_t *environment_create_subsurface(environment_t *env) {
   wl_surface_set_data(subsurface->surface, WL_SURFACE_ROLE_SUBSURFACE,
                       subsurface, env);
   // A new surface takes input everywhere; the layer surface takes it instead.
-  // Never pass NULL: that means "everywhere" too
+  // Never pass NULL: that means "everywhere" too.
+  //
+  // This empty region is load-bearing for crash safety, not only for pointer
+  // focus. Hyprland 0.56 segfaults when a focused layer surface (the chat
+  // bubble) unmaps while the pointer is over a subsurface of another layer
+  // surface that takes input: refocusLastWindow() hit-tests it and calls
+  // keyboardFocusable() on a view it never made for layer-surface subsurfaces.
+  // With no input on the sprites the hit-test finds the layer surface itself,
+  // which has a view. hyprwm/Hyprland#16311 (after v0.56.2) adds those views;
+  // check a release with scripts/hyprland-repro/ before giving sprites input
   if (empty_region)
     wl_surface_set_input_region(subsurface->surface, empty_region);
   else {
@@ -2770,7 +2778,8 @@ void environment_subsurface_attach(environment_subsurface_t *surface,
 
   wl_surface_attach(surface->surface, sprite->buffer->buffer, 0, 0);
   wl_surface_damage_buffer(surface->surface, 0, 0, INT32_MAX, INT32_MAX);
-  // The layer surface takes the input instead, see environment_pointer_retarget()
+  // The layer surface takes the input instead, see environment_pointer_retarget().
+  // Keeps Hyprland 0.56 from crashing too, see environment_create_subsurface()
   wl_surface_set_input_region(surface->surface, empty_region);
 
   if (!surface->pose) {
@@ -3413,29 +3422,6 @@ static void environment_subsurface_sprite_offset(environment_subsurface_t *surfa
        (config_get_mascot_scale() * surface->env->scale);
 }
 
-// Hyprland 0.56 segfaults when a focused layer surface (the chat bubble)
-// unmaps while the pointer is over a sprite: refocusLastWindow() hit-tests the
-// sprite, a subsurface of a layer surface it keeps no view for, and calls
-// keyboardFocusable() on that null view. The bubble therefore asks for sprite
-// input to be off while it closes; with nothing under the pointer the
-// compositor falls back to the last window.
-//
-// TODO: remove when hyprwm/Hyprland#16311 is in a release — verify with
-// scripts/hyprland-repro/. Along with this function go sprite_input_suppressed,
-// the hiding/hidden events (chat.c, ui/Bubble.qml) and the timeout in
-// chat_tick(). Sprite subsurfaces have had an empty input region since the
-// pointer-input redesign, so the hit-test should already find the layer
-// surface instead; this may be removable sooner
-void environment_suppress_sprite_input(environment_t *env, bool suppress) {
-  if (!env || !env->is_ready)
-    return;
-  if (env->sprite_input_suppressed == suppress)
-    return;
-  env->sprite_input_suppressed = suppress;
-  environment_update_input_region(env);
-  environment_commit(env);
-}
-
 // Sprite's input rectangle (its non-transparent bounds) in environment-local
 // logical coordinates, top-referenced
 static bool environment_sprite_input_box(environment_subsurface_t *surface,
@@ -3463,7 +3449,7 @@ static environment_subsurface_t *environment_sprite_at(environment_t *env,
                                                        int32_t x, int32_t y) {
   if (!env || !env->is_ready || !env->mascot_manager.referenced_mascots)
     return NULL;
-  if (env->sprite_input_suppressed || !config_get_dragging())
+  if (!config_get_dragging())
     return NULL;
 
   environment_subsurface_t *found = NULL;
@@ -3503,7 +3489,7 @@ void environment_update_input_region(environment_t *env) {
     INPUT_MIX(0xFFFFFFFF);
     INPUT_MIX(env->root_surface->width);
     INPUT_MIX(env->root_surface->height);
-  } else if (!env->sprite_input_suppressed && config_get_dragging() &&
+  } else if (config_get_dragging() &&
              env->mascot_manager.referenced_mascots) {
     struct list *mascots = env->mascot_manager.referenced_mascots;
     pthread_mutex_lock(&env->mascot_manager.mutex);

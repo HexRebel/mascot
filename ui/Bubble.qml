@@ -18,14 +18,6 @@ PanelWindow {
 
     // The daemon keeps the mascot sitting until told the bubble is gone
     signal released(int mascot)
-    // Sent before and after unmapping. Hyprland 0.56 crashes when the bubble
-    // unmaps with the pointer over a sprite, so the daemon turns sprite input
-    // off in between (see environment_suppress_sprite_input() in mascotd).
-    // TODO: remove when hyprwm/Hyprland#16311 is in a release — verify with
-    // scripts/hyprland-repro/ (with unmapTimer and hiddenTimer)
-    signal hiding()
-    signal hidden()
-    property bool closing: false
 
     // .mascots asks the daemon for its prototypes; .mascot <name> swaps the
     // mascot for another one in the same spot (see chat_swap() in mascotd)
@@ -35,7 +27,7 @@ PanelWindow {
     // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
     signal talked(int mascot, bool active)
     property bool replying: false
-    readonly property bool talking: replying && chat.running && visible && !closing
+    readonly property bool talking: replying && chat.running && visible
     onTalkingChanged: if (bubble.event)
         bubble.talked(bubble.event.mascot, bubble.talking)
     property string transcript: ""
@@ -92,13 +84,6 @@ PanelWindow {
     }
 
     function openFor(e: var): void {
-        // A tap that raced a close: stay mapped and give the sprites back
-        if (unmapTimer.running) {
-            unmapTimer.stop();
-            bubble.closing = false;
-            bubble.hidden();
-        }
-
         // Double clicks arrive as two taps: keep the open conversation
         if (bubble.visible && bubble.event && bubble.event.mascot === e.mascot) {
             input.forceActiveFocus();
@@ -138,36 +123,10 @@ PanelWindow {
             say(e.reason);
     }
 
-    // Hides the bubble without releasing the mascot (the daemon may be gone).
-    // Looks closed at once, but unmaps only once the daemon has had time to
-    // turn sprite input off
+    // Hides the bubble without releasing the mascot (the daemon may be gone)
     function dismiss(): void {
         chat.running = false;
-        if (!bubble.visible || bubble.closing)
-            return;
-        bubble.closing = true;
-        hiddenTimer.stop();
-        bubble.hiding();
-        unmapTimer.start();
-    }
-
-    Timer {
-        id: unmapTimer
-
-        interval: 100
-        onTriggered: {
-            bubble.visible = false;
-            bubble.closing = false;
-            hiddenTimer.start();
-        }
-    }
-
-    // Lets the compositor finish the unmap before sprites take input again
-    Timer {
-        id: hiddenTimer
-
-        interval: 250
-        onTriggered: bubble.hidden()
+        bubble.visible = false;
     }
 
     function close(): void {
@@ -386,7 +345,6 @@ PanelWindow {
 
     Shape {
         anchors.fill: parent
-        visible: !bubble.closing
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
@@ -404,7 +362,6 @@ PanelWindow {
     Column {
         id: content
 
-        visible: !bubble.closing
         x: bubble.inset + bubble.padding
         y: bubble.inset + bubble.padding + (bubble.below ? bubble.tailHeight : 0)
         width: bubble.bodyWidth - 2 * bubble.padding

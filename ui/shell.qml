@@ -63,23 +63,13 @@ ShellRoot {
             console.info("mascot-bubble:", connected ? "connected to" : "disconnected from", path);
             if (connected)
                 root.wasConnected = true;
-            else if (root.managed && root.wasConnected)
-                quitTimer.start();
-            else
+            else if (root.managed && root.wasConnected) {
+                bubble.dismiss();
+                Qt.quit();
+            } else
                 // The daemon went away or turned chat off (CHAT_ENABLED=false)
                 bubble.dismiss();
         }
-    }
-
-    // Never exit with the bubble mapped: Hyprland 0.56 can crash when it goes
-    // away (see Bubble.hiding). dismiss() unmaps after 100 ms; the daemon has
-    // already turned sprite input off before closing the socket
-    Timer {
-        id: quitTimer
-
-        interval: 400
-        onRunningChanged: if (running) bubble.dismiss()
-        onTriggered: Qt.quit()
     }
 
     // Started by hand, the daemon may start after us or be restarted; keep trying
@@ -97,8 +87,6 @@ ShellRoot {
     Bubble {
         id: bubble
 
-        onHiding: root.send({ event: "hiding" })
-        onHidden: root.send({ event: "hidden" })
         onReleased: mascot => root.send({ event: "close", mascot: mascot })
         onTalked: (mascot, active) => root.send({ event: "talking", mascot: mascot, active: active })
         onListRequested: root.send({ event: "list" })

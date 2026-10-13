@@ -876,12 +876,9 @@ held instead.
 | `{"event":"talking","mascot":N,"active":true}` | While `active` is true, the held mascot N plays its `Talk` behaviour (if the prototype defines one; otherwise it keeps sitting). Send `false` when the answer is complete |
 | `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
 | `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
-| `{"event":"hiding"}` | The client is about to unmap a window. The overlay stops sprites from taking pointer input |
-| `{"event":"hidden"}` | The window is unmapped. Sprites take input again; the overlay also restores it after 2 s, or when the last chat client disconnects |
 
-`hiding` and `hidden` exist because some compositors crash when a focused layer surface unmaps
-while the pointer is over a subsurface of another layer surface. A client that shows a focused
-window should send `hiding`, wait about 100 ms, unmap, wait a little longer, and send `hidden`.
+Other messages are ignored. Older clients sent `hiding` and `hidden` around unmapping their
+window; they are no longer needed.
 
 A prototype opts into talking by defining a behaviour named `Talk` with frequency 0 (so it is
 never picked at random) that refers to an existing action.
