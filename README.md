@@ -271,6 +271,7 @@ so any model aichat supports works, including local ones through Ollama.
 
 - Quickshell (`pacman -S quickshell`)
 - aichat (`pacman -S aichat`), configured with at least one model
+- Optional: pywal (`pacman -S python-pywal`) for colours that follow your theme (see [Colours](#colours))
 
 ## Starting and stopping
 
@@ -368,7 +369,12 @@ layerrule = blur on, match:namespace mascot-bubble
 layerrule = ignore_alpha 0.3, match:namespace mascot-bubble
 ```
 
-Colours are read from pywal (`~/.cache/wal/colors.json`) when it exists.
+## Colours
+
+The bubble takes its colours from pywal (`~/.cache/wal/colors.json`) when it exists, and follows
+the file when it changes. What you type is shown in `color4` (also used for the mascot's name and
+the outline), the answer in the foreground colour, and the bubble's own messages and command output
+in `color8`. Without pywal it uses built-in dark colours.
 
 # Advanced usage
 
