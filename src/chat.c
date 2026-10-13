@@ -60,7 +60,9 @@ static char listen_path[PATH_MAX] = {0};
 static int64_t held_mascot_id = -1;
 
 // Sprites take no pointer input while a bubble hides, so Hyprland cannot crash
-// on them (see environment_suppress_sprite_input())
+// on them (see environment_suppress_sprite_input()).
+// TODO: remove when hyprwm/Hyprland#16311 is in a release — verify with
+// scripts/hyprland-repro/ (also hiding/hidden below and chat_tick())
 static bool sprites_suppressed = false;
 static struct timespec suppressed_at;
 // Set by chat_disconnect_all() until the bubble it cut off is gone

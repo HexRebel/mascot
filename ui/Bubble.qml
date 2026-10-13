@@ -20,7 +20,9 @@ PanelWindow {
     signal released(int mascot)
     // Sent before and after unmapping. Hyprland 0.56 crashes when the bubble
     // unmaps with the pointer over a sprite, so the daemon turns sprite input
-    // off in between (see environment_suppress_sprite_input() in mascotd)
+    // off in between (see environment_suppress_sprite_input() in mascotd).
+    // TODO: remove when hyprwm/Hyprland#16311 is in a release — verify with
+    // scripts/hyprland-repro/ (with unmapTimer and hiddenTimer)
     signal hiding()
     signal hidden()
     property bool closing: false

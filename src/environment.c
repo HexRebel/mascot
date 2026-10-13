@@ -3418,7 +3418,14 @@ static void environment_subsurface_sprite_offset(environment_subsurface_t *surfa
 // sprite, a subsurface of a layer surface it keeps no view for, and calls
 // keyboardFocusable() on that null view. The bubble therefore asks for sprite
 // input to be off while it closes; with nothing under the pointer the
-// compositor falls back to the last window
+// compositor falls back to the last window.
+//
+// TODO: remove when hyprwm/Hyprland#16311 is in a release — verify with
+// scripts/hyprland-repro/. Along with this function go sprite_input_suppressed,
+// the hiding/hidden events (chat.c, ui/Bubble.qml) and the timeout in
+// chat_tick(). Sprite subsurfaces have had an empty input region since the
+// pointer-input redesign, so the hit-test should already find the layer
+// surface instead; this may be removable sooner
 void environment_suppress_sprite_input(environment_t *env, bool suppress) {
   if (!env || !env->is_ready)
     return;
