@@ -846,7 +846,7 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
 | sprite | {x, y, width, height} or null | The box the current sprite is drawn in; null if it has no pose yet |
 | surface | {width, height} | Size of the overlay's surface on that output |
 | command | string or null | The `chat_command` setting, or null if it is empty. The overlay does not run it |
-| role | string or null | The `chat_role` setting (the role the bubble starts with), or null if it is empty |
+| role | string or null | The role the bubble starts with for this mascot: its entry in `chat_roles`, else the `chat_role` setting; null if neither is set or its entry is empty |
 
 ### dragged
 
@@ -860,9 +860,9 @@ client that asked. Lists the display names of all loaded prototypes.
 
 ### swapped
 
-`{"event":"swapped","mascot":N,"to":M,"prototype":"Black Bunny"}`: answer to `swap`, sent to every
+`{"event":"swapped","mascot":N,"to":M,"prototype":"Black Bunny","role":null}`: answer to `swap`, sent to every
 client. Mascot N has been replaced by mascot M, of the named prototype. If N was held, M is now
-held instead.
+held instead. `role` is the new mascot's role, as in `tap`.
 
 ### swap_failed
 

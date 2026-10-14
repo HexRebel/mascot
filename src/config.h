@@ -59,6 +59,7 @@
 #define CONFIG_PARAM_CHAT_ENABLED "CHAT_ENABLED"
 #define CONFIG_PARAM_CHAT_COMMAND "CHAT_COMMAND"
 #define CONFIG_PARAM_CHAT_ROLE "CHAT_ROLE"
+#define CONFIG_PARAM_CHAT_ROLES "CHAT_ROLES"
 #define CONFIG_PARAM_BUBBLE_ENABLED "BUBBLE_ENABLED"
 #define CONFIG_PARAM_BUBBLE_COMMAND "BUBBLE_COMMAND"
 #define CONFIG_PARAM_COUNT 35
@@ -147,6 +148,12 @@ const char* config_get_chat_command();
 // The aichat role the bubble starts with; NULL if unset
 bool config_set_chat_role(const char* value);
 const char* config_get_chat_role();
+// A role per mascot, "<mascot>=<role>;..."; NULL if unset
+bool config_set_chat_roles(const char* value);
+const char* config_get_chat_roles();
+// The role from CHAT_ROLES for this prototype, else CHAT_ROLE; NULL if neither,
+// or if CHAT_ROLES gives it an empty role. May return dest
+const char* config_get_chat_role_for(const char* display_name, const char* name, char* dest, size_t size);
 
 // Whether mascotd starts the chat bubble, and the command to start it with
 bool config_set_bubble_enabled(int32_t value);
@@ -193,6 +200,7 @@ __attribute((unused)) static const char* config_keys[] = {
     CONFIG_PARAM_CHAT_ENABLED,
     CONFIG_PARAM_CHAT_COMMAND,
     CONFIG_PARAM_CHAT_ROLE,
+    CONFIG_PARAM_CHAT_ROLES,
     CONFIG_PARAM_BUBBLE_ENABLED,
     CONFIG_PARAM_BUBBLE_COMMAND,
     NULL

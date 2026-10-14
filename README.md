@@ -321,12 +321,13 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
 | `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot) |
 | `.exit model\|session` | Go back to the default |
-| `.exit role` | Leave the role, also the one from `CHAT_ROLE` (until `.role` or a restart) |
+| `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
 | `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot Black Bunny` |
 | `.clear` | Start this mascot's conversation over |
 
-The model, role and session apply to every mascot until changed, and reset when `qs` restarts.
+The model, role and session apply to the mascot whose bubble you typed them in, until changed, and
+reset when `qs` restarts; each mascot can have its own.
 
 The memory is an aichat session per mascot, kept in `$XDG_RUNTIME_DIR/mascot-memory/` and deleted when
 the bubble starts and quits; your own aichat sessions are not touched. The whole conversation is
@@ -355,6 +356,12 @@ To start with one of your aichat roles instead, set `CHAT_ROLE`, e.g. `mascot co
 Gemma4`. It replaces the prompt from the next tap; `.role` overrides it, and `.exit role` leaves it
 until you pick a role again or `qs` restarts.
 
+To give each kind of mascot its own role, set `CHAT_ROLES` to `<mascot>=<role>` pairs separated by
+`;`, e.g. `mascot config set CHAT_ROLES 'Brown Bear=Bear;Black Bunny=bunny'`. Mascot names are the
+ones `.mascots` lists (any letter case); a mascot that is not in the list gets `CHAT_ROLE`, and an
+empty role (`Shimeji=`) gives that mascot Mascot's prompt instead. Swapping
+with `.mascot` switches to the new mascot's role.
+
 ## Configuration
 
 | Option | Default | Description |
@@ -362,6 +369,7 @@ until you pick a role again or `qs` restarts.
 | `CHAT_ENABLED` | `true` | `false` closes the bubble and stops taps from opening it; `true` starts it again. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
 | `CHAT_ROLE` | empty | The aichat role the bubble starts with (`-r`); empty means Mascot's prompt. Takes effect from the next tap. |
+| `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 

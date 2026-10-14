@@ -293,6 +293,24 @@ void chat_mascot_dragged(struct mascot* mascot)
     chat_broadcast(line, len);
 }
 
+static const char* chat_prototype_name(const struct mascot_prototype* prototype)
+{
+    return prototype->display_name ? prototype->display_name : prototype->name;
+}
+
+// The prototype's role (CHAT_ROLES, else CHAT_ROLE) as a quoted JSON string, or null
+static void chat_role_json(const struct mascot_prototype* prototype, char* dest, size_t size)
+{
+    char buffer[256], escaped[504];
+    const char* role = config_get_chat_role_for(prototype->display_name, prototype->name, buffer, sizeof(buffer));
+    if (!role) {
+        snprintf(dest, size, "null");
+        return;
+    }
+    json_escape(role, escaped, sizeof(escaped));
+    snprintf(dest, size, "\"%s\"", escaped);
+}
+
 bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
 {
     if (!client_count || !mascot || !env) return false;
@@ -311,14 +329,9 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
         snprintf(command, sizeof(command), "\"%s\"", escaped);
     }
 
-    // Same for CHAT_ROLE
-    char role[512] = "null";
-    const char* chat_role = config_get_chat_role();
-    if (chat_role) {
-        char escaped[504];
-        json_escape(chat_role, escaped, sizeof(escaped));
-        snprintf(role, sizeof(role), "\"%s\"", escaped);
-    }
+    // Same for the role: this mascot's from CHAT_ROLES, else CHAT_ROLE
+    char role[512];
+    chat_role_json(mascot->prototype, role, sizeof(role));
 
     char sprite[128] = "null";
     struct bounding_box box;
@@ -366,10 +379,6 @@ static void chat_send_to(int fd, const char* line, size_t len)
     shutdown(fd, SHUT_RDWR);
 }
 
-static const char* chat_prototype_name(const struct mascot_prototype* prototype)
-{
-    return prototype->display_name ? prototype->display_name : prototype->name;
-}
 
 // Replies {"event":"prototypes","names":[...]} with every loaded prototype
 static void chat_send_prototypes(int fd)
@@ -416,7 +425,7 @@ static void chat_swap_summoned(struct mascot* mascot, void* data)
 // Replaces mascot N with a new one of the named prototype (display or internal
 // name, any case) at the same spot, facing the same way. The new one takes over
 // the chat hold and every client gets {"event":"swapped","mascot":N,"to":M,
-// "prototype":"name"}; the sender gets {"event":"swap_failed",...} otherwise
+// "prototype":"name","role":...} (role as in the tap event); the sender gets {"event":"swap_failed",...} otherwise
 static void chat_swap(int fd, const char* line)
 {
     struct json_value_s* root = json_parse(line, strlen(line));
@@ -480,9 +489,11 @@ static void chat_swap(int fd, const char* line)
     INFO("<Mascot:%s:%u> Swapped for %s from the chat bubble", old->prototype->name, old->id, prototype->name);
     environment_remove_mascot(environment, old);
 
-    char name[1600], reply[2048];
+    char name[1600], role[512], reply[2560];
     json_escape(chat_prototype_name(prototype), name, sizeof(name));
-    int len = snprintf(reply, sizeof(reply), "{\"event\":\"swapped\",\"mascot\":%ld,\"to\":%u,\"prototype\":\"%s\"}\n",
-                       mascot_id, replacement->id, name);
+    chat_role_json(prototype, role, sizeof(role));
+    int len = snprintf(reply, sizeof(reply),
+                       "{\"event\":\"swapped\",\"mascot\":%ld,\"to\":%u,\"prototype\":\"%s\",\"role\":%s}\n",
+                       mascot_id, replacement->id, name, role);
     if (len > 0 && len < (int)sizeof(reply)) chat_broadcast(reply, len);
 }

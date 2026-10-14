@@ -53,7 +53,16 @@ PanelWindow {
 
     function conversation(mascot: int): var {
         if (!bubble.conversations[mascot])
-            bubble.conversations[mascot] = { entries: [], memory: "", persona: "" };
+            bubble.conversations[mascot] = {
+                entries: [],
+                memory: "", // the aichat session that remembers it
+                persona: "", // the role flags that session started with
+                // .model/.role/.session for this mascot only; see dotCommand()
+                model: "",
+                role: "", // empty: the daemon's role for it (event.role), else Mascot's prompt
+                noRole: false, // .exit role: no role at all, not even the daemon's
+                session: ""
+            };
         return bubble.conversations[mascot];
     }
 
@@ -178,7 +187,9 @@ PanelWindow {
             return;
         bubble.conversations[e.to] = conversation(e.mascot);
         delete bubble.conversations[e.mascot];
-        bubble.event = Object.assign({}, bubble.event, { mascot: e.to, prototype: e.prototype });
+        // Older daemons send no role with it: keep the old one
+        bubble.event = Object.assign({}, bubble.event, { mascot: e.to, prototype: e.prototype },
+                                     "role" in e ? { role: e.role } : {});
         say(`mascot: ${e.prototype}`);
     }
 
@@ -201,11 +212,11 @@ PanelWindow {
     }
 
     // aichat's REPL dot commands need a tty, so the bubble emulates the useful
-    // ones with aichat's CLI flags. Kept across bubbles until changed
-    property string model: ""
-    property string role: "" // empty: CHAT_ROLE (event.role), else Mascot's prompt
-    property bool noRole: false // .exit role: no role at all, not even CHAT_ROLE
-    property string session: ""
+    // ones with aichat's CLI flags. .model, .role and .session apply to this
+    // mascot's conversation until changed
+    function chosen(): var {
+        return conversation(bubble.event.mascot);
+    }
 
     readonly property string helpText: [
         ".info                  show aichat's settings",
@@ -214,14 +225,15 @@ PanelWindow {
         ".role <name>           switch role (instead of the default)",
         ".session <name>        start/continue a session with memory",
         ".exit model|session    go back to the default",
-        ".exit role             leave the role (also CHAT_ROLE's)",
+        ".exit role             leave the role (also the default one)",
         ".mascots               list the mascots you have",
         ".mascot <name>         swap this mascot for another one",
         ".clear                 start this conversation over"
     ].join("\n")
 
     function roleFlags(): var {
-        const role = bubble.role || (bubble.noRole ? "" : bubble.event?.role);
+        const c = chosen();
+        const role = c.role || (c.noRole ? "" : bubble.event.role);
         if (role)
             return ["-r", role]; // only ever one -r: aichat refuses two
         if (bubble.prompt)
@@ -230,9 +242,10 @@ PanelWindow {
     }
 
     function flags(): var {
-        let args = (bubble.model ? ["-m", bubble.model] : []).concat(roleFlags());
-        if (bubble.session)
-            args.push("-s", bubble.session, "--save-session");
+        const c = chosen();
+        let args = (c.model ? ["-m", c.model] : []).concat(roleFlags());
+        if (c.session)
+            args.push("-s", c.session, "--save-session");
         return args;
     }
 
@@ -241,9 +254,9 @@ PanelWindow {
     // later ones (and aichat skips cmd_prelude with -s), so a new role or
     // mascot name starts the memory over
     function messageFlags(): var {
-        if (bubble.session)
+        const c = chosen();
+        if (c.session)
             return flags();
-        const c = conversation(bubble.event.mascot);
         const persona = JSON.stringify(roleFlags());
         if (c.memory && c.persona !== persona) {
             c.memory = "";
@@ -262,7 +275,7 @@ PanelWindow {
         bubble.replying = reply;
         // Only messages use the bubble's memory dir: .sessions and named
         // sessions stay in aichat's own
-        chat.environment = reply && !bubble.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {};
+        chat.environment = reply && !chosen().session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {};
         const command = bubble.event?.command || 'aichat';
         // stdin must be closed: aichat reads a non-tty stdin as extra input and
         // waits forever on the open pipe Process gives it
@@ -284,7 +297,7 @@ PanelWindow {
     function defaultName(key: string): string {
         if (key !== "role")
             return "default";
-        if (bubble.event?.role && !bubble.noRole)
+        if (bubble.event.role && !chosen().noRole)
             return `${bubble.event.role} (default)`;
         return bubble.prompt ? "none (Mascot's prompt)" : "none (aichat's default)";
     }
@@ -313,12 +326,13 @@ PanelWindow {
         case ".session":
             {
                 const key = name.slice(1);
+                const c = chosen();
                 if (arg) {
-                    bubble[key] = arg;
+                    c[key] = arg;
                     if (key === "role")
-                        bubble.noRole = false;
+                        c.noRole = false;
                 }
-                say(`${key}: ${bubble[key] || defaultName(key)}`);
+                say(`${key}: ${c[key] || defaultName(key)}`);
                 return;
             }
         case ".exit":
@@ -326,9 +340,9 @@ PanelWindow {
                 say("use .exit model, .exit role or .exit session");
                 return;
             }
-            bubble[arg] = "";
+            chosen()[arg] = "";
             if (arg === "role")
-                bubble.noRole = true;
+                chosen().noRole = true;
             say(`${arg}: ${defaultName(arg)}`);
             return;
         case ".mascots":
