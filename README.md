@@ -309,6 +309,9 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 - Each mascot has its own conversation, kept until Mascot stops: close the bubble, tap the mascot
   again and it carries on where you left it, and the model remembers what was said. `.clear` starts
   it over.
+- Closing the bubble does not stop a reply: it is written into the conversation in the background,
+  ready when you tap the mascot again.
+- Reasoning models' `<think>…</think>` is not shown; the bubble says *thinking…* until the answer starts.
 
 Lines starting with `.` are commands, modelled on aichat's REPL:
 

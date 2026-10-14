@@ -26,61 +26,71 @@ PanelWindow {
 
     // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
     signal talked(int mascot, bool active)
-    property bool replying: false
-    readonly property bool talking: replying && chat.running && visible
+    readonly property bool talking: visible && !!current?.job && current.replying
     onTalkingChanged: if (bubble.event)
         bubble.talked(bubble.event.mascot, bubble.talking)
-    // The conversation, one entry per message: kind is "you" (typed by the
-    // user), "reply" (the model's answer) or "system" (the bubble's own notes and
-    // dot command output), each drawn in its own pywal colour
-    ListModel {
-        id: entries
-    }
-    property int streaming: -1 // entry the running command writes into
-    property string errorText: ""
-    readonly property bool busy: chat.running
 
     // Each mascot keeps its own conversation until the bubble quits (with the
-    // daemon), by mascot id: the entries shown and the aichat session that gives
-    // the model its memory. The sessions live in the runtime dir and are removed
-    // when the bubble starts and quits, never in aichat's own sessions dir
+    // daemon), by mascot id, and a reply keeps streaming into it while the
+    // bubble is closed or shows another mascot. The aichat sessions that give
+    // the model its memory live in the runtime dir and are removed when the
+    // bubble starts and quits, never in aichat's own sessions dir
     property var conversations: ({})
+    property QtObject current: null // the conversation shown
+    readonly property var entries: current ? current.entries : null
+    readonly property bool busy: !!current?.job
     property int memoryCount: 0
     readonly property string memoryDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/mascot-memory/`
         + (Quickshell.env("MASCOT_CHAT_SOCKET") || "mascotd-chat").replace(/^.*\//, "").replace(/\.sock$/, "")
 
     Component.onCompleted: Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir])
 
-    function conversation(mascot: int): var {
+    Component {
+        id: conversationComponent
+
+        QtObject {
+            // One entry per message: kind is "you" (typed by the user), "reply"
+            // (the model's answer) or "system" (the bubble's own notes and dot
+            // command output), each drawn in its own pywal colour
+            property ListModel entries: ListModel {}
+            property int streaming: -1 // entry the running command writes into
+            property var job: null // the running command, see run()
+            property bool replying: false // job answers a message, not a dot command
+            property string error: ""
+            property string memory: "" // the aichat session that remembers it
+            property string persona: "" // the role flags that session started with
+            // .model/.role/.session for this mascot only; see dotCommand()
+            property string model: ""
+            property string role: "" // empty: the daemon's role for it (event.role), else Mascot's prompt
+            property bool noRole: false // .exit role: no role at all, not even the daemon's
+            property string session: ""
+        }
+    }
+
+    function conversation(mascot: int): QtObject {
         if (!bubble.conversations[mascot])
-            bubble.conversations[mascot] = {
-                entries: [],
-                memory: "", // the aichat session that remembers it
-                persona: "", // the role flags that session started with
-                // .model/.role/.session for this mascot only; see dotCommand()
-                model: "",
-                role: "", // empty: the daemon's role for it (event.role), else Mascot's prompt
-                noRole: false, // .exit role: no role at all, not even the daemon's
-                session: ""
-            };
+            bubble.conversations[mascot] = conversationComponent.createObject(bubble);
         return bubble.conversations[mascot];
     }
 
-    // Copies the shown entries into the conversation they belong to
-    function stash(): void {
-        if (!bubble.event)
+    // Stops a conversation's running command; what it wrote so far stays
+    function stop(c: QtObject): void {
+        if (!c?.job)
             return;
-        let rows = [];
-        for (let i = 0; i < entries.count; i++)
-            rows.push({ kind: entries.get(i).kind, body: entries.get(i).body });
-        conversation(bubble.event.mascot).entries = rows;
+        const job = c.job;
+        c.job = null;
+        job.running = false;
     }
 
     // Drops every conversation, e.g. when the daemon goes away (a new one
     // starts counting mascot ids from 0 again)
     function forget(): void {
-        bubble.event = null; // or the next tap would stash these entries again
-        bubble.clearEntries();
+        bubble.event = null;
+        bubble.current = null;
+        for (const mascot in bubble.conversations) {
+            stop(bubble.conversations[mascot]);
+            bubble.conversations[mascot].destroy();
+        }
         bubble.conversations = {};
         Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
     }
@@ -142,13 +152,8 @@ PanelWindow {
             return;
         }
 
-        chat.running = false;
-        bubble.stash();
         bubble.event = e;
-        bubble.clearEntries();
-        for (const row of conversation(e.mascot).entries)
-            entries.append(row);
-        bubble.errorText = "";
+        bubble.current = conversation(e.mascot);
         input.text = "";
         bubble.visible = true;
         bubble.grabKeyboard();
@@ -198,10 +203,9 @@ PanelWindow {
             say(e.reason);
     }
 
-    // Hides the bubble without releasing the mascot (the daemon may be gone)
+    // Hides the bubble without releasing the mascot (the daemon may be gone); a
+    // running reply carries on into its conversation
     function dismiss(): void {
-        chat.running = false;
-        bubble.stash();
         bubble.visible = false;
     }
 
@@ -214,8 +218,8 @@ PanelWindow {
     // aichat's REPL dot commands need a tty, so the bubble emulates the useful
     // ones with aichat's CLI flags. .model, .role and .session apply to this
     // mascot's conversation until changed
-    function chosen(): var {
-        return conversation(bubble.event.mascot);
+    function chosen(): QtObject {
+        return bubble.current;
     }
 
     readonly property string helpText: [
@@ -272,26 +276,25 @@ PanelWindow {
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
     // parsed by the shell
     function run(args: var, reply = false): void {
-        bubble.replying = reply;
-        // Only messages use the bubble's memory dir: .sessions and named
-        // sessions stay in aichat's own
-        chat.environment = reply && !chosen().session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {};
+        const c = bubble.current;
         const command = bubble.event?.command || 'aichat';
-        // stdin must be closed: aichat reads a non-tty stdin as extra input and
-        // waits forever on the open pipe Process gives it
-        chat.command = ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args);
-        entries.append({ kind: reply ? "reply" : "system", body: "" });
-        bubble.streaming = entries.count - 1;
-        chat.running = true;
+        c.entries.append({ kind: reply ? "reply" : "system", body: "" });
+        c.streaming = c.entries.count - 1;
+        c.replying = reply;
+        c.job = jobComponent.createObject(bubble, {
+            conv: c,
+            // Only messages use the bubble's memory dir: .sessions and named
+            // sessions stay in aichat's own
+            environment: reply && !c.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {},
+            // stdin must be closed: aichat reads a non-tty stdin as extra input
+            // and waits forever on the open pipe Process gives it
+            command: ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args)
+        });
+        c.job.running = true;
     }
 
     function say(text: string): void {
-        entries.append({ kind: "system", body: text });
-    }
-
-    function clearEntries(): void {
-        entries.clear();
-        bubble.streaming = -1;
+        bubble.entries.append({ kind: "system", body: text });
     }
 
     function defaultName(key: string): string {
@@ -357,8 +360,9 @@ PanelWindow {
                 bubble.swapRequested(bubble.event.mascot, arg);
             return;
         case ".clear":
-            bubble.clearEntries();
-            conversation(bubble.event.mascot).memory = "";
+            stop(bubble.current);
+            bubble.entries.clear();
+            bubble.current.memory = "";
             return;
         default:
             say(`unknown command ${name} - try .help`);
@@ -371,8 +375,8 @@ PanelWindow {
         if (!text || bubble.busy)
             return;
 
-        bubble.errorText = "";
-        entries.append({ kind: "you", body: text });
+        bubble.current.error = "";
+        bubble.entries.append({ kind: "you", body: text });
         input.text = "";
         if (text.startsWith("."))
             dotCommand(text);
@@ -454,23 +458,36 @@ PanelWindow {
         onFileChanged: this.reload()
     }
 
-    Process {
-        id: chat
+    // One per command run, writing into its own conversation, see run()
+    Component {
+        id: jobComponent
 
-        stdout: SplitParser {
-            splitMarker: "" // stream: append chunks as they arrive
-            onRead: data => {
-                if (bubble.streaming >= 0 && bubble.streaming < entries.count)
-                    entries.setProperty(bubble.streaming, "body", entries.get(bubble.streaming).body + data);
+        Process {
+            id: job
+
+            property QtObject conv
+
+            stdout: SplitParser {
+                splitMarker: "" // stream: append chunks as they arrive
+                onRead: data => {
+                    const c = job.conv;
+                    if (c?.job === job && c.streaming >= 0 && c.streaming < c.entries.count)
+                        c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
+                }
             }
-        }
-        stderr: StdioCollector {
-            id: chatErrors
-        }
+            stderr: StdioCollector {
+                id: jobErrors
+            }
 
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0)
-                bubble.errorText = chatErrors.text.trim() || `The command failed (exit ${exitCode})`;
+            onExited: (exitCode, exitStatus) => {
+                const c = job.conv;
+                if (c?.job === job) { // not stopped
+                    if (exitCode !== 0)
+                        c.error = jobErrors.text.trim() || `The command failed (exit ${exitCode})`;
+                    c.job = null;
+                }
+                job.destroy();
+            }
         }
     }
 
@@ -533,7 +550,7 @@ PanelWindow {
 
             width: parent.width
             height: Math.min(log.implicitHeight, 220)
-            visible: entries.count > 0
+            visible: (bubble.entries?.count ?? 0) > 0
             contentHeight: log.implicitHeight
             clip: true
 
@@ -547,18 +564,25 @@ PanelWindow {
                 onImplicitHeightChanged: scroller.contentY = Math.max(0, implicitHeight - scroller.height)
 
                 Repeater {
-                    model: entries
+                    model: bubble.entries
 
                     Text {
                         required property string kind
                         required property string body
+                        required property int index
+
+                        // Reasoning models write <think>…</think> before the answer: hide it,
+                        // and say "thinking…" until the answer starts
+                        readonly property string answer: kind === "reply" ? body.replace(/<(think|thinking)>[\s\S]*?(<\/\1>|$)/g, "").trim() : body.trim()
+                        readonly property bool thinking: kind === "reply" && answer === "" && /<think/.test(body)
+                            && bubble.current.streaming === index && !!bubble.current.job
 
                         width: log.width
                         visible: text !== "" // a command that has printed nothing yet
-                        text: (kind === "you" ? "› " : "") + body.trim()
+                        text: thinking ? "thinking…" : (kind === "you" ? "› " : "") + answer
                         textFormat: Text.PlainText // model output is never markup
                         wrapMode: Text.Wrap
-                        color: kind === "you" ? theme.accent : kind === "reply" ? theme.foreground : theme.muted
+                        color: kind === "you" ? theme.accent : kind === "reply" && !thinking ? theme.foreground : theme.muted
                         font.pixelSize: 13
                     }
                 }
@@ -567,8 +591,8 @@ PanelWindow {
 
         Text {
             width: parent.width
-            visible: bubble.errorText !== ""
-            text: bubble.errorText
+            visible: !!bubble.current?.error
+            text: bubble.current?.error ?? ""
             wrapMode: Text.Wrap
             color: "#f38ba8"
             font.pixelSize: 12
