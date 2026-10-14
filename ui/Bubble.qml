@@ -156,6 +156,8 @@ PanelWindow {
             return;
         }
         bubble.remarking = false;
+        bubble.keepKeyboard = bubble.fromKey;
+        bubble.fromKey = false;
         // Double clicks arrive as two taps: keep the open conversation
         if (bubble.visible && bubble.event && bubble.event.mascot === e.mascot) {
             bubble.grabKeyboard();
@@ -166,8 +168,8 @@ PanelWindow {
         bubble.event = e;
         bubble.current = conversation(e.mascot);
         input.text = "";
+        bubble.grabKeyboard(); // before showing it, so it maps with the keyboard
         bubble.visible = true;
-        bubble.grabKeyboard();
         input.forceActiveFocus();
     }
 
@@ -220,11 +222,19 @@ PanelWindow {
     // `mascot chat`: close the bubble, or open it again at the last mascot (the
     // daemon answers with a tap event, see openFor())
     function toggle(): void {
-        if (bubble.visible)
+        if (bubble.visible) {
             bubble.close();
-        else
+        } else {
+            bubble.fromKey = true;
             bubble.openRequested(bubble.event?.mascot ?? -1);
+        }
     }
+
+    // Opened from a key (`mascot chat`): the pointer is elsewhere, and Hyprland
+    // hands the keyboard back to the window under it once the bubble drops to
+    // OnDemand, so such a bubble keeps the keyboard until it closes
+    property bool fromKey: false
+    property bool keepKeyboard: false
 
     // The mascot was dragged away from under the bubble
     function closeFor(mascot: int): void {
@@ -259,6 +269,7 @@ PanelWindow {
     function dismiss(): void {
         bubble.visible = false;
         bubble.remarking = false; // after hiding, or OnDemand would take the keyboard first
+        bubble.keepKeyboard = false;
     }
 
     function close(): void {
@@ -496,7 +507,7 @@ PanelWindow {
     WlrLayershell.namespace: "mascot-bubble"
     // OnDemand alone only focuses on click, so open as Exclusive to type straight
     // away, then drop to OnDemand (see grabKeyboard())
-    WlrLayershell.keyboardFocus: bubble.grabbing ? WlrKeyboardFocus.Exclusive
+    WlrLayershell.keyboardFocus: bubble.grabbing || bubble.keepKeyboard ? WlrKeyboardFocus.Exclusive
         : bubble.remarking ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
 
     // Colours from pywal (read only), with fallbacks if the cache is missing

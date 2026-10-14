@@ -311,7 +311,8 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
   it over.
 - **`mascot chat`** opens the bubble at the mascot you last talked to (or the first one), and closes
   it again; bind it to a key to chat without the mouse, e.g. in Hyprland
-  `bind = SUPER SHIFT, M, exec, mascot chat`.
+  `bind = SUPER SHIFT, M, exec, mascot chat`. A bubble opened this way keeps the keyboard until it
+  closes (Esc, × or the key again), so you can type straight away wherever the pointer is.
 - With `CHAT_REMARKS` set, a random mascot now and then says something on its own. Its bubble does
   not take the keyboard and closes 7 seconds after the remark, unless the pointer is on it; click
   into it to answer. `mascot chat --remark` makes one say something now.
