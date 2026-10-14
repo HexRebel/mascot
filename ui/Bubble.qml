@@ -396,6 +396,10 @@ PanelWindow {
         c.job.running = true;
     }
 
+    function scrollBy(dy: real): void {
+        scroller.contentY = Math.max(0, Math.min(scroller.contentY + dy, scroller.contentHeight - scroller.height));
+    }
+
     function say(text: string): void {
         bubble.entries.append({ kind: "system", body: text });
     }
@@ -746,6 +750,19 @@ PanelWindow {
                 Keys.onReturnPressed: bubble.send()
                 Keys.onEnterPressed: bubble.send()
                 Keys.onEscapePressed: bubble.close()
+                // Scroll the conversation: the arrows (a one-line input has no use
+                // for them), Ctrl+J/K and PageUp/PageDown; j and k still type
+                Keys.onUpPressed: bubble.scrollBy(-40)
+                Keys.onDownPressed: bubble.scrollBy(40)
+                Keys.onPressed: event => {
+                    const ctrl = event.modifiers & Qt.ControlModifier;
+                    const step = ctrl && event.key === Qt.Key_K ? -40 : ctrl && event.key === Qt.Key_J ? 40
+                        : event.key === Qt.Key_PageUp ? -scroller.height : event.key === Qt.Key_PageDown ? scroller.height : 0;
+                    if (step) {
+                        bubble.scrollBy(step);
+                        event.accepted = true;
+                    }
+                }
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter

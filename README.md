@@ -305,7 +305,8 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
   away closes it.
 - The bubble takes the keyboard when it opens, so you can type straight away. Click another window
   to type there while the bubble stays open; click the bubble (or tap the mascot) to go back.
-- **Enter** sends, **Esc** or **×** closes.
+- **Enter** sends, **Esc** or **×** closes. **↑/↓**, **Ctrl+K/Ctrl+J** and **PageUp/PageDown** scroll
+  the conversation.
 - Each mascot has its own conversation, kept until Mascot stops: close the bubble, tap the mascot
   again and it carries on where you left it, and the model remembers what was said. `.clear` starts
   it over.
