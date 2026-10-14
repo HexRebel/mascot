@@ -47,6 +47,8 @@ ShellRoot {
             bubble.swapped(event);
         else if (event.event === "swap_failed")
             bubble.swapFailed(event);
+        else if (event.event === "toggle")
+            bubble.toggle();
     }
 
     Socket {
@@ -94,5 +96,6 @@ ShellRoot {
         onTalked: (mascot, active) => root.send({ event: "talking", mascot: mascot, active: active })
         onListRequested: root.send({ event: "list" })
         onSwapRequested: (mascot, prototype) => root.send({ event: "swap", mascot: mascot, prototype: prototype })
+        onOpenRequested: mascot => root.send({ event: "open", mascot: mascot })
     }
 }

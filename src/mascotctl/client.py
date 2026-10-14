@@ -1403,6 +1403,10 @@ if __name__ == "__main__":
 
     stop_parser = category.add_parser("stop", help="Ask overlay daemon to stop")
 
+# Chat bubble
+
+    category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
+
 # Foreground
     foreground_parser = category.add_parser("foreground", help="Run overlay daemon in foreground")
 
@@ -1457,6 +1461,19 @@ if __name__ == "__main__":
     socket_path = arguments.socket or (
         os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "mascotd.sock")
     )
+
+    # Goes straight to the chat socket next to the IPC socket (foo.sock ->
+    # foo-chat.sock, see src/chat.c); never starts the overlay
+    if arguments.category == "chat":
+        chat_path = socket_path[:-len(".sock")] + "-chat.sock" if socket_path.endswith(".sock") else socket_path + "-chat"
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:
+                chat.connect(chat_path)
+                chat.sendall(b'{"event":"toggle"}\n')
+        except OSError as e:
+            print(f"Cannot reach the chat bubble at {chat_path} ({e.strerror}); is mascotd running?", file=sys.stderr)
+            exit(1)
+        exit(0)
 
     startopts: dict[str, Any] = {
         "cmdline": []

@@ -24,6 +24,10 @@ PanelWindow {
     signal listRequested()
     signal swapRequested(int mascot, string prototype)
 
+    // `mascot chat` (e.g. on a key): asks the daemon to open the bubble at the
+    // mascot talked to last (-1: none, the daemon picks the first one)
+    signal openRequested(int mascot)
+
     // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
     signal talked(int mascot, bool active)
     readonly property bool talking: visible && !!current?.job && current.replying
@@ -173,6 +177,15 @@ PanelWindow {
         id: releaseGrab
         interval: 300
         onTriggered: bubble.grabbing = false
+    }
+
+    // `mascot chat`: close the bubble, or open it again at the last mascot (the
+    // daemon answers with a tap event, see openFor())
+    function toggle(): void {
+        if (bubble.visible)
+            bubble.close();
+        else
+            bubble.openRequested(bubble.event?.mascot ?? -1);
     }
 
     // The mascot was dragged away from under the bubble

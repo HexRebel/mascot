@@ -877,6 +877,8 @@ held instead. `role` is the new mascot's role, as in `tap`.
 | `{"event":"talking","mascot":N,"active":true}` | While `active` is true, the held mascot N plays its `Talk` behaviour (if the prototype defines one; otherwise it keeps sitting). Send `false` when the answer is complete |
 | `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
 | `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
+| `{"event":"toggle"}` | Sent by `mascot chat`. Passed on unchanged to every other client: the bubble closes, or asks to open with `open` |
+| `{"event":"open","mascot":N}` | Open the bubble at mascot N, or at the first mascot if N is -1 or gone: answered with a `tap` event to every client, as if the mascot had been tapped with the pointer at its anchor, and the mascot is held |
 
 Other messages are ignored. Older clients sent `hiding` and `hidden` around unmapping their
 window; they are no longer needed.

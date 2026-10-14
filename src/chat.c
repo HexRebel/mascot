@@ -152,13 +152,27 @@ int chat_accept(void)
 
 static void chat_send_prototypes(int fd);
 static void chat_swap(int fd, const char* line);
+static void chat_send_to(int fd, const char* line, size_t len);
+static void chat_open(const char* line);
 
 // Handles one line from a client: {"event":"talking","mascot":N,"active":true|false},
-// {"event":"close","mascot":N}, {"event":"list"} or
-// {"event":"swap","mascot":N,"prototype":"name"}. Anything else is ignored, e.g. the
-// "hiding"/"hidden" events older bubbles still send
+// {"event":"close","mascot":N}, {"event":"list"},
+// {"event":"swap","mascot":N,"prototype":"name"}, {"event":"toggle"} (from
+// `mascot chat`, passed on to the other clients, i.e. the bubble) or
+// {"event":"open","mascot":N} (the bubble's answer to it). Anything else is
+// ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
+    if (strstr(line, "\"event\":\"toggle\"")) {
+        static const char toggle[] = "{\"event\":\"toggle\"}\n";
+        for (int i = 0; i < client_count; i++)
+            if (clients[i].fd != fd) chat_send_to(clients[i].fd, toggle, sizeof(toggle) - 1);
+        return;
+    }
+    if (strstr(line, "\"event\":\"open\"")) {
+        chat_open(line);
+        return;
+    }
     if (strstr(line, "\"event\":\"list\"")) {
         chat_send_prototypes(fd);
         return;
@@ -496,4 +510,47 @@ static void chat_swap(int fd, const char* line)
                        "{\"event\":\"swapped\",\"mascot\":%ld,\"to\":%u,\"prototype\":\"%s\",\"role\":%s}\n",
                        mascot_id, replacement->id, name, role);
     if (len > 0 && len < (int)sizeof(reply)) chat_broadcast(reply, len);
+}
+
+// The first mascot on any screen
+static struct mascot* chat_first_mascot(void)
+{
+    struct protocol_server_state* state = protocol_get_server_state();
+    struct mascot* mascot = NULL;
+
+    pthread_mutex_lock(&state->environment_mutex);
+    for (uint32_t i = 0, c = list_count(state->environments); i < list_size(state->environments) && c && !mascot; i++) {
+        environment_t* environment = list_get(state->environments, i);
+        if (!environment) continue;
+        c--;
+        pthread_mutex_t* mutex = NULL;
+        struct list* mascots = environment_mascot_list(environment, &mutex);
+        if (!mascots) continue;
+        pthread_mutex_lock(mutex);
+        for (size_t j = 0; j < list_size(mascots) && !mascot; j++) mascot = list_get(mascots, j);
+        pthread_mutex_unlock(mutex);
+    }
+    pthread_mutex_unlock(&state->environment_mutex);
+    return mascot;
+}
+
+// Opens the bubble at mascot N, or at the first mascot if N is gone or not
+// given, as if it had been tapped (pointer at its anchor)
+static void chat_open(const char* line)
+{
+    struct mascot* mascot = NULL;
+    const char* field = strstr(line, "\"mascot\":");
+    if (field) {
+        char* end = NULL;
+        long id = strtol(field + strlen("\"mascot\":"), &end, 10);
+        if (end != field + strlen("\"mascot\":") && id >= 0) mascot = chat_find_mascot(id);
+    }
+    if (!mascot) mascot = chat_first_mascot();
+    if (!mascot) {
+        INFO("Chat bubble asked to open, but there are no mascots");
+        return;
+    }
+
+    environment_t* env = mascot->environment;
+    chat_announce_tap(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i);
 }

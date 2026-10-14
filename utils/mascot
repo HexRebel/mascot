@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import struct
-from typing import Callable, Any
-import socket
-import time
-from dataclasses import dataclass
-from dataclasses import dataclass, field
-import subprocess
-import enum
-import xml
-import pathlib
-import zipfile
-import xml.etree.ElementTree as ET
-import sys
-import stat
-from typing import Dict, Optional
-import tarfile
-import random
-from PIL import Image
 import logging
+from typing import Callable, Any
+import xml
+import subprocess
+from dataclasses import dataclass, field
+import xml.etree.ElementTree as ET
+from typing import Dict, Optional
+import random
 import argparse
-import json
-import shutil
-import io
-from xml.etree import ElementTree
-import os
+import tarfile
+import time
+from PIL import Image
 import tempfile
+import json
+import socket
+import os
+import io
+import enum
+import stat
+import zipfile
+from dataclasses import dataclass
+import sys
+import pathlib
+import shutil
+from xml.etree import ElementTree
+import struct
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -3953,6 +3953,11 @@ if __name__ == "__main__":
 
     stop_parser = category.add_parser("stop", help="Ask overlay daemon to stop")
 
+# Chat bubble
+# Chat bubble
+
+    category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
+
 # Foreground
 # Foreground
     foreground_parser = category.add_parser("foreground", help="Run overlay daemon in foreground")
@@ -4010,6 +4015,21 @@ if __name__ == "__main__":
     socket_path = arguments.socket or (
         os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "mascotd.sock")
     )
+
+    # Goes straight to the chat socket next to the IPC socket (foo.sock ->
+    # Goes straight to the chat socket next to the IPC socket (foo.sock ->
+    # foo-chat.sock, see src/chat.c); never starts the overlay
+    # foo-chat.sock, see src/chat.c); never starts the overlay
+    if arguments.category == "chat":
+        chat_path = socket_path[:-len(".sock")] + "-chat.sock" if socket_path.endswith(".sock") else socket_path + "-chat"
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:
+                chat.connect(chat_path)
+                chat.sendall(b'{"event":"toggle"}\n')
+        except OSError as e:
+            print(f"Cannot reach the chat bubble at {chat_path} ({e.strerror}); is mascotd running?", file=sys.stderr)
+            exit(1)
+        exit(0)
 
     startopts: dict[str, Any] = {
         "cmdline": []
