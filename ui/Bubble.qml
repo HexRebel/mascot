@@ -64,6 +64,7 @@ PanelWindow {
             property string error: ""
             property string memory: "" // the aichat session that remembers it
             property string persona: "" // the role flags that session started with
+            property int memoryChars: 0 // roughly what that session holds, see ask()
             // .model/.role/.session for this mascot only; see dotCommand()
             property string model: ""
             property string role: "" // empty: the daemon's role for it (event.role), else Mascot's prompt
@@ -189,10 +190,10 @@ PanelWindow {
         bubble.remarking = true;
         bubble.visible = true;
         // Not shown, but kept in the memory like any message
-        run(messageFlags().concat("--", "(Not from the user: you have not talked for a while. Say one short "
+        ask("(Not from the user: you have not talked for a while. Say one short "
             + "thing to the user on your own, in character - a remark, a question or something you noticed. "
             + "Write in the language of your earlier conversation, if any, else in the language of the locale "
-            + `${Qt.locale().name}. Do not mention this note.)`), true, "remark");
+            + `${Qt.locale().name}. Do not mention this note.)`, "remark");
     }
 
     Timer {
@@ -304,14 +305,26 @@ PanelWindow {
         return args;
     }
 
-    // flags() for a message: unless .session chose one, the mascot's own
-    // memory. A session keeps the role or prompt it started with and ignores
-    // later ones (and aichat skips cmd_prelude with -s), so a new role or
-    // mascot name starts the memory over
-    function messageFlags(): var {
-        const c = chosen();
-        if (c.session)
-            return flags();
+    // A memory holds about this many characters (~6000 tokens, well inside a
+    // 16k context) before ask() sums it up into a fresh one.
+    // MASCOT_MEMORY_LIMIT overrides it (for testing)
+    readonly property int memoryLimit: parseInt(Quickshell.env("MASCOT_MEMORY_LIMIT")) || 24000
+
+    // Sends a message to the current mascot; kind of the answer's entry:
+    // "reply" or "remark". It goes into the mascot's own memory unless .session
+    // chose a session. A session keeps the role or prompt it started with and
+    // ignores later ones (and aichat skips cmd_prelude with -s), so a new role
+    // or mascot name starts the memory over. A memory past memoryLimit is
+    // summed up first, in that memory, and the summary starts a fresh one in
+    // front of this message, so replies do not slow down as it grows
+    function ask(text: string, kind: string): void {
+        const c = bubble.current;
+        const command = bubble.event?.command || "aichat";
+        const base = flags();
+        if (c.session) {
+            run(base.concat("--", text), true, kind); // "--": a message may start with '-'
+            return;
+        }
         const persona = JSON.stringify(roleFlags());
         if (c.memory && c.persona !== persona) {
             c.memory = "";
@@ -320,25 +333,49 @@ PanelWindow {
         if (!c.memory) {
             c.memory = `chat-${++bubble.memoryCount}`;
             c.persona = persona;
+            c.memoryChars = 0;
         }
-        return flags().concat("-s", c.memory, "--save-session");
+        const post = message => {
+            c.memoryChars += message.length;
+            run(base.concat("-s", c.memory, "--save-session", "--", message), true, kind, null, c, command);
+        };
+        if (c.memoryChars <= bubble.memoryLimit) {
+            post(text);
+            return;
+        }
+        say("summing up the memory…");
+        run(base.concat("-s", c.memory, "--", "(Not from the user: sum up our conversation so far in a few short "
+            + "sentences, for your own memory - names, facts, what we talked about and how. Write only the "
+            + "summary, in the language of the conversation.)"), false, "", (summary, ok) => {
+            // Failed: carry on in the long memory rather than lose it
+            if (ok && summary.trim()) {
+                c.memory = `chat-${++bubble.memoryCount}`;
+                c.memoryChars = 0;
+                text = `(What we talked about before, summed up: ${summary.trim()})\n\n${text}`;
+            }
+            post(text);
+        }, c, command);
     }
 
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
-    // parsed by the shell
-    // kind of the entry it writes into: "reply" for a message (or "remark"),
-    // "system" for a dot command
-    function run(args: var, reply = false, kind = reply ? "reply" : "system"): void {
-        const c = bubble.current;
-        const command = bubble.event?.command || 'aichat';
-        c.entries.append({ kind: kind, body: "" });
-        c.streaming = c.entries.count - 1;
+    // parsed by the shell. kind of the entry it writes into: "reply" for a
+    // message (or "remark"), "system" for a dot command, "" for none: the
+    // output is then collected and handed to done(output, ok) instead
+    function run(args: var, reply = false, kind = reply ? "reply" : "system", done = null,
+                 c = bubble.current, command = bubble.event?.command || "aichat"): void {
+        if (kind) {
+            c.entries.append({ kind: kind, body: "" });
+            c.streaming = c.entries.count - 1;
+        } else {
+            c.streaming = -1;
+        }
         c.replying = reply;
         c.job = jobComponent.createObject(bubble, {
             conv: c,
-            // Only messages use the bubble's memory dir: .sessions and named
-            // sessions stay in aichat's own
-            environment: reply && !c.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {},
+            done: done,
+            // Only the mascot's memory uses the bubble's memory dir: .sessions
+            // and named sessions stay in aichat's own
+            environment: (reply || !kind) && !c.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {},
             // stdin must be closed: aichat reads a non-tty stdin as extra input
             // and waits forever on the open pipe Process gives it
             command: ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args)
@@ -434,7 +471,7 @@ PanelWindow {
         if (text.startsWith("."))
             dotCommand(text);
         else
-            run(messageFlags().concat("--", text), true); // "--": a message may start with '-'
+            ask(text, "reply");
     }
 
     visible: false
@@ -522,12 +559,18 @@ PanelWindow {
             id: job
 
             property QtObject conv
+            property var done: null // see run()
+            property string output: ""
 
             stdout: SplitParser {
                 splitMarker: "" // stream: append chunks as they arrive
                 onRead: data => {
                     const c = job.conv;
-                    if (c?.job === job && c.streaming >= 0 && c.streaming < c.entries.count)
+                    if (c?.job !== job)
+                        return;
+                    if (c.streaming < 0)
+                        job.output += data;
+                    else if (c.streaming < c.entries.count)
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
                 }
             }
@@ -538,9 +581,13 @@ PanelWindow {
             onExited: (exitCode, exitStatus) => {
                 const c = job.conv;
                 if (c?.job === job) { // not stopped
-                    if (exitCode !== 0)
+                    if (exitCode !== 0 && !job.done)
                         c.error = jobErrors.text.trim() || `The command failed (exit ${exitCode})`;
+                    if (c.replying && c.streaming >= 0 && c.streaming < c.entries.count)
+                        c.memoryChars += c.entries.get(c.streaming).body.length;
                     c.job = null;
+                    if (job.done)
+                        job.done(job.output, exitCode === 0);
                 }
                 job.destroy();
             }

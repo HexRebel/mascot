@@ -339,9 +339,10 @@ The model, role and session apply to the mascot whose bubble you typed them in, 
 reset when `qs` restarts; each mascot can have its own.
 
 The memory is an aichat session per mascot, kept in `$XDG_RUNTIME_DIR/mascot-memory/` and deleted when
-the bubble starts and quits; your own aichat sessions are not touched. The whole conversation is
-sent with every message, so a long one gets slower and can outgrow the model's context; `.clear`
-helps. A session keeps the role or prompt it started with, so changing the role (or swapping to a
+the bubble starts and quits; your own aichat sessions are not touched. The memory is sent with
+every message, so once it holds about 24,000 characters (some 6,000 tokens) the bubble has the
+model sum it up and carries on in a fresh memory that starts with the summary; you see *summing up
+the memory…* and the text in the bubble stays. `.clear` starts over completely. A session keeps the role or prompt it started with, so changing the role (or swapping to a
 mascot with another name) starts the memory over, while the text stays in the bubble.
 
 `.mascot` replaces the mascot by the bubble with a new one of the given type (any letter case) in the
