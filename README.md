@@ -312,6 +312,9 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 - **`mascot chat`** opens the bubble at the mascot you last talked to (or the first one), and closes
   it again; bind it to a key to chat without the mouse, e.g. in Hyprland
   `bind = SUPER SHIFT, M, exec, mascot chat`.
+- With `CHAT_REMARKS` set, a random mascot now and then says something on its own. Its bubble does
+  not take the keyboard and closes 7 seconds after the remark, unless the pointer is on it; click
+  into it to answer. `mascot chat --remark` makes one say something now.
 - Closing the bubble does not stop a reply: it is written into the conversation in the background,
   ready when you tap the mascot again.
 - Reasoning models' `<think>…</think>` is not shown; the bubble says *thinking…* until the answer starts.
@@ -375,6 +378,7 @@ with `.mascot` switches to the new mascot's role.
 | `CHAT_ENABLED` | `true` | `false` closes the bubble and stops taps from opening it; `true` starts it again. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
 | `CHAT_ROLE` | empty | The aichat role the bubble starts with (`-r`); empty means Mascot's prompt. Takes effect from the next tap. |
+| `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |

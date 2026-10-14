@@ -54,8 +54,9 @@ PanelWindow {
 
         QtObject {
             // One entry per message: kind is "you" (typed by the user), "reply"
-            // (the model's answer) or "system" (the bubble's own notes and dot
-            // command output), each drawn in its own pywal colour
+            // (the model's answer), "remark" (what the mascot said on its own) or
+            // "system" (the bubble's own notes and dot command output), each
+            // drawn in its own pywal colour
             property ListModel entries: ListModel {}
             property int streaming: -1 // entry the running command writes into
             property var job: null // the running command, see run()
@@ -149,6 +150,11 @@ PanelWindow {
     }
 
     function openFor(e: var): void {
+        if (e.remark) {
+            bubble.remark(e);
+            return;
+        }
+        bubble.remarking = false;
         // Double clicks arrive as two taps: keep the open conversation
         if (bubble.visible && bubble.event && bubble.event.mascot === e.mascot) {
             bubble.grabKeyboard();
@@ -162,6 +168,37 @@ PanelWindow {
         bubble.visible = true;
         bubble.grabKeyboard();
         input.forceActiveFocus();
+    }
+
+    // CHAT_REMARKS: the mascot says something on its own. The bubble opens
+    // without the keyboard (Hyprland gives an OnDemand layer surface the
+    // keyboard when it maps, so it has none) and closes 7 s after the remark is
+    // written, unless the pointer is on it; a click makes it a normal chat
+    property bool remarking: false
+
+    function remark(e: var): void {
+        const c = conversation(e.mascot);
+        // Shown already or still answering: the daemon can let the mascot go
+        if (bubble.visible || c.job) {
+            bubble.released(e.mascot);
+            return;
+        }
+        bubble.event = e;
+        bubble.current = c;
+        input.text = "";
+        bubble.remarking = true;
+        bubble.visible = true;
+        // Not shown, but kept in the memory like any message
+        run(messageFlags().concat("--", "(Not from the user: you have not talked for a while. Say one short "
+            + "thing to the user on your own, in character - a remark, a question or something you noticed. "
+            + "Write in the language of your earlier conversation, if any, else in the language of the locale "
+            + `${Qt.locale().name}. Do not mention this note.)`), true, "remark");
+    }
+
+    Timer {
+        interval: 7000
+        running: bubble.remarking && bubble.visible && !bubble.busy && !remarkHover.hovered
+        onTriggered: bubble.close()
     }
 
     // Take the keyboard briefly, then let go to OnDemand, so a click elsewhere
@@ -220,6 +257,7 @@ PanelWindow {
     // running reply carries on into its conversation
     function dismiss(): void {
         bubble.visible = false;
+        bubble.remarking = false; // after hiding, or OnDemand would take the keyboard first
     }
 
     function close(): void {
@@ -288,10 +326,12 @@ PanelWindow {
 
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
     // parsed by the shell
-    function run(args: var, reply = false): void {
+    // kind of the entry it writes into: "reply" for a message (or "remark"),
+    // "system" for a dot command
+    function run(args: var, reply = false, kind = reply ? "reply" : "system"): void {
         const c = bubble.current;
         const command = bubble.event?.command || 'aichat';
-        c.entries.append({ kind: reply ? "reply" : "system", body: "" });
+        c.entries.append({ kind: kind, body: "" });
         c.streaming = c.entries.count - 1;
         c.replying = reply;
         c.job = jobComponent.createObject(bubble, {
@@ -417,7 +457,8 @@ PanelWindow {
     WlrLayershell.namespace: "mascot-bubble"
     // OnDemand alone only focuses on click, so open as Exclusive to type straight
     // away, then drop to OnDemand (see grabKeyboard())
-    WlrLayershell.keyboardFocus: bubble.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
+    WlrLayershell.keyboardFocus: bubble.grabbing ? WlrKeyboardFocus.Exclusive
+        : bubble.remarking ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
 
     // Colours from pywal (read only), with fallbacks if the cache is missing
     QtObject {
@@ -427,6 +468,7 @@ PanelWindow {
         property color foreground: "#cdd6f4"
         property color accent: "#89b4fa"
         property color muted: "#a6adc8"
+        property color remark: "#cba6f7" // what a mascot said on its own
 
         function apply(json: string): void {
             let data;
@@ -439,6 +481,7 @@ PanelWindow {
             theme.foreground = data.special?.foreground ?? theme.foreground;
             theme.accent = data.colors?.color4 ?? theme.accent;
             theme.muted = data.colors?.color8 ?? theme.muted;
+            theme.remark = data.colors?.color5 ?? theme.remark;
         }
     }
 
@@ -507,6 +550,10 @@ PanelWindow {
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
+
+        HoverHandler {
+            id: remarkHover
+        }
 
         ShapePath {
             fillColor: Qt.alpha(theme.background, 0.92)
@@ -586,8 +633,9 @@ PanelWindow {
 
                         // Reasoning models write <think>…</think> before the answer: hide it,
                         // and say "thinking…" until the answer starts
-                        readonly property string answer: kind === "reply" ? body.replace(/<(think|thinking)>[\s\S]*?(<\/\1>|$)/g, "").trim() : body.trim()
-                        readonly property bool thinking: kind === "reply" && answer === "" && /<think/.test(body)
+                        readonly property bool answering: kind === "reply" || kind === "remark"
+                        readonly property string answer: answering ? body.replace(/<(think|thinking)>[\s\S]*?(<\/\1>|$)/g, "").trim() : body.trim()
+                        readonly property bool thinking: answering && answer === "" && /<think/.test(body)
                             && bubble.current.streaming === index && !!bubble.current.job
 
                         width: log.width
@@ -595,7 +643,8 @@ PanelWindow {
                         text: thinking ? "thinking…" : (kind === "you" ? "› " : "") + answer
                         textFormat: Text.PlainText // model output is never markup
                         wrapMode: Text.Wrap
-                        color: kind === "you" ? theme.accent : kind === "reply" && !thinking ? theme.foreground : theme.muted
+                        color: thinking ? theme.muted : kind === "you" ? theme.accent : kind === "reply" ? theme.foreground
+                            : kind === "remark" ? theme.remark : theme.muted
                         font.pixelSize: 13
                     }
                 }
@@ -632,6 +681,8 @@ PanelWindow {
                 clip: true
                 readOnly: bubble.busy
 
+                onActiveFocusChanged: if (activeFocus)
+                    bubble.remarking = false
                 Keys.onReturnPressed: bubble.send()
                 Keys.onEnterPressed: bubble.send()
                 Keys.onEscapePressed: bubble.close()
@@ -644,6 +695,19 @@ PanelWindow {
                     font: input.font
                 }
             }
+        }
+    }
+
+    // A remark's bubble has no keyboard: a click anywhere makes it a normal chat
+    // and still reaches what is under it (the input, ×)
+    MouseArea {
+        anchors.fill: parent
+        enabled: bubble.remarking
+        onPressed: mouse => {
+            bubble.remarking = false;
+            bubble.grabKeyboard();
+            input.forceActiveFocus();
+            mouse.accepted = false;
         }
     }
 }

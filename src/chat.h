@@ -54,6 +54,10 @@ void chat_close(void);
 // pointer_x/pointer_y are environment-local, top-referenced
 bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y);
 
+// Called about once a second from the main loop: lets a random mascot say
+// something every CHAT_REMARKS to 2 * CHAT_REMARKS minutes
+void chat_tick(void);
+
 // Releases the chat hold on a mascot the user started dragging and tells
 // clients with {"event":"dragged","mascot":N}, so its bubble can close
 void chat_mascot_dragged(struct mascot* mascot);

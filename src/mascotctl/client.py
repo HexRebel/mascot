@@ -1154,6 +1154,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "CHAT_COMMAND": "Chat Command",
         "CHAT_ROLE": "Chat Role",
         "CHAT_ROLES": "Chat Roles",
+        "CHAT_REMARKS": "Chat Remarks",
         "BUBBLE_ENABLED": "Bubble Enabled",
         "BUBBLE_COMMAND": "Bubble Command"
     }
@@ -1239,6 +1240,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "CHAT_COMMAND": "chat_command",
         "CHAT_ROLE": "chat_role",
         "CHAT_ROLES": "chat_roles",
+        "CHAT_REMARKS": "chat_remarks",
         "BUBBLE_ENABLED": "bubble_enabled",
         "BUBBLE_COMMAND": "bubble_command",
     }
@@ -1405,7 +1407,8 @@ if __name__ == "__main__":
 
 # Chat bubble
 
-    category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
+    chat_parser = category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
+    chat_parser.add_argument("--remark", action="store_true", help="Let a random mascot say something now instead (as CHAT_REMARKS does)")
 
 # Foreground
     foreground_parser = category.add_parser("foreground", help="Run overlay daemon in foreground")
@@ -1469,7 +1472,7 @@ if __name__ == "__main__":
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:
                 chat.connect(chat_path)
-                chat.sendall(b'{"event":"toggle"}\n')
+                chat.sendall(b'{"event":"remark"}\n' if arguments.remark else b'{"event":"toggle"}\n')
         except OSError as e:
             print(f"Cannot reach the chat bubble at {chat_path} ({e.strerror}); is mascotd running?", file=sys.stderr)
             exit(1)

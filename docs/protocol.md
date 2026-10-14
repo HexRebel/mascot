@@ -846,6 +846,7 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
 | sprite | {x, y, width, height} or null | The box the current sprite is drawn in; null if it has no pose yet |
 | surface | {width, height} | Size of the overlay's surface on that output |
 | command | string or null | The `chat_command` setting, or null if it is empty. The overlay does not run it |
+| remark | true, or absent | Present on a remark (`chat_remarks`): the mascot says something on its own, so the bubble should not take the keyboard. The mascot is held as for a tap |
 | role | string or null | The role the bubble starts with for this mascot: its entry in `chat_roles`, else the `chat_role` setting; null if neither is set or its entry is empty |
 
 ### dragged
@@ -878,6 +879,7 @@ held instead. `role` is the new mascot's role, as in `tap`.
 | `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
 | `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
 | `{"event":"toggle"}` | Sent by `mascot chat`. Passed on unchanged to every other client: the bubble closes, or asks to open with `open` |
+| `{"event":"remark"}` | A random mascot says something now, as the `chat_remarks` setting does every N to 2N minutes: a `tap` event with `"remark":true`. Ignored while a mascot is held (the bubble is open) |
 | `{"event":"open","mascot":N}` | Open the bubble at mascot N, or at the first mascot if N is -1 or gone: answered with a `tap` event to every client, as if the mascot had been tapped with the pointer at its anchor, and the mascot is held |
 
 Other messages are ignored. Older clients sent `hiding` and `hidden` around unmapping their

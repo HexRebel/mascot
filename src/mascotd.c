@@ -998,6 +998,7 @@ int main(int argc, const char** argv)
             bubble_sd.fd = start_bubble(epfd, &bubble_sd, chat_path);
         }
         bubble_tick();
+        chat_tick();
 
         if (!fds_count && !mascot_total_count) {
             break;

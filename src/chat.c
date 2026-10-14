@@ -37,6 +37,7 @@
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CHAT_MAX_CLIENTS 16
@@ -154,15 +155,21 @@ static void chat_send_prototypes(int fd);
 static void chat_swap(int fd, const char* line);
 static void chat_send_to(int fd, const char* line, size_t len);
 static void chat_open(const char* line);
+static bool chat_remark(void);
 
 // Handles one line from a client: {"event":"talking","mascot":N,"active":true|false},
 // {"event":"close","mascot":N}, {"event":"list"},
 // {"event":"swap","mascot":N,"prototype":"name"}, {"event":"toggle"} (from
 // `mascot chat`, passed on to the other clients, i.e. the bubble) or
-// {"event":"open","mascot":N} (the bubble's answer to it). Anything else is
+// {"event":"open","mascot":N} (the bubble's answer to it) or {"event":"remark"}
+// (a random mascot says something now, as CHAT_REMARKS does). Anything else is
 // ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
+    if (strstr(line, "\"event\":\"remark\"")) {
+        chat_remark();
+        return;
+    }
     if (strstr(line, "\"event\":\"toggle\"")) {
         static const char toggle[] = "{\"event\":\"toggle\"}\n";
         for (int i = 0; i < client_count; i++)
@@ -325,7 +332,8 @@ static void chat_role_json(const struct mascot_prototype* prototype, char* dest,
     snprintf(dest, size, "\"%s\"", escaped);
 }
 
-bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
+static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y,
+                          bool remark)
 {
     if (!client_count || !mascot || !env) return false;
 
@@ -362,14 +370,14 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s}\n",
+        "\"command\":%s,\"role\":%s%s}\n",
         mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role);
+        command, role, remark ? ",\"remark\":true" : "");
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;
@@ -380,6 +388,11 @@ bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointe
     // Keep the mascot still while someone is talking to it
     if (delivered) chat_hold(mascot);
     return delivered;
+}
+
+bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
+{
+    return chat_announce(mascot, env, pointer_x, pointer_y, false);
 }
 
 static void chat_send_to(int fd, const char* line, size_t len)
@@ -553,4 +566,62 @@ static void chat_open(const char* line)
 
     environment_t* env = mascot->environment;
     chat_announce_tap(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i);
+}
+
+// A random mascot on any screen
+static struct mascot* chat_random_mascot(void)
+{
+    struct protocol_server_state* state = protocol_get_server_state();
+    struct mascot* picked = NULL;
+    uint32_t seen = 0;
+
+    pthread_mutex_lock(&state->environment_mutex);
+    for (uint32_t i = 0, c = list_count(state->environments); i < list_size(state->environments) && c; i++) {
+        environment_t* environment = list_get(state->environments, i);
+        if (!environment) continue;
+        c--;
+        pthread_mutex_t* mutex = NULL;
+        struct list* mascots = environment_mascot_list(environment, &mutex);
+        if (!mascots) continue;
+        pthread_mutex_lock(mutex);
+        for (size_t j = 0; j < list_size(mascots); j++) {
+            struct mascot* mascot = list_get(mascots, j);
+            // Reservoir sampling: each of the n mascots is kept with chance 1/n
+            if (mascot && lrand48() % ++seen == 0) picked = mascot;
+        }
+        pthread_mutex_unlock(mutex);
+    }
+    pthread_mutex_unlock(&state->environment_mutex);
+    return picked;
+}
+
+// Lets a random mascot say something: the bubble opens without taking the
+// keyboard (see "remark" in docs/protocol.md). Not while the bubble is open
+static bool chat_remark(void)
+{
+    if (!client_count || held_mascot_id != -1) return false;
+    struct mascot* mascot = chat_random_mascot();
+    if (!mascot) return false;
+    environment_t* env = mascot->environment;
+    INFO("<Mascot:%s:%u> Saying something on its own", mascot->prototype->name, mascot->id);
+    return chat_announce(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i, true);
+}
+
+void chat_tick(void)
+{
+    static time_t next_remark = 0;
+    int32_t minutes = config_get_chat_remarks();
+    time_t now = time(NULL);
+    if (minutes <= 0) {
+        next_remark = 0;
+        return;
+    }
+    if (!next_remark) {
+        // Every N to 2N minutes, so it does not feel like clockwork
+        next_remark = now + minutes * 60 + lrand48() % (minutes * 60 + 1);
+        return;
+    }
+    if (now < next_remark) return;
+    // Busy (bubble open) or nobody to show it: try again in a couple of minutes
+    next_remark = chat_remark() ? 0 : now + 120;
 }
