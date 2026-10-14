@@ -370,14 +370,14 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s%s}\n",
+        "\"command\":%s,\"role\":%s,\"memory\":%d%s}\n",
         mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role, remark ? ",\"remark\":true" : "");
+        command, role, config_get_chat_memory(), remark ? ",\"remark\":true" : "");
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;

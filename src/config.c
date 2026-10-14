@@ -78,6 +78,7 @@ struct config {
     char* chat_role;
     char* chat_roles;
     int32_t chat_remarks;
+    int32_t chat_memory;
     bool bubble_enabled;
     char* bubble_command;
 
@@ -137,6 +138,7 @@ bool config_parse(const char* path)
     config.affordances = true;
     config.overlay_layer = LAYER_TYPE_OVERLAY;
     config.mascot_limit = 512;
+    config.chat_memory = 8000;
     config.ie_throw_policy = 3;
     config.pointer_left_value = -1;
     config.pointer_right_value = -1;
@@ -275,6 +277,8 @@ bool config_parse(const char* path)
             config_set_chat_roles(value);
         } else if (strcasecmp(key, "chat_remarks") == 0) {
             config_set_chat_remarks(atoi(value));
+        } else if (strcasecmp(key, "chat_memory") == 0) {
+            config_set_chat_memory(atoi(value));
         } else if (strcasecmp(key, "bubble_enabled") == 0) {
             config_set_bubble_enabled(parse_bool(value));
         } else if (strcasecmp(key, "bubble_command") == 0) {
@@ -331,6 +335,7 @@ void config_write(const char* path)
     if (config.chat_role) fprintf(file, "chat_role=%s\n", config.chat_role);
     if (config.chat_roles) fprintf(file, "chat_roles=%s\n", config.chat_roles);
     fprintf(file, "chat_remarks=%d\n", config.chat_remarks);
+    fprintf(file, "chat_memory=%d\n", config.chat_memory);
     fprintf(file, "bubble_enabled=%s\n", config.bubble_enabled ? "true" : "false");
     if (config.bubble_command) fprintf(file, "bubble_command=%s\n", config.bubble_command);
 
@@ -838,6 +843,18 @@ int32_t config_get_chat_remarks()
     return config.chat_remarks;
 }
 
+bool config_set_chat_memory(int32_t value)
+{
+    if (value < 0) return false;
+    config.chat_memory = value;
+    return true;
+}
+
+int32_t config_get_chat_memory()
+{
+    return config.chat_memory;
+}
+
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
 // prototype's display or internal name (any case). An empty role means none,
 // not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
@@ -1036,6 +1053,9 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_REMARKS)) {
         snprintf(dest, size, "%d", config.chat_remarks);
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_MEMORY)) {
+        snprintf(dest, size, "%d", config.chat_memory);
+        return true;
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         snprintf(dest, size, "%s", config.bubble_enabled ? "true" : "false");
         return true;
@@ -1134,6 +1154,8 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_chat_roles(value);
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_REMARKS)) {
         res = config_set_chat_remarks(atoi(value));
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_MEMORY)) {
+        res = config_set_chat_memory(atoi(value));
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         res = config_set_bubble_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {

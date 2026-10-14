@@ -305,10 +305,12 @@ PanelWindow {
         return args;
     }
 
-    // A memory holds about this many characters (~6000 tokens, well inside a
-    // 16k context) before ask() sums it up into a fresh one.
-    // MASCOT_MEMORY_LIMIT overrides it (for testing)
-    readonly property int memoryLimit: parseInt(Quickshell.env("MASCOT_MEMORY_LIMIT")) || 24000
+    // A memory holds about this many characters before ask() sums it up into
+    // a fresh one: CHAT_MEMORY tokens (the tap event's "memory", 0 = never) at
+    // 3 characters each, a cautious guess for most languages; 8000 tokens if
+    // the daemon is older. MASCOT_MEMORY_LIMIT (characters) overrides it, for testing
+    readonly property int memoryLimit: parseInt(Quickshell.env("MASCOT_MEMORY_LIMIT"))
+        || (bubble.event?.memory === 0 ? 0 : (bubble.event?.memory ?? 8000) * 3)
 
     // Sends a message to the current mascot; kind of the answer's entry:
     // "reply" or "remark". It goes into the mascot's own memory unless .session
@@ -339,7 +341,7 @@ PanelWindow {
             c.memoryChars += message.length;
             run(base.concat("-s", c.memory, "--save-session", "--", message), true, kind, null, c, command);
         };
-        if (c.memoryChars <= bubble.memoryLimit) {
+        if (!bubble.memoryLimit || c.memoryChars <= bubble.memoryLimit) {
             post(text);
             return;
         }

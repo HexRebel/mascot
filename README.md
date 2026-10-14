@@ -340,7 +340,7 @@ reset when `qs` restarts; each mascot can have its own.
 
 The memory is an aichat session per mascot, kept in `$XDG_RUNTIME_DIR/mascot-memory/` and deleted when
 the bubble starts and quits; your own aichat sessions are not touched. The memory is sent with
-every message, so once it holds about 24,000 characters (some 6,000 tokens) the bubble has the
+every message, so once it holds about `CHAT_MEMORY` tokens (8000 by default) the bubble has the
 model sum it up and carries on in a fresh memory that starts with the summary; you see *summing up
 the memory…* and the text in the bubble stays. `.clear` starts over completely. A session keeps the role or prompt it started with, so changing the role (or swapping to a
 mascot with another name) starts the memory over, while the text stays in the bubble.
@@ -379,6 +379,7 @@ with `.mascot` switches to the new mascot's role.
 | `CHAT_ENABLED` | `true` | `false` closes the bubble and stops taps from opening it; `true` starts it again. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
 | `CHAT_ROLE` | empty | The aichat role the bubble starts with (`-r`); empty means Mascot's prompt. Takes effect from the next tap. |
+| `CHAT_MEMORY` | `8000` | About how many tokens a mascot's memory may hold before it is summed up (counted as 3 characters each); `0` never sums up. Keep it well below the model's context (Ollama's `num_ctx`), which also holds the role and the reply. Takes effect from the next tap. |
 | `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |

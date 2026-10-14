@@ -832,7 +832,7 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
 {"event":"tap","mascot":1,"prototype":"Shimeji","output":"DP-1",
  "pointer":{"x":285,"y":1403},"anchor":{"x":285,"y":1440},"looking_right":true,
  "sprite":{"x":220,"y":1312,"width":128,"height":128},
- "surface":{"width":2560,"height":1440},"command":null,"role":null}
+ "surface":{"width":2560,"height":1440},"command":null,"role":null,"memory":8000}
 ```
 
 | Field | Type | Description |
@@ -846,6 +846,7 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
 | sprite | {x, y, width, height} or null | The box the current sprite is drawn in; null if it has no pose yet |
 | surface | {width, height} | Size of the overlay's surface on that output |
 | command | string or null | The `chat_command` setting, or null if it is empty. The overlay does not run it |
+| memory | number | The `chat_memory` setting: about how many tokens a mascot's memory may hold before the bubble sums it up; 0 = never |
 | remark | true, or absent | Present on a remark (`chat_remarks`): the mascot says something on its own, so the bubble should not take the keyboard. The mascot is held as for a tap |
 | role | string or null | The role the bubble starts with for this mascot: its entry in `chat_roles`, else the `chat_role` setting; null if neither is set or its entry is empty |
 
