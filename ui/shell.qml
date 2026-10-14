@@ -61,14 +61,17 @@ ShellRoot {
 
         onConnectedChanged: {
             console.info("mascot-bubble:", connected ? "connected to" : "disconnected from", path);
-            if (connected)
+            if (connected) {
                 root.wasConnected = true;
-            else if (root.managed && root.wasConnected) {
-                bubble.dismiss();
+                return;
+            }
+            // The daemon went away or turned chat off (CHAT_ENABLED=false)
+            bubble.dismiss();
+            if (!root.wasConnected)
+                return;
+            bubble.forget();
+            if (root.managed)
                 Qt.quit();
-            } else
-                // The daemon went away or turned chat off (CHAT_ENABLED=false)
-                bubble.dismiss();
         }
     }
 

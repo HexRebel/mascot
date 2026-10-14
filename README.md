@@ -306,6 +306,9 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 - The bubble takes the keyboard when it opens, so you can type straight away. Click another window
   to type there while the bubble stays open; click the bubble (or tap the mascot) to go back.
 - **Enter** sends, **Esc** or **×** closes.
+- Each mascot has its own conversation, kept until Mascot stops: close the bubble, tap the mascot
+  again and it carries on where you left it, and the model remembers what was said. `.clear` starts
+  it over.
 
 Lines starting with `.` are commands, modelled on aichat's REPL:
 
@@ -316,14 +319,20 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.models`, `.roles`, `.sessions` | List them |
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
-| `.session <name>` | Start or continue a session, which gives the conversation memory |
+| `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot) |
 | `.exit model\|session` | Go back to the default |
 | `.exit role` | Leave the role, also the one from `CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
 | `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot Black Bunny` |
-| `.clear` | Clear the bubble |
+| `.clear` | Start this mascot's conversation over |
 
 The model, role and session apply to every mascot until changed, and reset when `qs` restarts.
+
+The memory is an aichat session per mascot, kept in `$XDG_RUNTIME_DIR/mascot-memory/` and deleted when
+the bubble starts and quits; your own aichat sessions are not touched. The whole conversation is
+sent with every message, so a long one gets slower and can outgrow the model's context; `.clear`
+helps. A session keeps the role or prompt it started with, so changing the role (or swapping to a
+mascot with another name) starts the memory over, while the text stays in the bubble.
 
 `.mascot` replaces the mascot by the bubble with a new one of the given type (any letter case) in the
 same spot, facing the same way. The bubble stays open and the conversation carries on with the new
@@ -338,7 +347,8 @@ your `cmd_prelude` are left alone; the prompt simply takes their place in the bu
 
 The bundled prompt is `$(PREFIX)/share/mascot/ui/prompt.md`. To write your own, put a `prompt.md` in
 Mascot's data directory (`~/.local/share/mascot/prompt.md`); it replaces the bundled one, and an
-empty file turns the prompt off. The bubble reads it when it starts, so run `mascot stop` after
+empty file turns the prompt off. Note that aichat skips `cmd_prelude` for a session, and the
+bubble's memory is one; to keep your prelude role, set it as `CHAT_ROLE` (below). The bubble reads it when it starts, so run `mascot stop` after
 changing it.
 
 To start with one of your aichat roles instead, set `CHAT_ROLE`, e.g. `mascot config set CHAT_ROLE

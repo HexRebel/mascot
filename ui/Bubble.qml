@@ -40,6 +40,42 @@ PanelWindow {
     property string errorText: ""
     readonly property bool busy: chat.running
 
+    // Each mascot keeps its own conversation until the bubble quits (with the
+    // daemon), by mascot id: the entries shown and the aichat session that gives
+    // the model its memory. The sessions live in the runtime dir and are removed
+    // when the bubble starts and quits, never in aichat's own sessions dir
+    property var conversations: ({})
+    property int memoryCount: 0
+    readonly property string memoryDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/mascot-memory/`
+        + (Quickshell.env("MASCOT_CHAT_SOCKET") || "mascotd-chat").replace(/^.*\//, "").replace(/\.sock$/, "")
+
+    Component.onCompleted: Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir])
+
+    function conversation(mascot: int): var {
+        if (!bubble.conversations[mascot])
+            bubble.conversations[mascot] = { entries: [], memory: "", persona: "" };
+        return bubble.conversations[mascot];
+    }
+
+    // Copies the shown entries into the conversation they belong to
+    function stash(): void {
+        if (!bubble.event)
+            return;
+        let rows = [];
+        for (let i = 0; i < entries.count; i++)
+            rows.push({ kind: entries.get(i).kind, body: entries.get(i).body });
+        conversation(bubble.event.mascot).entries = rows;
+    }
+
+    // Drops every conversation, e.g. when the daemon goes away (a new one
+    // starts counting mascot ids from 0 again)
+    function forget(): void {
+        bubble.event = null; // or the next tap would stash these entries again
+        bubble.clearEntries();
+        bubble.conversations = {};
+        Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
+    }
+
     // Geometry
     readonly property int bodyWidth: 380
     readonly property int radius: 14
@@ -98,8 +134,11 @@ PanelWindow {
         }
 
         chat.running = false;
+        bubble.stash();
         bubble.event = e;
         bubble.clearEntries();
+        for (const row of conversation(e.mascot).entries)
+            entries.append(row);
         bubble.errorText = "";
         input.text = "";
         bubble.visible = true;
@@ -137,6 +176,8 @@ PanelWindow {
     function swapped(e: var): void {
         if (!bubble.event || bubble.event.mascot !== e.mascot)
             return;
+        bubble.conversations[e.to] = conversation(e.mascot);
+        delete bubble.conversations[e.mascot];
         bubble.event = Object.assign({}, bubble.event, { mascot: e.to, prototype: e.prototype });
         say(`mascot: ${e.prototype}`);
     }
@@ -149,6 +190,7 @@ PanelWindow {
     // Hides the bubble without releasing the mascot (the daemon may be gone)
     function dismiss(): void {
         chat.running = false;
+        bubble.stash();
         bubble.visible = false;
     }
 
@@ -175,27 +217,52 @@ PanelWindow {
         ".exit role             leave the role (also CHAT_ROLE's)",
         ".mascots               list the mascots you have",
         ".mascot <name>         swap this mascot for another one",
-        ".clear                 clear the bubble"
+        ".clear                 start this conversation over"
     ].join("\n")
 
-    function flags(): var {
-        let args = [];
-        if (bubble.model)
-            args.push("-m", bubble.model);
+    function roleFlags(): var {
         const role = bubble.role || (bubble.noRole ? "" : bubble.event?.role);
         if (role)
-            args.push("-r", role); // only ever one -r: aichat refuses two
-        else if (bubble.prompt)
-            args.push("--prompt", bubble.prompt.replace(/\{name\}/g, bubble.event?.prototype || "a desktop mascot"));
+            return ["-r", role]; // only ever one -r: aichat refuses two
+        if (bubble.prompt)
+            return ["--prompt", bubble.prompt.replace(/\{name\}/g, bubble.event?.prototype || "a desktop mascot")];
+        return [];
+    }
+
+    function flags(): var {
+        let args = (bubble.model ? ["-m", bubble.model] : []).concat(roleFlags());
         if (bubble.session)
             args.push("-s", bubble.session, "--save-session");
         return args;
+    }
+
+    // flags() for a message: unless .session chose one, the mascot's own
+    // memory. A session keeps the role or prompt it started with and ignores
+    // later ones (and aichat skips cmd_prelude with -s), so a new role or
+    // mascot name starts the memory over
+    function messageFlags(): var {
+        if (bubble.session)
+            return flags();
+        const c = conversation(bubble.event.mascot);
+        const persona = JSON.stringify(roleFlags());
+        if (c.memory && c.persona !== persona) {
+            c.memory = "";
+            say("new role - the memory starts over");
+        }
+        if (!c.memory) {
+            c.memory = `chat-${++bubble.memoryCount}`;
+            c.persona = persona;
+        }
+        return flags().concat("-s", c.memory, "--save-session");
     }
 
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
     // parsed by the shell
     function run(args: var, reply = false): void {
         bubble.replying = reply;
+        // Only messages use the bubble's memory dir: .sessions and named
+        // sessions stay in aichat's own
+        chat.environment = reply && !bubble.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {};
         const command = bubble.event?.command || 'aichat';
         // stdin must be closed: aichat reads a non-tty stdin as extra input and
         // waits forever on the open pipe Process gives it
@@ -277,6 +344,7 @@ PanelWindow {
             return;
         case ".clear":
             bubble.clearEntries();
+            conversation(bubble.event.mascot).memory = "";
             return;
         default:
             say(`unknown command ${name} - try .help`);
@@ -295,7 +363,7 @@ PanelWindow {
         if (text.startsWith("."))
             dotCommand(text);
         else
-            run(flags().concat("--", text), true); // "--": a message may start with '-'
+            run(messageFlags().concat("--", text), true); // "--": a message may start with '-'
     }
 
     visible: false
