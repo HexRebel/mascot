@@ -295,7 +295,10 @@ PanelWindow {
         ".exit role             leave the role (also the default one)",
         ".mascots               list the mascots you have",
         ".mascot <name>         swap this mascot for another one",
-        ".clear                 start this conversation over"
+        ".copy                  copy the last answer",
+        ".clear                 start this conversation over",
+        "",
+        "Select text with the mouse and press Ctrl+C to copy part of it."
     ].join("\n")
 
     function roleFlags(): var {
@@ -400,6 +403,22 @@ PanelWindow {
         scroller.contentY = Math.max(0, Math.min(scroller.contentY + dy, scroller.contentHeight - scroller.height));
     }
 
+    // The answer without a reasoning model's <think>…</think>
+    function answerOf(body: string): string {
+        return body.replace(/<(think|thinking)>[\s\S]*?(<\/\1>|$)/g, "").trim();
+    }
+
+    // The entry with text selected by the mouse, for Ctrl+C in the input
+    property Item selected: null
+
+    function copySelection(): bool {
+        const text = bubble.selected?.selectedText ?? "";
+        if (!text)
+            return false;
+        Quickshell.clipboardText = text;
+        return true;
+    }
+
     function say(text: string): void {
         bubble.entries.append({ kind: "system", body: text });
     }
@@ -465,6 +484,17 @@ PanelWindow {
                 say(`already ${bubble.event.prototype}`);
             else
                 bubble.swapRequested(bubble.event.mascot, arg);
+            return;
+        case ".copy":
+            for (let i = bubble.entries.count - 1; i >= 0; i--) {
+                const e = bubble.entries.get(i);
+                if ((e.kind === "reply" || e.kind === "remark") && answerOf(e.body)) {
+                    Quickshell.clipboardText = answerOf(e.body);
+                    say("copied the last answer");
+                    return;
+                }
+            }
+            say("no answer to copy yet");
             return;
         case ".clear":
             stop(bubble.current);
@@ -677,6 +707,13 @@ PanelWindow {
             visible: (bubble.entries?.count ?? 0) > 0
             contentHeight: log.implicitHeight
             clip: true
+            // A drag selects text instead of scrolling; the wheel still scrolls
+            interactive: false
+
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: event => bubble.scrollBy(event.pixelDelta.y ? -event.pixelDelta.y : -event.angleDelta.y / 3)
+            }
 
             Column {
                 id: log
@@ -690,7 +727,9 @@ PanelWindow {
                 Repeater {
                     model: bubble.entries
 
-                    Text {
+                    TextEdit {
+                        id: entry
+
                         required property string kind
                         required property string body
                         required property int index
@@ -698,15 +737,28 @@ PanelWindow {
                         // Reasoning models write <think>…</think> before the answer: hide it,
                         // and say "thinking…" until the answer starts
                         readonly property bool answering: kind === "reply" || kind === "remark"
-                        readonly property string answer: answering ? body.replace(/<(think|thinking)>[\s\S]*?(<\/\1>|$)/g, "").trim() : body.trim()
+                        readonly property string answer: answering ? bubble.answerOf(body) : body.trim()
                         readonly property bool thinking: answering && answer === "" && /<think/.test(body)
                             && bubble.current.streaming === index && !!bubble.current.job
 
                         width: log.width
                         visible: text !== "" // a command that has printed nothing yet
                         text: thinking ? "thinking…" : (kind === "you" ? "› " : "") + answer
-                        textFormat: Text.PlainText // model output is never markup
-                        wrapMode: Text.Wrap
+                        textFormat: TextEdit.PlainText // model output is never markup
+                        wrapMode: TextEdit.Wrap
+                        // Selectable for copying; the input keeps the keyboard
+                        readOnly: true
+                        selectByMouse: true
+                        activeFocusOnPress: false
+                        persistentSelection: true
+                        selectionColor: Qt.alpha(theme.accent, 0.4)
+                        selectedTextColor: color
+                        onSelectedTextChanged: if (selectedText && bubble.selected !== entry) {
+                            bubble.selected?.deselect();
+                            bubble.selected = entry;
+                        }
+                        Component.onDestruction: if (bubble.selected === entry)
+                            bubble.selected = null
                         color: thinking ? theme.muted : kind === "you" ? theme.accent : kind === "reply" ? theme.foreground
                             : kind === "remark" ? theme.remark : theme.muted
                         font.pixelSize: 13
@@ -761,6 +813,8 @@ PanelWindow {
                     if (step) {
                         bubble.scrollBy(step);
                         event.accepted = true;
+                    } else if (ctrl && event.key === Qt.Key_C && !input.selectedText && bubble.copySelection()) {
+                        event.accepted = true; // copy what is selected in the conversation
                     }
                 }
 

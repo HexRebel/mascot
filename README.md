@@ -320,6 +320,8 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 - Closing the bubble does not stop a reply: it is written into the conversation in the background,
   ready when you tap the mascot again.
 - Reasoning models' `<think>…</think>` is not shown; the bubble says *thinking…* until the answer starts.
+- **Copy** part of an answer by selecting it with the mouse and pressing **Ctrl+C** (the input keeps the
+  keyboard, so you can type on); `.copy` copies the whole last answer. The mouse wheel scrolls.
 
 Lines starting with `.` are commands, modelled on aichat's REPL:
 
@@ -335,6 +337,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
 | `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot Black Bunny` |
+| `.copy` | Copy the last answer to the clipboard |
 | `.clear` | Start this mascot's conversation over |
 
 The model, role and session apply to the mascot whose bubble you typed them in, until changed, and
