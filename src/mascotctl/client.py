@@ -20,6 +20,7 @@ from qoi.src.qoi import encode_img
 import time
 
 from levenstein import lv_variant
+from noclimb import strip_climbing
 
 import random
 
@@ -585,6 +586,58 @@ def converter_handler(arguments: argparse.Namespace, parser):
     if failed:
         exit(1)
 
+def wlshm_adjusted(path: str, no_climb: bool, talk: str | None):
+    """Copy of a .wlshm with --no-climb/--talk applied, as an unlinked temporary file.
+
+    The daemon unpacks whatever fd it is given, so the original file is never touched.
+    Returns the file and what was changed, one line each.
+    """
+    with open(path, "rb") as f:
+        header = f.read(512)
+        source = tarfile.open(fileobj=io.BytesIO(f.read()), mode="r:*")
+
+    names = source.getnames()
+    manifest = json.load(source.extractfile("manifest.json")) if "manifest.json" in names else {}
+    behaviors_name = manifest.get("behaviors", "behaviors.json")
+    actions_name = manifest.get("actions", "actions.json")
+    for needed in (behaviors_name, actions_name):
+        if needed not in names:
+            raise ValueError(f"{needed} not found")
+    behaviors = json.load(source.extractfile(behaviors_name))
+    changes = []
+
+    if talk:
+        # Inlined actions are anonymous parts of other actions, not something to pick
+        actions = [a["name"] for a in json.load(source.extractfile(actions_name)) if not a["name"].startswith("___")]
+        match = next((a for a in actions if a.lower() == talk.lower()), None)
+        if not match:
+            raise ValueError(f"no action called '{talk}'. Actions: {', '.join(actions)}")
+        definitions = behaviors.setdefault("definitions", [])
+        definitions[:] = [d for d in definitions if d.get("name") != "Talk"]
+        # Never picked at random (frequency 0); the daemon switches to it while a reply streams
+        definitions.append({"name": "Talk", "action": match, "next_behavior_list": [], "next_behavior_list_count": 0,
+                            "hidden": True, "condition": None, "is_conditioner": False,
+                            "next_behavior_list_add": True, "frequency": 0})
+        changes.append(f"talks with {match}")
+
+    if no_climb:
+        disabled = strip_climbing(behaviors)
+        changes.append(f"climbing removed ({len(disabled)} behaviors)" if disabled else "no climbing to remove")
+
+    behaviors_data = json.dumps(behaviors).encode("utf-8")
+    out = tempfile.TemporaryFile()
+    out.write(header)
+    with tarfile.open(fileobj=out, mode="w") as tar:
+        for member in source.getmembers():
+            if member.name == behaviors_name:
+                member.size = len(behaviors_data)
+                tar.addfile(member, io.BytesIO(behaviors_data))
+            else:
+                tar.addfile(member, source.extractfile(member) if member.isfile() else None)
+    source.close()
+    out.seek(0)
+    return out, changes
+
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
     match arguments.action:
         case "list":
@@ -765,6 +818,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
             client.register_callback(ImportFinished, finished)
             client.register_callback(ImportFailed, failed)
 
+            # Kept open until the daemon is done with them
+            adjusted = []
             for input_file in arguments.input:
                 if not os.path.exists(input_file):
                     logger.error(f"File '{input_file}' does not exist")
@@ -773,10 +828,22 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     if f.read(4) != b'WLPK':
                         logger.warning(f"File '{input_file}' is not a valid mascot prototype, please first convert it to a mascot prototype using the convert command (mascot convert)")
                         continue
-                    Import(f.fileno(), arguments.force, client.socket)
+                    if not arguments.no_climb and not arguments.talk:
+                        Import(f.fileno(), arguments.force, client.socket)
+                        continue
+                try:
+                    copy, changes = wlshm_adjusted(input_file, arguments.no_climb, arguments.talk)
+                except (tarfile.TarError, ValueError, KeyError) as e:
+                    logger.error(f"Could not prepare '{input_file}': {e}")
+                    continue
+                print(f"{input_file}: {', '.join(changes)}")
+                adjusted.append(copy)
+                Import(copy.fileno(), arguments.force, client.socket)
 
 
             client.dispatch_events(until=lambda: len(imports) == 0)
+            for copy in adjusted:
+                copy.close()
 
         case _:
             parser.print_help()
@@ -1381,6 +1448,8 @@ if __name__ == "__main__":
     prototype_importer = prototype_subparsers.add_parser("import", help="Import a prototype")
     prototype_importer.add_argument("input", nargs="*", help="Path(s) of the prototype to import. Can be either in wlshm format or in Shimeji-ee format. Can be specified multiple times.")
     prototype_importer.add_argument("-f", "--force", action="store_true", help="Overwrite existing prototypes")
+    prototype_importer.add_argument("--no-climb", action="store_true", help="Remove wall and ceiling behaviors, so the mascot stays on the floor")
+    prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info')")
 
 # Convert category
 
@@ -1448,6 +1517,8 @@ if __name__ == "__main__":
     prototype_importer = category.add_parser("import", help="Import a prototype")
     prototype_importer.add_argument("input", nargs="*", help="Path(s) of the prototype to import. Can be either in wlshm format or in Shimeji-ee format. Can be specified multiple times.")
     prototype_importer.add_argument("-f", "--force", action="store_true", help="Overwrite existing prototypes")
+    prototype_importer.add_argument("--no-climb", action="store_true", help="Remove wall and ceiling behaviors, so the mascot stays on the floor")
+    prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info')")
 
     prototype_list = category.add_parser("list", help="List known prototypes")
     prototype_list.add_argument("-d", "--detailed", action="store_true", help="Show detailed information about the prototypes")

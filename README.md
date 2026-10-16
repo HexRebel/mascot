@@ -186,6 +186,18 @@ mascot prototypes import /path/to/Shimeji.{first_name}.wlshm /path/to/Shimeji.{s
 
 If prototype already exists, mascot will skip it unless -f is used.
 
+With `--no-climb`, the mascot never climbs walls or hangs from the ceiling: every behavior whose name
+mentions a wall, the ceiling, climbing or hanging is never picked. Falling, being thrown and being
+dragged still work.
+
+With `--talk <action>`, the mascot plays that action while the chat bubble answers (a `Talk` behavior
+that is never picked at random). `mascot prototypes info <name>` lists the actions; pick one that
+looks right on the floor. Without it, the mascot just sits. The `.wlshm` file itself is left unchanged.
+
+```sh
+mascot import --no-climb --talk Pet "Shimeji.White Bunny.wlshm"
+```
+
 # Listing available prototypes
 
 You can list all available mascot prototypes using the following command:
