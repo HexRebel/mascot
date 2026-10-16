@@ -505,11 +505,13 @@ def converter_handler(arguments: argparse.Namespace, parser):
             for element in root.iter():
                 element.tag = element.tag.rpartition("}")[2]
 
+            # Credits are usually <Artist Name="…" URL="…"/>, but accept text too
             def info_text(tag):
                 element = root.find(f"Information/{tag}")
-                if element is None or not (element.text or "").strip():
+                if element is None:
                     return None
-                return element.text.strip()
+                text = (element.text or "").strip() or element.get("Name", "").strip()
+                return text or None
 
             manifest["display_name"] = info_text("Name") or manifest["display_name"]
             for key, tag in (("artist", "Artist"), ("scripter", "Scripter"),
@@ -754,8 +756,6 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     if not prot:
                         print(f"ERROR: Prototype '{name}' not found")
                     selected_prototypes.append(prot)
-
-            print(selected_prototypes)
 
             def failed(client: Client, packet: ExportFailed):
                 export = exports.get(packet.object_id)
