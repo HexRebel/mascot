@@ -424,12 +424,13 @@ void protocol_server_mascot_destroyed(struct mascot *mascot)
 }
 
 void protocol_server_prototype_withdraw(struct mascot_prototype* prototype) {
-    ipc_packet_t* withdraw_event = protocol_builder_prototype_withdrawn(prototype);
     pthread_mutex_lock(&server_state->clients_mutex);
     for (uint32_t i = 0, c = list_count(server_state->clients); i < list_size(server_state->clients) && c; i++) {
         struct protocol_client* client = list_get(server_state->clients, i);
         if (!client) continue;
         c--;
+        // One packet per client: ipc_connector_send frees it once sent
+        ipc_packet_t* withdraw_event = protocol_builder_prototype_withdrawn(prototype);
         ipc_connector_send(client->connector, withdraw_event);
     }
     pthread_mutex_unlock(&server_state->clients_mutex);
@@ -798,6 +799,9 @@ void* protocol_import_thread(void* arg) {
 
     const struct mascot_prototype* old_prototype = mascot_prototype_store_get(server_state->prototypes, mascot_name);
     mascot_prototype_link(old_prototype);
+    // Replaced in place only if it lives in the user's store. A bundled prototype
+    // stays where it is; the new copy goes to the user's store and takes precedence.
+    bool replace_in_place = false;
     if (old_prototype) {
         if (!(import->flags & 1)) { // Replace flag
             mascot_prototype_unlink(old_prototype);
@@ -810,8 +814,13 @@ void* protocol_import_thread(void* arg) {
             free(import);
             return NULL;
         }
-        snprintf(dirname, PATH_MAX, "%s", old_prototype->path);
-    } else {
+        struct stat st;
+        if (!fstatat(mascot_prototype_store_get_fd(server_state->prototypes), old_prototype->path, &st, AT_SYMLINK_NOFOLLOW)) {
+            snprintf(dirname, PATH_MAX, "%s", old_prototype->path);
+            replace_in_place = true;
+        }
+    }
+    if (!replace_in_place) {
         struct stat st;
         int16_t retries_count = 1;
         while (!fstatat(mascot_prototype_store_get_fd(server_state->prototypes), dirname, &st, AT_SYMLINK_NOFOLLOW)) {
@@ -870,20 +879,34 @@ void* protocol_import_thread(void* arg) {
         }
     }
 
-    if (old_prototype) {
-        io_swapat(mascot_prototype_store_get_fd(server_state->prototypes), tmpdirname, mascot_prototype_store_get_fd(server_state->prototypes), old_prototype->path);
-        io_unlinkat(mascot_prototype_store_get_fd(server_state->prototypes), tmpdirname, IO_RECURSIVE);
-        mascot_prototype_mark_as_unlinked(old_prototype);
+    int32_t store_fd = mascot_prototype_store_get_fd(server_state->prototypes);
+    int32_t moved;
+    if (replace_in_place) {
+        moved = io_swapat(store_fd, tmpdirname, store_fd, dirname);
+        if (moved == 0) mascot_prototype_mark_as_unlinked(old_prototype);
     } else {
-        io_renameat(mascot_prototype_store_get_fd(server_state->prototypes), tmpdirname, mascot_prototype_store_get_fd(server_state->prototypes), dirname, 0);
+        moved = io_renameat(store_fd, tmpdirname, store_fd, dirname, 0);
     }
+    // After a swap this is the old prototype; after a failure, the unpacked one
+    if (replace_in_place || moved != 0) io_unlinkat(store_fd, tmpdirname, IO_RECURSIVE);
 
     mascot_prototype_unlink(old_prototype);
 
     close(newfd);
     archive_read_free(archive);
 
-    ipc_packet_t* success = protocol_builder_import_finished(import, old_prototype ? old_prototype->path : dirname);
+    if (moved != 0) {
+        ipc_packet_t* error = protocol_builder_import_failed(import, 0);
+        ipc_connector_send(client->connector, error);
+        protocol_client_remove_object(client, import->id);
+        pthread_mutex_unlock(&import->thread_mutex);
+        pthread_mutex_destroy(&import->thread_mutex);
+        close(import->target_descriptor);
+        free(import);
+        return NULL;
+    }
+
+    ipc_packet_t* success = protocol_builder_import_finished(import, dirname);
     ipc_connector_send(client->connector, success);
 
     protocol_client_remove_object(client, import->id);
@@ -1137,7 +1160,8 @@ protocol_export_t* protocol_server_export(struct protocol_client* client, int32_
     }
 
     struct stat loc;
-    if (fstatat(mascot_prototype_store_get_fd(server_state->prototypes), prototype->path, &loc, 0) == -1) {
+    // path_fd, not the user's store: a bundled prototype lives elsewhere
+    if (fstat(prototype->path_fd, &loc) == -1) {
         ipc_packet_t* error = protocol_builder_export_failed(export, 6);
         ipc_connector_send(client->connector, error);
         free(export);
