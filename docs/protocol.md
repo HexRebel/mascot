@@ -857,12 +857,12 @@ held; a client showing a conversation for it will usually close it.
 
 ### prototypes
 
-`{"event":"prototypes","names":["Shimeji","Black Bunny"]}`: answer to `list`, sent only to the
+`{"event":"prototypes","names":["Shimeji","Example"]}`: answer to `list`, sent only to the
 client that asked. Lists the display names of all loaded prototypes.
 
 ### swapped
 
-`{"event":"swapped","mascot":N,"to":M,"prototype":"Black Bunny","role":null}`: answer to `swap`, sent to every
+`{"event":"swapped","mascot":N,"to":M,"prototype":"Example","role":null}`: answer to `swap`, sent to every
 client. Mascot N has been replaced by mascot M, of the named prototype. If N was held, M is now
 held instead. `role` is the new mascot's role, as in `tap`.
 

@@ -195,7 +195,7 @@ that is never picked at random). `mascot prototypes info <name>` lists the actio
 looks right on the floor. Without it, the mascot just sits. The `.wlshm` file itself is left unchanged.
 
 ```sh
-mascot import --no-climb --talk Pet "Shimeji.White Bunny.wlshm"
+mascot import --no-climb --talk SitAndSpinHead "Shimeji.Example.wlshm"
 ```
 
 # Listing available prototypes
@@ -348,7 +348,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.exit model\|session` | Go back to the default |
 | `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
-| `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot Black Bunny` |
+| `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot shimeji` |
 | `.copy` | Copy the last answer to the clipboard |
 | `.clear` | Start this mascot's conversation over |
 
@@ -370,7 +370,7 @@ mascot; with Mascot's prompt it answers under its new name from the next message
 
 Unless you pick a role with `.role` or set `CHAT_ROLE`, every message is sent with Mascot's own system prompt
 (aichat's `--prompt`), so the mascot answers in character, briefly and in your language. `{name}` in
-the prompt becomes the mascot's name, so Brown Bear answers as Brown Bear. Your aichat roles and
+the prompt becomes the mascot's name, so Shimeji answers as Shimeji. Your aichat roles and
 your `cmd_prelude` are left alone; the prompt simply takes their place in the bubble.
 
 The bundled prompt is `$(PREFIX)/share/mascot/ui/prompt.md`. To write your own, put a `prompt.md` in
@@ -380,11 +380,11 @@ bubble's memory is one; to keep your prelude role, set it as `CHAT_ROLE` (below)
 changing it.
 
 To start with one of your aichat roles instead, set `CHAT_ROLE`, e.g. `mascot config set CHAT_ROLE
-Gemma4`. It replaces the prompt from the next tap; `.role` overrides it, and `.exit role` leaves it
+my-role`. It replaces the prompt from the next tap; `.role` overrides it, and `.exit role` leaves it
 until you pick a role again or `qs` restarts.
 
 To give each kind of mascot its own role, set `CHAT_ROLES` to `<mascot>=<role>` pairs separated by
-`;`, e.g. `mascot config set CHAT_ROLES 'Brown Bear=Bear;Black Bunny=bunny'`. Mascot names are the
+`;`, e.g. `mascot config set CHAT_ROLES 'Shimeji=my-role;Example=other-role'`. Mascot names are the
 ones `.mascots` lists (any letter case); a mascot that is not in the list gets `CHAT_ROLE`, and an
 empty role (`Shimeji=`) gives that mascot Mascot's prompt instead. Swapping
 with `.mascot` switches to the new mascot's role.
@@ -407,10 +407,10 @@ closed. An empty `CHAT_COMMAND` means plain `aichat` with your normal config.
 
 The bubble cannot answer aichat's prompts, so a reply that waits for one (for example to confirm a
 tool call) never arrives. If your config uses tools, give the bubble a separate aichat config
-without them, e.g. a copy with `function_calling: false` in `~/.config/aichat-bubble/`:
+without them, e.g. a copy with `function_calling: false` in `~/.config/aichat-mascot/`:
 
 ```sh
-mascot config set CHAT_COMMAND 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-bubble" aichat'
+mascot config set CHAT_COMMAND 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-mascot" aichat'
 ```
 
 ## Blur on Hyprland (optional)
