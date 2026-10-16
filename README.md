@@ -16,7 +16,7 @@ exactly what has changed.
   <img src="./docs/screenshot.png" style="width: 100%;">
 </p>
 
-Shimejis on the screenshot (from upstream) by [paccha](https://linktr.ee/paccha_) and [Moneka](https://x.com/Monikaphobia)
+The mascot on the screenshot is the bundled Shimeji by Yuki Yamada (Group Finity), chatting through the bubble.
 
 ## Compositor support
 
