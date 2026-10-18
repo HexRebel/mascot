@@ -349,6 +349,10 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
 | `.mascot <name>` | Swap this mascot for another one, e.g. `.mascot shimeji` |
+| `.tools` | List what the mascot can look up (see *Tools*) |
+| `.todo` | Show the todo list (see *Tools*) |
+| `.todo add <item>` | Add an item to it |
+| `.todo done <number or text>` | Remove an item from it |
 | `.copy` | Copy the last answer to the clipboard |
 | `.clear` | Start this mascot's conversation over |
 
@@ -389,6 +393,60 @@ ones `.mascots` lists (any letter case); a mascot that is not in the list gets `
 empty role (`Shimeji=`) gives that mascot Mascot's prompt instead. Swapping
 with `.mascot` switches to the new mascot's role.
 
+## Tools
+
+The mascot can look things up while it answers, with Mascot's own tools (aichat's function calling,
+in the [llm-functions](https://github.com/sigoden/llm-functions) layout, installed to
+`$(PREFIX)/share/mascot/tools/`). They only read, but for your todo list; none of them writes, deletes
+or runs anything else:
+
+| `CHAT_TOOLS` | Tools | What they do |
+|---|---|---|
+| `time` | – | The date, weekday and time, put in front of every message (unseen), so it works with any model |
+| `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
+| `files` | `list_directory`, `read_file` | List directories and read text files (the first 64 KB) in your home directory |
+| `todo` | `list_todos`, `add_todo`, `remove_todo` | Keep your todo list: ask the mascot to remember something, or tell it something is done |
+
+`CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files and `todo`
+for the todo list, e.g. `mascot config set CHAT_TOOLS time,weather,files,todo`, or set it empty to
+turn the tools off. It takes effect from the next tap.
+
+The todo list is one list for all mascots, `todo.md` in Mascot's data directory
+(`~/.local/share/mascot/todo.md`), with one `- [ ] item` line per item; you can edit it yourself,
+and other lines in it are kept. `.todo`, `.todo add <item>` and `.todo done <number or text>` change
+it straight away, without the model. When the mascot changes it, the bubble shows what really
+changed (*✓ todo: added …*), so a reply that only claims it did is easy to spot.
+
+The file and todo tools keep to what is yours to share:
+
+- Files: only your home directory, and never hidden files or directories (`.config`, `.ssh`,
+  `.env`, …), also not through a link.
+- Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
+  your computer. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
+  its memory starts over first, so nothing it read goes along (`.todo` still works).
+- Not in a `.session`, which outlives Mascot and may later go to any model.
+
+The bubble always points aichat at these tools, never at your own llm-functions, and turns function
+calling off when `CHAT_TOOLS` is empty, so none of your tools can write or run anything unconfirmed
+from the bubble (aichat's tools only ask before they act in a terminal). The model has to support
+function calling, and aichat has to know that: mark it in your aichat config, e.g.
+
+```yaml
+clients:
+  - type: openai-compatible
+    name: ollama
+    api_base: http://localhost:11434/v1
+    models:
+      - name: my-model
+        supports_function_calling: true
+```
+
+`function_calling: false` in the config may stay; the bubble turns it on for its own tools. aichat
+lets a role's own `use_tools` override the global ones, so with tools the bubble sends your role as
+`--prompt` with its front matter, Mascot's tools as `use_tools` and the role's model as `-m`. A memory
+keeps the tools of its first message, so changing `CHAT_TOOLS` or the role starts it over. Some
+models call tools more reliably than others; one that does not just answers without looking.
+
 ## Configuration
 
 | Option | Default | Description |
@@ -399,15 +457,15 @@ with `.mascot` switches to the new mascot's role.
 | `CHAT_MEMORY` | `8000` | About how many tokens a mascot's memory may hold before it is summed up (counted as 3 characters each); `0` never sums up. Keep it well below the model's context (Ollama's `num_ctx`), which also holds the role and the reply. Takes effect from the next tap. |
 | `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
+| `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files` and/or `todo`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 
 The message is appended to `CHAT_COMMAND` as an argument, never parsed by the shell, and stdin is
 closed. An empty `CHAT_COMMAND` means plain `aichat` with your normal config.
 
-The bubble cannot answer aichat's prompts, so a reply that waits for one (for example to confirm a
-tool call) never arrives. If your config uses tools, give the bubble a separate aichat config
-without them, e.g. a copy with `function_calling: false` in `~/.config/aichat-mascot/`:
+The bubble cannot answer aichat's prompts, so give it an aichat config that never waits for one,
+e.g. a copy of yours in `~/.config/aichat-mascot/` (the bubble chooses the tools itself, see *Tools*):
 
 ```sh
 mascot config set CHAT_COMMAND 'AICHAT_CONFIG_DIR="$HOME/.config/aichat-mascot" aichat'

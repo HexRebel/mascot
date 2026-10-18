@@ -124,6 +124,9 @@ all: $(TARGET) $(PLUGINS_LIB) $(UTILS_DIR)/mascot
 clean:
 	@-rm -rf $(TARGET) $(PLUGINS_LIB) $(BUILDDIR) $(UTILS_DIR)/mascot $(UTILS_DIR)
 
+# The bubble's read-only tools (tools/bin/<tool> links to tools/mascot-tools)
+TOOLS := get_current_weather list_directory read_file list_todos add_todo remove_todo
+
 .PHONY: install
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin/
@@ -141,6 +144,10 @@ install: all
 	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -m644 ui/*.qml ui/prompt.md $(DESTDIR)$(PREFIX)/share/mascot/ui/
+	install -d $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/
+	install -m755 tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/
+	install -m644 tools/functions.json $(DESTDIR)$(PREFIX)/share/mascot/tools/
+	for tool in $(TOOLS); do ln -sfn ../mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 	cp -R --no-preserve=ownership prototypes/. $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
 	chmod -R u=rwX,go=rX $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
@@ -160,9 +167,12 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Bubble.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/prompt.md
+	rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/functions.json
+	for tool in $(TOOLS); do rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done
 	rm -rf $(DESTDIR)$(PREFIX)/share/mascot/prototypes
 	rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \
-		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null || true
+		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot/tools/bin \
+		$(DESTDIR)$(PREFIX)/share/mascot/tools $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null || true
 
 .PHONY: install-plugins
 install-plugins: build-plugins

@@ -62,9 +62,10 @@
 #define CONFIG_PARAM_CHAT_ROLES "CHAT_ROLES"
 #define CONFIG_PARAM_CHAT_REMARKS "CHAT_REMARKS"
 #define CONFIG_PARAM_CHAT_MEMORY "CHAT_MEMORY"
+#define CONFIG_PARAM_CHAT_TOOLS "CHAT_TOOLS"
 #define CONFIG_PARAM_BUBBLE_ENABLED "BUBBLE_ENABLED"
 #define CONFIG_PARAM_BUBBLE_COMMAND "BUBBLE_COMMAND"
-#define CONFIG_PARAM_COUNT 35
+#define CONFIG_PARAM_COUNT 36
 
 #define POINTER_PRIMARY_BUTTON 0x01
 #define POINTER_SECONDARY_BUTTON 0x02
@@ -163,6 +164,10 @@ int32_t config_get_chat_remarks();
 // up (default 8000); 0 = never
 bool config_set_chat_memory(int32_t value);
 int32_t config_get_chat_memory();
+// The bubble's tools: "time", "weather", "files" and/or "todo", comma-separated
+// (default "time,weather"); NULL = none. Fails on anything else
+bool config_set_chat_tools(const char* value);
+const char* config_get_chat_tools();
 
 // Whether mascotd starts the chat bubble, and the command to start it with
 bool config_set_bubble_enabled(int32_t value);
@@ -212,6 +217,7 @@ __attribute((unused)) static const char* config_keys[] = {
     CONFIG_PARAM_CHAT_ROLES,
     CONFIG_PARAM_CHAT_REMARKS,
     CONFIG_PARAM_CHAT_MEMORY,
+    CONFIG_PARAM_CHAT_TOOLS,
     CONFIG_PARAM_BUBBLE_ENABLED,
     CONFIG_PARAM_BUBBLE_COMMAND,
     NULL

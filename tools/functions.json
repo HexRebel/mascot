@@ -1,0 +1,87 @@
+[
+  {
+    "name": "get_current_weather",
+    "description": "Get the current weather for a place.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "type": "string",
+          "description": "The city and optionally the country, e.g. \"London\" or \"Paris, France\". Leave it empty for where the user is (guessed from their IP address)."
+        }
+      }
+    }
+  },
+  {
+    "name": "list_directory",
+    "description": "List the files and directories in a directory of the user's home directory (directories end with /). Hidden files are never shown.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The directory, e.g. \"~\" or \"~/Documents\"; relative paths are relative to the home directory."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "read_file",
+    "description": "Read a text file in the user's home directory (at most the first 64 KB). Hidden files cannot be read.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The file, e.g. \"~/Documents/notes.txt\"; relative paths are relative to the home directory."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "list_todos",
+    "description": "Show the user's todo list, numbered. Call it when the user asks what is on it, or before removing an item you are not sure of.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "add_todo",
+    "description": "Add an item to the user's todo list. Call it whenever the user asks you to remember, note, put on the list or add something to do; it is only added if you call this.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "The item, short, in the user's words, e.g. \"buy milk\"."
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "name": "remove_todo",
+    "description": "Remove an item from the user's todo list, when it is done or the user asks you to; it is only removed if you call this.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "The item's number from list_todos, or (part of) its text."
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  }
+]

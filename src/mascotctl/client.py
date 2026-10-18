@@ -1223,6 +1223,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "CHAT_ROLES": "Chat Roles",
         "CHAT_REMARKS": "Chat Remarks",
         "CHAT_MEMORY": "Chat Memory",
+        "CHAT_TOOLS": "Chat Tools",
         "BUBBLE_ENABLED": "Bubble Enabled",
         "BUBBLE_COMMAND": "Bubble Command"
     }
@@ -1310,6 +1311,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "CHAT_ROLES": "chat_roles",
         "CHAT_REMARKS": "chat_remarks",
         "CHAT_MEMORY": "chat_memory",
+        "CHAT_TOOLS": "chat_tools",
         "BUBBLE_ENABLED": "bubble_enabled",
         "BUBBLE_COMMAND": "bubble_command",
     }

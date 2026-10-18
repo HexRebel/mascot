@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+#   mascot-tools - the read-only tools the chat bubble lets the model use
+#
+#   Copyright (C) 2026  Xedoc91
+#
+#   This program is free software; you can redistribute it and/or
+#   modify it under the terms of the GNU General Public License
+#   as published by the Free Software Foundation; either version 2
+#   of the License, or (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, see <https://www.gnu.org/licenses/>.
+"""aichat runs bin/<tool> '<json arguments>' with LLM_OUTPUT set to a file it
+reads the result from (the llm-functions layout, see functions.json). Every
+bin/<tool> is a link to this script, which picks the tool by its own name.
+
+Nothing here writes or deletes anything but the todo list, Mascot's own
+MASCOT_TODO_FILE. The file tools only see the home directory without hidden
+files and directories (no dotfiles, .ssh, .config, .env...). The file and todo
+tools only work when the bubble says the model is local (MASCOT_TOOLS_LOCAL=1),
+so what they read stays on this computer."""
+
+import fcntl
+import json
+import os
+import sys
+import urllib.parse
+import urllib.request
+
+READ_LIMIT = 64 * 1024  # bytes of a file handed to the model
+LIST_LIMIT = 200  # entries of a directory
+TODO_LIMIT = 300  # characters of a todo item
+
+
+class ToolError(Exception):
+    pass
+
+
+def get_current_weather(args):
+    # Only the place name leaves the computer; none means wttr.in's guess by IP
+    location = str(args.get("location") or "").strip()
+    url = "https://wttr.in/" + urllib.parse.quote(location.replace(" ", "+"), safe="+,")
+    url += "?format=" + urllib.parse.quote("%l: %C, %t (feels like %f), wind %w, humidity %h, rain %p") + "&M"
+    request = urllib.request.Request(url, headers={"User-Agent": "curl/8"})  # plain text, not HTML
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.read(4096).decode("utf-8", "replace").strip()
+    except OSError as e:
+        raise ToolError(f"could not get the weather: {e}")
+
+
+def home_path(path):
+    """The real path under home for path (relative to home), or ToolError"""
+    if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
+        raise ToolError("files can only be read with a local model")
+    home = os.path.realpath(os.path.expanduser("~"))
+    path = os.path.expanduser(str(path or "~").strip() or "~")
+    if not os.path.isabs(path):
+        path = os.path.join(home, path)
+    # Both as written and with links resolved: a link may not lead out of home
+    # or into a hidden directory
+    for candidate in (os.path.normpath(path), os.path.realpath(path)):
+        rel = os.path.relpath(candidate, home)
+        if rel == ".." or rel.startswith("../"):
+            raise ToolError("only files in the home directory can be read")
+        if any(part.startswith(".") and part != "." for part in rel.split(os.sep)):
+            raise ToolError("hidden files and directories are private")
+    return os.path.realpath(path)
+
+
+def shown(path):
+    home = os.path.realpath(os.path.expanduser("~"))
+    rel = os.path.relpath(path, home)
+    return "~" if rel == "." else "~/" + rel
+
+
+def list_directory(args):
+    path = home_path(args.get("path"))
+    try:
+        entries = sorted(os.scandir(path), key=lambda e: e.name.lower())
+    except OSError as e:
+        raise ToolError(f"cannot list {shown(path)}: {e.strerror}")
+    names = []
+    for entry in entries:
+        if entry.name.startswith("."):
+            continue
+        try:
+            names.append(entry.name + ("/" if entry.is_dir() else ""))
+        except OSError:
+            names.append(entry.name)
+    lines = [f"{shown(path)}:"] + names[:LIST_LIMIT]
+    if len(names) > LIST_LIMIT:
+        lines.append(f"... and {len(names) - LIST_LIMIT} more")
+    if not names:
+        lines.append("(empty)")
+    return "\n".join(lines)
+
+
+def read_file(args):
+    path = home_path(args.get("path"))
+    if os.path.isdir(path):
+        raise ToolError(f"{shown(path)} is a directory, use list_directory")
+    try:
+        with open(path, "rb") as file:
+            data = file.read(READ_LIMIT + 1)
+    except OSError as e:
+        raise ToolError(f"cannot read {shown(path)}: {e.strerror}")
+    if b"\0" in data[:8192]:
+        raise ToolError(f"{shown(path)} is not a text file")
+    text = data[:READ_LIMIT].decode("utf-8", "replace")
+    if len(data) > READ_LIMIT:
+        text += f"\n... (only the first {READ_LIMIT // 1024} KB are shown)"
+    return text
+
+
+# The todo list is a Markdown file: one "- [ ] item" line per item; other lines
+# (a heading, notes) are kept as they are. Items are numbered from 1 in order
+TODO_ITEM = "- [ ] "
+
+
+def todo_file():
+    if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
+        raise ToolError("the todo list is only there with a local model")
+    path = os.environ.get("MASCOT_TODO_FILE", "")
+    if not os.path.isabs(path):
+        raise ToolError("no todo list")
+    return path
+
+
+def todo_change(change):
+    """Runs change(lines) -> message on the todo file's lines, under a lock on
+    its directory, and writes them back (atomically) if they changed"""
+    path = todo_file()
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    lock = os.open(directory, os.O_RDONLY)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            with open(path, encoding="utf-8") as file:
+                lines = file.read().splitlines()
+        except FileNotFoundError:
+            lines = []
+        before = list(lines)
+        message = change(lines)
+        if lines != before:
+            temp = f"{path}.{os.getpid()}.tmp"
+            with open(temp, "w", encoding="utf-8") as file:
+                file.write("".join(line + "\n" for line in lines))
+            os.replace(temp, path)
+        return message
+    finally:
+        os.close(lock)
+
+
+def changed(note):
+    """Tells the bubble what really changed (on stderr, which aichat passes on),
+    so it can show it whatever the reply claims"""
+    print(f"mascot-tools: {note}", file=sys.stderr)
+
+
+def todo_items(lines):
+    """(line index, text) of each item"""
+    return [(i, line[len(TODO_ITEM):].strip()) for i, line in enumerate(lines)
+            if line.startswith(TODO_ITEM) and line[len(TODO_ITEM):].strip()]
+
+
+def todo_listing(lines):
+    items = todo_items(lines)
+    if not items:
+        return "The todo list is empty."
+    return "\n".join(f"{n}. {text}" for n, (_, text) in enumerate(items, 1))
+
+
+def list_todos(args):
+    return todo_change(todo_listing)
+
+
+def add_todo(args):
+    text = " ".join(str(args.get("item") or "").split())[:TODO_LIMIT]
+    if not text:
+        raise ToolError("nothing to add")
+
+    def change(lines):
+        lines.append(TODO_ITEM + text)
+        changed(f"todo: added {text}")
+        return f"added: {text}\n\n" + todo_listing(lines)
+    return todo_change(change)
+
+
+def remove_todo(args):
+    which = " ".join(str(args.get("item") or "").split())
+    if not which:
+        raise ToolError("say which item to remove")
+
+    def change(lines):
+        items = todo_items(lines)
+        if which.isdigit():
+            n = int(which)
+            if not 1 <= n <= len(items):
+                raise ToolError(f"there is no item {n}\n\n" + todo_listing(lines))
+            found = [items[n - 1]]
+        else:
+            found = [item for item in items if item[1].lower() == which.lower()] \
+                or [item for item in items if which.lower() in item[1].lower()]
+        if not found:
+            raise ToolError(f"no item matches \"{which}\"\n\n" + todo_listing(lines))
+        if len(found) > 1:
+            raise ToolError(f"more than one item matches \"{which}\": "
+                            + "; ".join(text for _, text in found) + " - say which by its number")
+        index, text = found[0]
+        del lines[index]
+        changed(f"todo: removed {text}")
+        return f"removed: {text}\n\n" + todo_listing(lines)
+    return todo_change(change)
+
+
+TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, list_todos, add_todo, remove_todo)}
+
+
+def main():
+    name = os.path.basename(sys.argv[0])
+    try:
+        if name not in TOOLS:
+            raise ToolError(f"unknown tool {name}")
+        try:
+            args = json.loads(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].strip() else {}
+        except json.JSONDecodeError:
+            raise ToolError("invalid JSON arguments")
+        result = TOOLS[name](args if isinstance(args, dict) else {})
+    except ToolError as e:
+        result = f"error: {e}"  # for the model, which can tell the user
+    output = os.environ.get("LLM_OUTPUT")
+    if output:
+        with open(output, "a", encoding="utf-8") as file:
+            file.write(result + "\n")
+    else:
+        print(result)
+
+
+if __name__ == "__main__":
+    main()

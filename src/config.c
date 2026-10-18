@@ -79,6 +79,7 @@ struct config {
     char* chat_roles;
     int32_t chat_remarks;
     int32_t chat_memory;
+    char* chat_tools;
     bool bubble_enabled;
     char* bubble_command;
 
@@ -139,6 +140,7 @@ bool config_parse(const char* path)
     config.overlay_layer = LAYER_TYPE_OVERLAY;
     config.mascot_limit = 512;
     config.chat_memory = 8000;
+    config.chat_tools = strdup("time,weather");
     config.ie_throw_policy = 3;
     config.pointer_left_value = -1;
     config.pointer_right_value = -1;
@@ -279,6 +281,8 @@ bool config_parse(const char* path)
             config_set_chat_remarks(atoi(value));
         } else if (strcasecmp(key, "chat_memory") == 0) {
             config_set_chat_memory(atoi(value));
+        } else if (strcasecmp(key, "chat_tools") == 0) {
+            config_set_chat_tools(value);
         } else if (strcasecmp(key, "bubble_enabled") == 0) {
             config_set_bubble_enabled(parse_bool(value));
         } else if (strcasecmp(key, "bubble_command") == 0) {
@@ -336,6 +340,8 @@ void config_write(const char* path)
     if (config.chat_roles) fprintf(file, "chat_roles=%s\n", config.chat_roles);
     fprintf(file, "chat_remarks=%d\n", config.chat_remarks);
     fprintf(file, "chat_memory=%d\n", config.chat_memory);
+    // Always written: empty turns the tools off, a missing line means the default
+    fprintf(file, "chat_tools=%s\n", config.chat_tools ? config.chat_tools : "");
     fprintf(file, "bubble_enabled=%s\n", config.bubble_enabled ? "true" : "false");
     if (config.bubble_command) fprintf(file, "bubble_command=%s\n", config.bubble_command);
 
@@ -855,6 +861,28 @@ int32_t config_get_chat_memory()
     return config.chat_memory;
 }
 
+// CHAT_TOOLS is a comma-separated list of "time", "weather", "files" and "todo"
+bool config_set_chat_tools(const char* value)
+{
+    if (value && strchr(value, '\n')) return false;
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer), "%s", value ? value : "");
+    for (char* save = NULL, *tool = strtok_r(buffer, ",", &save); tool; tool = strtok_r(NULL, ",", &save)) {
+        tool = string_strip(tool);
+        if (*tool && strcasecmp(tool, "time") && strcasecmp(tool, "weather") && strcasecmp(tool, "files")
+            && strcasecmp(tool, "todo"))
+            return false;
+    }
+    free(config.chat_tools);
+    config.chat_tools = (value && *value) ? strdup(value) : NULL;
+    return true;
+}
+
+const char* config_get_chat_tools()
+{
+    return config.chat_tools;
+}
+
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
 // prototype's display or internal name (any case). An empty role means none,
 // not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
@@ -1056,6 +1084,9 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_MEMORY)) {
         snprintf(dest, size, "%d", config.chat_memory);
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_TOOLS)) {
+        snprintf(dest, size, "%s", config.chat_tools ? config.chat_tools : "");
+        return true;
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         snprintf(dest, size, "%s", config.bubble_enabled ? "true" : "false");
         return true;
@@ -1156,6 +1187,8 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_chat_remarks(atoi(value));
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_MEMORY)) {
         res = config_set_chat_memory(atoi(value));
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_TOOLS)) {
+        res = config_set_chat_tools(value);
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         res = config_set_bubble_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {

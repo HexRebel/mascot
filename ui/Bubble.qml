@@ -98,6 +98,7 @@ PanelWindow {
             bubble.conversations[mascot].destroy();
         }
         bubble.conversations = {};
+        bubble.lookups = {};
         Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
     }
 
@@ -295,6 +296,10 @@ PanelWindow {
         ".exit role             leave the role (also the default one)",
         ".mascots               list the mascots you have",
         ".mascot <name>         swap this mascot for another one",
+        ".tools                 list what the mascot can look up",
+        ".todo                  show the todo list",
+        ".todo add <item>       add to it",
+        ".todo done <n|text>    remove an item (by number or text)",
         ".copy                  copy the last answer",
         ".clear                 start this conversation over",
         "",
@@ -326,34 +331,169 @@ PanelWindow {
     readonly property int memoryLimit: parseInt(Quickshell.env("MASCOT_MEMORY_LIMIT"))
         || (bubble.event?.memory === 0 ? 0 : (bubble.event?.memory ?? 8000) * 3)
 
+    // CHAT_TOOLS (the tap event's "tools"): the tools in ../tools the model may
+    // use, by the names CHAT_TOOLS knows them by ("time" needs none: every
+    // message starts with the date and time, see ask()). They only read, but for
+    // the todo list (todoFile, also .todo). The bubble always
+    // points aichat at those, never at your own llm-functions, and turns
+    // function calling off without them, so no tool of yours can write or run
+    // anything unconfirmed from the bubble
+    readonly property var toolFunctions: ({
+        time: [],
+        weather: ["get_current_weather"],
+        files: ["list_directory", "read_file"],
+        todo: ["list_todos", "add_todo", "remove_todo"]
+    })
+    // Only with a local model, so what they read stays on this computer
+    readonly property var localTools: ["files", "todo"]
+    readonly property string toolsDir: Quickshell.shellPath("../tools")
+    // One list for all mascots, in Markdown ("- [ ] item"), kept in the data directory
+    readonly property string todoFile: `${bubble.dataDir}/todo.md`
+
+    function toolNames(): var {
+        return (bubble.event?.tools ?? "").split(",").map(t => t.trim().toLowerCase())
+            .filter((t, i, all) => t in bubble.toolFunctions && all.indexOf(t) === i);
+    }
+
+    // The environment that gives aichat these tools; local: whether the model
+    // is local, so localTools are among them (tools/mascot-tools also refuses
+    // them without it)
+    function toolEnvironment(tools: var, local: bool): var {
+        // No flatMap in Qt's JavaScript engine
+        const names = [].concat(...tools.filter(t => local || !bubble.localTools.includes(t)).map(t => bubble.toolFunctions[t]));
+        if (!names.length)
+            return { AICHAT_FUNCTION_CALLING: "false" };
+        return {
+            AICHAT_FUNCTIONS_DIR: bubble.toolsDir,
+            AICHAT_FUNCTION_CALLING: "true",
+            AICHAT_USE_TOOLS: names.join(","),
+            MASCOT_TOOLS_LOCAL: local ? "1" : "0",
+            MASCOT_TODO_FILE: bubble.todoFile
+        };
+    }
+
+    // Runs one of Mascot's tools itself, not through the model (.todo); its
+    // output is written into the conversation
+    function runTool(name: string, args: var): void {
+        const path = `${bubble.toolsDir}/bin/${name}`.replace(/'/g, "'\\''");
+        run([JSON.stringify(args)], false, "system", null, bubble.current, `'${path}'`,
+            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile });
+    }
+
+    // aichat --info for these args, asked once per bubble: done(info, ok)
+    property var lookups: ({})
+
+    function lookup(args: var, c: QtObject, command: string, done: var): void {
+        const key = JSON.stringify([command, args]);
+        if (key in bubble.lookups) {
+            done(bubble.lookups[key], true);
+            return;
+        }
+        run(args.concat("--info"), false, "", (info, ok) => {
+            if (ok)
+                bubble.lookups[key] = info;
+            done(info, ok);
+        }, c, command);
+    }
+
+    // The role or prompt flags for a message with the tools, and their
+    // environment: done(flags, env). aichat gives a role's own use_tools
+    // precedence over AICHAT_USE_TOOLS (and --prompt makes a role with none), so
+    // with tools the role is sent as --prompt=<its front matter and text> with
+    // Mascot's tools as use_tools, and its model as -m (a --prompt keeps none).
+    // The file and todo tools (localTools) are offered only when a local model
+    // (ollama:…) answers, so what they read stays on this computer, and never to a .session (it
+    // outlives Mascot): aichat --info on a fresh session says which model that
+    // is, as .model and the role may each choose it
+    function withTools(c: QtObject, command: string, done: var): void {
+        const tools = toolNames();
+        const role = roleFlags();
+        if (!tools.length) {
+            done(role, toolEnvironment([], false));
+            return;
+        }
+        const build = (meta, prompt) => {
+            const roleModel = (meta.find(l => /^model:/.test(l)) ?? "").replace(/^model:\s*/, "").trim();
+            const model = c.model || !roleModel ? [] : ["-m", roleModel];
+            const send = local => {
+                const env = toolEnvironment(tools, local);
+                if (!env.AICHAT_USE_TOOLS) {
+                    done(role, env);
+                    return;
+                }
+                const front = meta.filter(l => !/^use_tools:/.test(l)).concat(`use_tools: ${env.AICHAT_USE_TOOLS}`);
+                // Models like to say they noted something without doing it
+                const todo = env.AICHAT_USE_TOOLS.includes("add_todo") ? "\n\nYou keep the user's todo list with the "
+                    + "tools list_todos, add_todo and remove_todo. When the user wants something on it, off it or looked "
+                    + "up, call the tool; never say you added or removed something without calling it." : "";
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${todo}`), env);
+            };
+            if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
+                send(false);
+                return;
+            }
+            const probe = (c.model ? ["-m", c.model] : []).concat(role, "-s", "mascot-probe");
+            lookup(probe, c, command, (info, ok) => send(ok && /^model:?\s+ollama:/m.test(info)));
+        };
+        if (role[0] !== "-r") {
+            build([], role[1] ?? ""); // Mascot's prompt, or none
+            return;
+        }
+        // "---\n<front matter>\n---\n\n<prompt>"
+        lookup(role, c, command, (info, ok) => {
+            if (!ok) {
+                done(role, toolEnvironment([], false)); // aichat says why with the message
+                return;
+            }
+            const parts = info.match(/^---\n([\s\S]*?)\n---\n\n?([\s\S]*)$/);
+            build(parts ? parts[1].split("\n") : [], (parts ? parts[2] : info).trim());
+        });
+    }
+
     // Sends a message to the current mascot; kind of the answer's entry:
     // "reply" or "remark". It goes into the mascot's own memory unless .session
-    // chose a session. A session keeps the role or prompt it started with and
-    // ignores later ones (and aichat skips cmd_prelude with -s), so a new role
-    // or mascot name starts the memory over. A memory past memoryLimit is
-    // summed up first, in that memory, and the summary starts a fresh one in
-    // front of this message, so replies do not slow down as it grows
+    // chose a session. A session keeps the role or prompt (and the tools) its
+    // first message had and ignores later ones (and aichat skips cmd_prelude
+    // with -s), so a new role, mascot name or set of tools starts the memory
+    // over - also when a model that is not local takes over, so what the file
+    // and todo tools read never goes to it
     function ask(text: string, kind: string): void {
         const c = bubble.current;
         const command = bubble.event?.command || "aichat";
-        const base = flags();
-        if (c.session) {
-            run(base.concat("--", text), true, kind); // "--": a message may start with '-'
-            return;
-        }
-        const persona = JSON.stringify(roleFlags());
-        if (c.memory && c.persona !== persona) {
-            c.memory = "";
-            say("new role - the memory starts over");
-        }
-        if (!c.memory) {
-            c.memory = `chat-${++bubble.memoryCount}`;
-            c.persona = persona;
-            c.memoryChars = 0;
-        }
+        withTools(c, command, (persona, env) => {
+            // The model always knows the time, without a tool call, which not
+            // every model makes; not shown, but kept in the memory
+            if (toolNames().includes("time"))
+                text = `(Now: ${Qt.formatDateTime(new Date(), "dddd yyyy-MM-dd HH:mm")})\n\n${text}`;
+            const base = (c.model ? ["-m", c.model] : []).concat(persona);
+            if (c.session) {
+                // "--": a message may start with '-'
+                run(base.concat("-s", c.session, "--save-session", "--", text), true, kind, null, c, command, env);
+                return;
+            }
+            const key = JSON.stringify(persona);
+            if (c.memory && c.persona !== key) {
+                const local = /read_file|list_todos/;
+                c.entries.append({ kind: "system", body: local.test(c.persona) && !local.test(key)
+                    ? "not a local model - no files or todo list, and the memory starts over, so what the mascot read stays here"
+                    : "new role or tools - the memory starts over" });
+                c.memory = "";
+            }
+            if (!c.memory) {
+                c.memory = `chat-${++bubble.memoryCount}`;
+                c.persona = key;
+                c.memoryChars = 0;
+            }
+            remember(text, kind, c, command, base, env);
+        });
+    }
+
+    // The rest of ask(): sends text into the memory with these tools (env), and
+    // sums the memory up first if it has grown past memoryLimit
+    function remember(text: string, kind: string, c: QtObject, command: string, base: var, env: var): void {
         const post = message => {
             c.memoryChars += message.length;
-            run(base.concat("-s", c.memory, "--save-session", "--", message), true, kind, null, c, command);
+            run(base.concat("-s", c.memory, "--save-session", "--", message), true, kind, null, c, command, env);
         };
         if (!bubble.memoryLimit || c.memoryChars <= bubble.memoryLimit) {
             post(text);
@@ -370,15 +510,16 @@ PanelWindow {
                 text = `(What we talked about before, summed up: ${summary.trim()})\n\n${text}`;
             }
             post(text);
-        }, c, command);
+        }, c, command, toolEnvironment([], false));
     }
 
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
     // parsed by the shell. kind of the entry it writes into: "reply" for a
     // message (or "remark"), "system" for a dot command, "" for none: the
-    // output is then collected and handed to done(output, ok) instead
+    // output is then collected and handed to done(output, ok) instead; env:
+    // more environment for it, e.g. toolEnvironment()
     function run(args: var, reply = false, kind = reply ? "reply" : "system", done = null,
-                 c = bubble.current, command = bubble.event?.command || "aichat"): void {
+                 c = bubble.current, command = bubble.event?.command || "aichat", env = ({})): void {
         if (kind) {
             c.entries.append({ kind: kind, body: "" });
             c.streaming = c.entries.count - 1;
@@ -391,7 +532,7 @@ PanelWindow {
             done: done,
             // Only the mascot's memory uses the bubble's memory dir: .sessions
             // and named sessions stay in aichat's own
-            environment: (reply || !kind) && !c.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {},
+            environment: Object.assign((reply || !kind) && !c.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {}, env),
             // stdin must be closed: aichat reads a non-tty stdin as extra input
             // and waits forever on the open pipe Process gives it
             command: ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args)
@@ -485,6 +626,36 @@ PanelWindow {
             else
                 bubble.swapRequested(bubble.event.mascot, arg);
             return;
+        case ".tools":
+            {
+                const tools = toolNames();
+                if (!tools.length) {
+                    say("tools: none (set CHAT_TOOLS to time, weather and/or files)");
+                    return;
+                }
+                const notes = {
+                    time: "time - the date and time, sent with every message",
+                    weather: "weather - from wttr.in (only the place name is sent)",
+                    files: "files - lists and reads files in your home directory, never hidden ones, "
+                        + "and only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
+                    todo: "todo - shows, adds to and removes from your todo list (also .todo), "
+                        + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : "")
+                };
+                say(tools.map(t => notes[t]).join("\n"));
+                return;
+            }
+        case ".todo":
+            {
+                const [sub, ...words] = rest;
+                const item = words.join(" ");
+                const tool = !sub ? "list_todos" : sub === "add" ? "add_todo"
+                    : ["done", "remove", "rm"].includes(sub) ? "remove_todo" : "";
+                if (!tool || (sub && !item))
+                    say("use .todo, .todo add <item> or .todo done <number or text>");
+                else
+                    runTool(tool, sub ? { item: item } : {});
+                return;
+            }
         case ".copy":
             for (let i = bubble.entries.count - 1; i >= 0; i--) {
                 const e = bubble.entries.get(i);
@@ -632,6 +803,14 @@ PanelWindow {
                         c.error = jobErrors.text.trim() || `The command failed (exit ${exitCode})`;
                     if (c.replying && c.streaming >= 0 && c.streaming < c.entries.count)
                         c.memoryChars += c.entries.get(c.streaming).body.length;
+                    // What Mascot's tools really changed (they say so on stderr),
+                    // whatever the reply claims
+                    if (c.replying) {
+                        for (const line of jobErrors.text.split("\n")) {
+                            if (line.startsWith("mascot-tools: "))
+                                c.entries.append({ kind: "system", body: "✓ " + line.slice(14) });
+                        }
+                    }
                     c.job = null;
                     if (job.done)
                         job.done(job.output, exitCode === 0);

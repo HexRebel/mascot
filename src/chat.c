@@ -355,6 +355,15 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     char role[512];
     chat_role_json(mascot->prototype, role, sizeof(role));
 
+    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo")
+    char tools[300] = "null";
+    const char* chat_tools = config_get_chat_tools();
+    if (chat_tools) {
+        char escaped[290];
+        json_escape(chat_tools, escaped, sizeof(escaped));
+        snprintf(tools, sizeof(tools), "\"%s\"", escaped);
+    }
+
     char sprite[128] = "null";
     struct bounding_box box;
     if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
@@ -370,14 +379,14 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s,\"memory\":%d%s}\n",
+        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s%s}\n",
         mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role, config_get_chat_memory(), remark ? ",\"remark\":true" : "");
+        command, role, config_get_chat_memory(), tools, remark ? ",\"remark\":true" : "");
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;
