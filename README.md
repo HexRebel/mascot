@@ -353,6 +353,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.todo` | Show the todo list (see *Tools*) |
 | `.todo add <item>` | Add an item to it |
 | `.todo done <number or text>` | Remove an item from it |
+| `.todo edit <number> <text>` | Change what an item says |
 | `.remind <when> <text>` | Set a reminder or timer, e.g. `.remind 10m tea` or `.remind tomorrow 12:00 water the plants` (see *Tools*) |
 | `.reminders` | List the reminders |
 | `.remind cancel <number or text>` | Cancel one |
@@ -408,7 +409,7 @@ writes, deletes or runs anything else:
 | `time` | – | The date, weekday and time, put in front of every message (unseen), so it works with any model |
 | `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
 | `files` | `list_directory`, `read_file` | List directories and read text files (the first 64 KB) in your home directory |
-| `todo` | `list_todos`, `add_todo`, `remove_todo` | Keep your todo list: ask the mascot to remember something, or tell it something is done |
+| `todo` | `list_todos`, `add_todo`, `remove_todo`, `edit_todo` | Keep your todo list: ask the mascot to remember something, to reword an item, or tell it something is done |
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 
 `CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files, `todo`
@@ -418,8 +419,8 @@ next tap.
 
 The todo list is one list for all mascots, `todo.md` in Mascot's data directory
 (`~/.local/share/mascot/todo.md`), with one `- [ ] item` line per item; you can edit it yourself,
-and other lines in it are kept. `.todo`, `.todo add <item>` and `.todo done <number or text>` change
-it straight away, without the model. When the mascot changes it, the bubble shows what really
+and other lines in it are kept. `.todo`, `.todo add <item>`, `.todo done <number or text>` and
+`.todo edit <number> <text>` change it straight away, without the model. When the mascot changes it, the bubble shows what really
 changed (*✓ todo: added …*), so a reply that only claims it did is easy to spot.
 
 Reminders are kept in `reminders.md` in the data directory, one `- 2026-10-19 12:00 text` line each

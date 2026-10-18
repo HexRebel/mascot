@@ -125,7 +125,7 @@ clean:
 	@-rm -rf $(TARGET) $(PLUGINS_LIB) $(BUILDDIR) $(UTILS_DIR)/mascot $(UTILS_DIR)
 
 # The bubble's read-only tools (tools/bin/<tool> links to tools/mascot-tools)
-TOOLS := get_current_weather list_directory read_file list_todos add_todo remove_todo \
+TOOLS := get_current_weather list_directory read_file list_todos add_todo remove_todo edit_todo \
 	set_reminder list_reminders cancel_reminder due_reminders
 
 .PHONY: install

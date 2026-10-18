@@ -205,30 +205,50 @@ def add_todo(args):
     return todo_change(change)
 
 
+def find_todo(lines, which):
+    """(line index, text) of the one item which names: its number or (part of) its text"""
+    items = todo_items(lines)
+    if which.isdigit():
+        n = int(which)
+        if not 1 <= n <= len(items):
+            raise ToolError(f"there is no item {n}\n\n" + todo_listing(lines))
+        return items[n - 1]
+    found = [item for item in items if item[1].lower() == which.lower()] \
+        or [item for item in items if which.lower() in item[1].lower()]
+    if not found:
+        raise ToolError(f"no item matches \"{which}\"\n\n" + todo_listing(lines))
+    if len(found) > 1:
+        raise ToolError(f"more than one item matches \"{which}\": "
+                        + "; ".join(text for _, text in found) + " - say which by its number")
+    return found[0]
+
+
 def remove_todo(args):
     which = " ".join(str(args.get("item") or "").split())
     if not which:
         raise ToolError("say which item to remove")
 
     def change(lines):
-        items = todo_items(lines)
-        if which.isdigit():
-            n = int(which)
-            if not 1 <= n <= len(items):
-                raise ToolError(f"there is no item {n}\n\n" + todo_listing(lines))
-            found = [items[n - 1]]
-        else:
-            found = [item for item in items if item[1].lower() == which.lower()] \
-                or [item for item in items if which.lower() in item[1].lower()]
-        if not found:
-            raise ToolError(f"no item matches \"{which}\"\n\n" + todo_listing(lines))
-        if len(found) > 1:
-            raise ToolError(f"more than one item matches \"{which}\": "
-                            + "; ".join(text for _, text in found) + " - say which by its number")
-        index, text = found[0]
+        index, text = find_todo(lines, which)
         del lines[index]
         changed(f"todo: removed {text}")
         return f"removed: {text}\n\n" + todo_listing(lines)
+    return todo_change(change)
+
+
+def edit_todo(args):
+    which = " ".join(str(args.get("item") or "").split())
+    text = " ".join(str(args.get("text") or "").split())[:TODO_LIMIT]
+    if not which:
+        raise ToolError("say which item to change")
+    if not text:
+        raise ToolError("say what the item should say instead")
+
+    def change(lines):
+        index, old = find_todo(lines, which)
+        lines[index] = TODO_ITEM + text
+        changed(f"todo: changed {old} → {text}")
+        return f"changed: {old} → {text}\n\n" + todo_listing(lines)
     return todo_change(change)
 
 
@@ -407,7 +427,7 @@ def due_reminders(args):
     return locked_change(reminder_file(), change)
 
 
-TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, list_todos, add_todo, remove_todo,
+TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, list_todos, add_todo, remove_todo, edit_todo,
                                  set_reminder, list_reminders, cancel_reminder, due_reminders)}
 
 

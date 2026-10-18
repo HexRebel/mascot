@@ -408,6 +408,7 @@ PanelWindow {
         ".todo                  show the todo list",
         ".todo add <item>       add to it",
         ".todo done <n|text>    remove an item (by number or text)",
+        ".todo edit <n> <text>  change what an item says",
         ".remind <when> <text>  set a reminder, e.g. .remind 10m tea",
         ".reminders             list them",
         ".remind cancel <n|text>  cancel one",
@@ -453,7 +454,7 @@ PanelWindow {
         time: [],
         weather: ["get_current_weather"],
         files: ["list_directory", "read_file"],
-        todo: ["list_todos", "add_todo", "remove_todo"],
+        todo: ["list_todos", "add_todo", "remove_todo", "edit_todo"],
         reminders: ["set_reminder", "list_reminders", "cancel_reminder"]
     })
     // Only with a local model, so what they read stays on this computer
@@ -539,8 +540,9 @@ PanelWindow {
                 const front = meta.filter(l => !/^use_tools:/.test(l)).concat(`use_tools: ${env.AICHAT_USE_TOOLS}`);
                 // Models like to say they noted something without doing it
                 const todo = env.AICHAT_USE_TOOLS.includes("add_todo") ? "\n\nYou keep the user's todo list with the "
-                    + "tools list_todos, add_todo and remove_todo. When the user wants something on it, off it or looked "
-                    + "up, call the tool; never say you added or removed something without calling it. The user "
+                    + "tools list_todos, add_todo, remove_todo and edit_todo. When the user wants something on it, off it, "
+                    + "changed or looked up, call the tool; never say you added, removed or changed something without "
+                    + "calling it. The user "
                     + "never sees what a tool returns: when they want to see the list, write it out." : "";
                 const remind = env.AICHAT_USE_TOOLS.includes("set_reminder") ? "\n\nWhen the user wants a reminder or "
                     + "a timer, call set_reminder (list_reminders and cancel_reminder for the ones set); the bubble "
@@ -757,7 +759,7 @@ PanelWindow {
                     weather: "weather - from wttr.in (only the place name is sent)",
                     files: "files - lists and reads files in your home directory, never hidden ones, "
                         + "and only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
-                    todo: "todo - shows, adds to and removes from your todo list (also .todo), "
+                    todo: "todo - shows, adds to, changes and removes from your todo list (also .todo), "
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
                     reminders: "reminders - sets, lists and cancels reminders and timers (also .remind), "
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : "")
@@ -769,10 +771,18 @@ PanelWindow {
             {
                 const [sub, ...words] = rest;
                 const item = words.join(" ");
+                // .todo edit <number> <new text>: by number, as the text may be anything
+                if (sub === "edit") {
+                    if (/^\d+$/.test(words[0] ?? "") && words.length > 1)
+                        runTool("edit_todo", { item: words[0], text: words.slice(1).join(" ") });
+                    else
+                        say("use .todo edit <number> <new text>");
+                    return;
+                }
                 const tool = !sub ? "list_todos" : sub === "add" ? "add_todo"
                     : ["done", "remove", "rm"].includes(sub) ? "remove_todo" : "";
                 if (!tool || (sub && !item))
-                    say("use .todo, .todo add <item> or .todo done <number or text>");
+                    say("use .todo, .todo add <item>, .todo done <number or text> or .todo edit <number> <new text>");
                 else
                     runTool(tool, sub ? { item: item } : {});
                 return;
@@ -941,15 +951,18 @@ PanelWindow {
                     // What Mascot's tools really changed (they say so on stderr),
                     // whatever the reply claims
                     if (c.replying) {
-                        let todos = null;
+                        let todos = null, changes = false;
                         for (const line of jobErrors.text.split("\n")) {
-                            if (line.startsWith("mascot-tools: "))
+                            if (line.startsWith("mascot-tools: ")) {
                                 c.entries.append({ kind: "system", body: "✓ " + line.slice(14) });
-                            else if (line.startsWith("mascot-todos: "))
+                                changes = true;
+                            } else if (line.startsWith("mascot-todos: ")) {
                                 todos = line.slice(14);
+                            }
                         }
-                        // The todo list the model looked up, unless its reply has it
-                        if (todos !== null) {
+                        // The todo list the model looked up, unless its reply has it,
+                        // or it was only looked up to change it (the ✓ says what changed)
+                        if (todos !== null && !changes) {
                             const reply = c.streaming >= 0 && c.streaming < c.entries.count
                                 ? c.entries.get(c.streaming).body.toLowerCase() : "";
                             try {

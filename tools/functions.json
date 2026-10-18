@@ -85,6 +85,27 @@
     }
   },
   {
+    "name": "edit_todo",
+    "description": "Change what an item on the user's todo list says, when the user wants it reworded or corrected (e.g. \"change 1 to plant flowers\"); it keeps its place. It is only changed if you call this.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "The item's number from list_todos, or (part of) its current text."
+        },
+        "text": {
+          "type": "string",
+          "description": "What the item should say instead, short, in the user's words."
+        }
+      },
+      "required": [
+        "item",
+        "text"
+      ]
+    }
+  },
+  {
     "name": "set_reminder",
     "description": "Set a reminder or a timer: the mascot tells the user when the time comes (or when Mascot next starts, if it is not running then). Call it whenever the user asks to be reminded of something or wants a timer; it is only set if you call this.",
     "parameters": {
