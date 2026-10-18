@@ -178,6 +178,12 @@ def context_tokens():
     return min([tokens] + most)
 
 
+def context_size(args):
+    """For the bubble, not the model: the local model's context in tokens (0:
+    unknown), so a mascot's memory stays well inside it"""
+    return str(context_tokens() or 0)
+
+
 def read_limit():
     """Bytes of a file to hand the model: a quarter of its context (at about 3
     bytes a token), so the prompt, the conversation and the answer still fit"""
@@ -772,7 +778,7 @@ def due_reminders(args):
 
 
 TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, search_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
-                                 set_reminder, list_reminders, cancel_reminder, due_reminders)}
+                                 set_reminder, list_reminders, cancel_reminder, due_reminders, context_size)}
 
 
 def main():
@@ -791,6 +797,8 @@ def main():
     if output:
         with open(output, "a", encoding="utf-8") as file:
             file.write(result + "\n")
+        # What this put in the conversation's memory, which the bubble counts
+        print(f"mascot-size: {len(result)}", file=sys.stderr)
     else:
         print(result)
 

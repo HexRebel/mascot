@@ -105,6 +105,7 @@ PanelWindow {
         }
         bubble.conversations = {};
         bubble.lookups = {};
+        bubble.contexts = {};
         Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
     }
 
@@ -440,9 +441,44 @@ PanelWindow {
     // A memory holds about this many characters before ask() sums it up into
     // a fresh one: CHAT_MEMORY tokens (the tap event's "memory", 0 = never) at
     // 3 characters each, a cautious guess for most languages; 8000 tokens if
-    // the daemon is older. MASCOT_MEMORY_LIMIT (characters) overrides it, for testing
+    // the daemon is older. MASCOT_MEMORY_LIMIT (characters) overrides it, for
+    // testing. With a local model, at most half its context (see memoryFor())
     readonly property int memoryLimit: parseInt(Quickshell.env("MASCOT_MEMORY_LIMIT"))
         || (bubble.event?.memory === 0 ? 0 : (bubble.event?.memory ?? 8000) * 3)
+
+    // memoryLimit for this conversation's model: done(characters). Ollama cuts
+    // the start of a conversation that outgrows the context off silently, and
+    // the start is the prompt - the mascot would forget who it is. So with a
+    // local model the memory is at most half its context, leaving room for the
+    // prompt, a file a tool reads and the answer (CHAT_MEMORY may be smaller)
+    function memoryFor(c: QtObject, command: string, done: var): void {
+        if (!bubble.memoryLimit || Quickshell.env("MASCOT_MEMORY_LIMIT")) {
+            done(bubble.memoryLimit);
+            return;
+        }
+        // The same probe as withTools(), so aichat is asked once
+        const probe = (c.model ? ["-m", c.model] : []).concat(roleFlags(), "-s", "mascot-probe");
+        lookup(probe, c, command, (info, ok) => {
+            const local = ok ? info.match(/^model:?\s+ollama:(\S+)/m) : null;
+            if (!local) {
+                done(bubble.memoryLimit); // not local: its context is unknown
+                return;
+            }
+            const cap = tokens => done(tokens > 0 ? Math.min(bubble.memoryLimit, tokens / 2 * 3) : bubble.memoryLimit);
+            if (local[1] in bubble.contexts) {
+                cap(bubble.contexts[local[1]]);
+                return;
+            }
+            const path = `${bubble.toolsDir}/bin/context_size`.replace(/'/g, "'\\''");
+            run(["{}"], false, "", (out, ok) => {
+                bubble.contexts[local[1]] = ok ? parseInt(out) || 0 : 0;
+                cap(bubble.contexts[local[1]]);
+            }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_VISION_MODEL: local[1] });
+        });
+    }
+
+    // The context of each local model (tokens, 0: unknown), from context_size
+    property var contexts: ({})
 
     // CHAT_TOOLS (the tap event's "tools"): the tools in ../tools the model may
     // use, by the names CHAT_TOOLS knows them by ("time" needs none: every
@@ -629,13 +665,17 @@ PanelWindow {
     }
 
     // The rest of ask(): sends text into the memory with these tools (env), and
-    // sums the memory up first if it has grown past memoryLimit
+    // sums the memory up first if it has grown past memoryFor()
     function remember(text: string, kind: string, c: QtObject, command: string, base: var, env: var): void {
+        memoryFor(c, command, limit => rememberWithin(limit, text, kind, c, command, base, env));
+    }
+
+    function rememberWithin(limit: int, text: string, kind: string, c: QtObject, command: string, base: var, env: var): void {
         const post = message => {
             c.memoryChars += message.length;
             run(base.concat("-s", c.memory, "--save-session", "--", message), true, kind, null, c, command, env);
         };
-        if (!bubble.memoryLimit || c.memoryChars <= bubble.memoryLimit) {
+        if (!limit || c.memoryChars <= limit) {
             post(text);
             return;
         }
@@ -981,6 +1021,8 @@ PanelWindow {
                                 todos = line.slice(14);
                             } else if (line.startsWith("mascot-show: ")) {
                                 shows.push(line.slice(13));
+                            } else if (line.startsWith("mascot-size: ")) {
+                                c.memoryChars += parseInt(line.slice(13)) || 0; // what a tool put in the memory
                             }
                         }
                         const reply = c.streaming >= 0 && c.streaming < c.entries.count

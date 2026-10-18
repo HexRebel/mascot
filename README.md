@@ -492,7 +492,7 @@ models call tools more reliably than others; one that does not just answers with
 | `CHAT_ENABLED` | `true` | `false` closes the bubble and stops taps from opening it; `true` starts it again. Takes effect without a restart. |
 | `CHAT_COMMAND` | empty | The command that answers a message. |
 | `CHAT_ROLE` | empty | The aichat role the bubble starts with (`-r`); empty means Mascot's prompt. Takes effect from the next tap. |
-| `CHAT_MEMORY` | `8000` | About how many tokens a mascot's memory may hold before it is summed up (counted as 3 characters each); `0` never sums up. Keep it well below the model's context (Ollama's `num_ctx`), which also holds the role and the reply. Takes effect from the next tap. |
+| `CHAT_MEMORY` | `8000` | About how many tokens a mascot's memory may hold before it is summed up (counted as 3 characters each, what the tools returned included); `0` never sums up. With a local model it is at most half the model's context (Ollama's `num_ctx`, or Ollama's default of 4096 tokens), which also holds the prompt, a file a tool reads and the reply; with a bigger model, raise it to use more. Takes effect from the next tap. |
 | `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo` and/or `reminders`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
