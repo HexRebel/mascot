@@ -436,14 +436,19 @@ model, like `.todo`; the reminders are shown whatever `CHAT_TOOLS` says.
 
 The file, todo and reminder tools keep to what is yours to share:
 
-- Files: only your home directory. Dotfiles and configs can be read (`~/.zshrc`,
-  `~/.config/hypr/…`; dotfiles are listed only when asked for), but never the places where keys,
-  logins and history are kept, wherever they are (also in a dotfiles repo) and also not through a link:
-  `.ssh`, `.gnupg`, password stores and keyrings, aichat's config, `.env` files, keys and
+- Files: only your home directory, and no hidden files or directories (dotfiles, `~/.config`, …)
+  unless you list them in `CHAT_DOTFILES`, separated by `;`, e.g. `mascot config set CHAT_DOTFILES
+  '~/.zshrc;~/.config/hypr;~/.config/kitty'`. Only what is listed (and what is inside a listed
+  directory) can be read; a link may not lead from there to any other hidden place. The directories
+  on the way, like `~/.config`, can be listed, but show only what you allowed. `CHAT_DOTFILES` is
+  empty by default, so the mascot sees no dotfiles until you choose some.
+- Even then, never where keys, logins and history are kept, wherever they are and also not through a
+  link: `.ssh`, `.gnupg`, password stores and keyrings, aichat's config, `.env` files, keys and
   certificates, browser profiles and everything that looks like their storage (cookies, local
   storage, databases), mail and chat apps, `.git` directories, `.cache`, flatpak's `.var`, shell
-  history, `environment.d` and uwsm's env files. The full list is `SECRET_DIRS` and `SECRET_NAMES` in
-  `tools/mascot-tools`; it cannot know every app, so keep secrets in one of those places.
+  history, `environment.d` and uwsm's env files (`SECRET_DIRS` and `SECRET_NAMES` in
+  `tools/mascot-tools`). That list is a safety net, not a guarantee: it cannot know every app, so
+  allow only the dotfiles you would show anyone.
 - Pictures: a tool can only hand the model text, so `look_at_image` shows the picture to the same
   local model itself, through Ollama's API (`OLLAMA_HOST`, else `127.0.0.1:11434`), and gives the
   model its description. The model must be able to see (Ollama lists `vision` under
@@ -485,6 +490,7 @@ models call tools more reliably than others; one that does not just answers with
 | `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo` and/or `reminders`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
+| `CHAT_DOTFILES` | *(empty)* | The hidden files and directories the file tools may see, `;`-separated, e.g. `~/.zshrc;~/.config/hypr`; empty: none (see *Tools*). Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 

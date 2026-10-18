@@ -14,7 +14,7 @@
   },
   {
     "name": "list_directory",
-    "description": "List the files and directories in a directory of the user's home directory (directories end with /), or show it as a tree with depth. Dotfiles are left out unless hidden is true; places with keys, tokens, browser data or shell history are never shown. The user does not see what this returns: write the names out for them, as a list or the tree, when they want to see them.",
+    "description": "List the files and directories in a directory of the user's home directory (directories end with /), or show it as a tree with depth. Dotfiles are left out unless hidden is true, and only the ones the user allowed are ever shown. The user does not see what this returns: write the names out for them, as a list or the tree, when they want to see them.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -28,7 +28,7 @@
         },
         "hidden": {
           "type": "boolean",
-          "description": "Also show dotfiles and dot-directories (like .config or .zshrc), e.g. when the user asks about their config files."
+          "description": "Also show the dotfiles and dot-directories the user allowed (like .zshrc), e.g. when they ask about their config files."
         }
       },
       "required": [
@@ -38,7 +38,7 @@
   },
   {
     "name": "read_file",
-    "description": "Read a text file in the user's home directory (at most the first 64 KB), dotfiles and configs too, e.g. \"~/.zshrc\" or \"~/.config/hypr/hyprland.lua\". Files with keys, tokens, browser data or shell history cannot be read.",
+    "description": "Read a text file in the user's home directory (at most the first 64 KB). Hidden files (dotfiles, ~/.config/...) can only be read if the user allowed them; files with keys, tokens or history never.",
     "parameters": {
       "type": "object",
       "properties": {

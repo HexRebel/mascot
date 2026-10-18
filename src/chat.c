@@ -365,6 +365,15 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
         snprintf(tools, sizeof(tools), "\"%s\"", escaped);
     }
 
+    // And CHAT_DOTFILES, the hidden files the file tools may see
+    char dotfiles[2100] = "null";
+    const char* chat_dotfiles = config_get_chat_dotfiles();
+    if (chat_dotfiles) {
+        char escaped[2090];
+        json_escape(chat_dotfiles, escaped, sizeof(escaped));
+        snprintf(dotfiles, sizeof(dotfiles), "\"%s\"", escaped);
+    }
+
     char sprite[128] = "null";
     struct bounding_box box;
     if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
@@ -373,21 +382,21 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     }
 
     // Everything is environment-local, logical px, top-referenced
-    char line[4096];
+    char line[8192];
     int len = snprintf(line, sizeof(line),
         "{\"event\":\"tap\",\"mascot\":%u,\"prototype\":\"%s\",\"output\":\"%s\","
         "\"pointer\":{\"x\":%d,\"y\":%d},"
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s%s}\n",
+        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s%s}\n",
         mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role, config_get_chat_memory(), tools, remark ? ",\"remark\":true" : "");
+        command, role, config_get_chat_memory(), tools, dotfiles, remark ? ",\"remark\":true" : "");
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;

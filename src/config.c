@@ -80,6 +80,7 @@ struct config {
     int32_t chat_remarks;
     int32_t chat_memory;
     char* chat_tools;
+    char* chat_dotfiles;
     bool bubble_enabled;
     char* bubble_command;
 
@@ -283,6 +284,8 @@ bool config_parse(const char* path)
             config_set_chat_memory(atoi(value));
         } else if (strcasecmp(key, "chat_tools") == 0) {
             config_set_chat_tools(value);
+        } else if (strcasecmp(key, "chat_dotfiles") == 0) {
+            config_set_chat_dotfiles(value);
         } else if (strcasecmp(key, "bubble_enabled") == 0) {
             config_set_bubble_enabled(parse_bool(value));
         } else if (strcasecmp(key, "bubble_command") == 0) {
@@ -342,6 +345,7 @@ void config_write(const char* path)
     fprintf(file, "chat_memory=%d\n", config.chat_memory);
     // Always written: empty turns the tools off, a missing line means the default
     fprintf(file, "chat_tools=%s\n", config.chat_tools ? config.chat_tools : "");
+    if (config.chat_dotfiles) fprintf(file, "chat_dotfiles=%s\n", config.chat_dotfiles);
     fprintf(file, "bubble_enabled=%s\n", config.bubble_enabled ? "true" : "false");
     if (config.bubble_command) fprintf(file, "bubble_command=%s\n", config.bubble_command);
 
@@ -883,6 +887,21 @@ const char* config_get_chat_tools()
     return config.chat_tools;
 }
 
+// CHAT_DOTFILES: the hidden files and directories the file tools may see,
+// ";"-separated (e.g. "~/.zshrc;~/.config/hypr"); the tools check them
+bool config_set_chat_dotfiles(const char* value)
+{
+    if (value && strchr(value, '\n')) return false;
+    free(config.chat_dotfiles);
+    config.chat_dotfiles = (value && *value) ? strdup(value) : NULL;
+    return true;
+}
+
+const char* config_get_chat_dotfiles()
+{
+    return config.chat_dotfiles;
+}
+
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
 // prototype's display or internal name (any case). An empty role means none,
 // not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
@@ -1087,6 +1106,9 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_TOOLS)) {
         snprintf(dest, size, "%s", config.chat_tools ? config.chat_tools : "");
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_DOTFILES)) {
+        snprintf(dest, size, "%s", config.chat_dotfiles ? config.chat_dotfiles : "");
+        return true;
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         snprintf(dest, size, "%s", config.bubble_enabled ? "true" : "false");
         return true;
@@ -1189,6 +1211,8 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_chat_memory(atoi(value));
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_TOOLS)) {
         res = config_set_chat_tools(value);
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_DOTFILES)) {
+        res = config_set_chat_dotfiles(value);
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         res = config_set_bubble_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {

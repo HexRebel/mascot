@@ -21,9 +21,10 @@ bin/<tool> is a link to this script, which picks the tool by its own name.
 
 Nothing here writes or deletes anything but the todo list and the reminders,
 Mascot's own MASCOT_TODO_FILE and MASCOT_REMINDER_FILE. The file tools only see
-the home directory, dotfiles too, but never where secrets are kept (see
-SECRET_DIRS and SECRET_NAMES: .ssh, keys, tokens, browser profiles, shell
-history...). The file, todo and reminder tools only work when the bubble
+the home directory, and no hidden files or directories but the ones the user
+let them see (CHAT_DOTFILES, passed as MASCOT_DOTFILES). Even there, never where
+secrets are kept (SECRET_DIRS and SECRET_NAMES: .ssh, keys, tokens, browser
+profiles, shell history...). The file, todo and reminder tools only work when the bubble
 says the model is local (MASCOT_TOOLS_LOCAL=1), so what they read stays on this
 computer."""
 
@@ -101,7 +102,45 @@ def get_current_weather(args):
         raise ToolError(f"could not get the weather: {e}")
 
 
-def home_path(path):
+def allowed_dotfiles():
+    """The hidden files and directories the user let the tools see
+    (CHAT_DOTFILES, ";"-separated), each as written and with links resolved:
+    e.g. ~/.config/hypr and the ~/.dotfiles/hypr/.config/hypr it links to"""
+    home = os.path.realpath(os.path.expanduser("~"))
+    allowed = set()
+    for entry in os.environ.get("MASCOT_DOTFILES", "").split(";"):
+        entry = os.path.expanduser(entry.strip())
+        if not entry:
+            continue
+        entry = os.path.join(home, entry) if not os.path.isabs(entry) else entry
+        allowed.update((os.path.normpath(entry), os.path.realpath(entry)))
+    return allowed
+
+
+def under(path, directory):
+    return path == directory or path.startswith(directory.rstrip("/") + "/")
+
+
+def check_path(path, listing=False):
+    """None if path (absolute) may be read, else why not. A hidden one only
+    inside CHAT_DOTFILES, or, for listing, a directory on the way to one
+    (~/.config for ~/.config/hypr). Both as written and with links resolved: a
+    link may not lead out of home, into a secret place or a hidden one not allowed"""
+    home = os.path.realpath(os.path.expanduser("~"))
+    allowed = allowed_dotfiles()
+    for candidate in (os.path.normpath(path), os.path.realpath(path)):
+        rel = os.path.relpath(candidate, home)
+        if rel == ".." or rel.startswith("../"):
+            return "only files in the home directory can be read"
+        if is_secret(rel):
+            return f"{shown(candidate)} is private (where keys, tokens or history are kept)"
+        hidden = any(part.startswith(".") for part in rel.split(os.sep) if part != ".")
+        if hidden and not any(under(candidate, a) or (listing and under(a, candidate)) for a in allowed):
+            return f"{shown(candidate)} is hidden; the mascot only sees the dotfiles listed in CHAT_DOTFILES"
+    return None
+
+
+def home_path(path, listing=False):
     """The real path under home for path (relative to home), or ToolError"""
     if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
         raise ToolError("files can only be read with a local model")
@@ -109,14 +148,9 @@ def home_path(path):
     path = os.path.expanduser(str(path or "~").strip() or "~")
     if not os.path.isabs(path):
         path = os.path.join(home, path)
-    # Both as written and with links resolved: a link may not lead out of home
-    # or into a secret place
-    for candidate in (os.path.normpath(path), os.path.realpath(path)):
-        rel = os.path.relpath(candidate, home)
-        if rel == ".." or rel.startswith("../"):
-            raise ToolError("only files in the home directory can be read")
-        if is_secret(rel):
-            raise ToolError(f"{shown(candidate)} is private (where keys, tokens or history are kept)")
+    why = check_path(path, listing)
+    if why:
+        raise ToolError(why)
     return os.path.realpath(path)
 
 
@@ -127,16 +161,14 @@ def shown(path):
 
 
 def visible_entries(path, hidden=False):
-    """(name, is a directory to go into) of what is in path, sorted, secret ones
-    left out, and dotfiles unless hidden; links to directories are shown but
-    not gone into"""
-    home = os.path.realpath(os.path.expanduser("~"))
+    """(name, is a directory to go into) of what is in path, sorted, only what
+    check_path() lets through (and dotfiles only if hidden); links to
+    directories are shown but not gone into"""
     entries = []
     for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
         if entry.name.startswith(".") and not hidden:
             continue
-        if is_secret(os.path.relpath(os.path.join(path, entry.name), home)) \
-                or is_secret(os.path.relpath(os.path.realpath(os.path.join(path, entry.name)), home)):
+        if check_path(os.path.join(path, entry.name), listing=True):
             continue
         try:
             is_dir = entry.is_dir()
@@ -147,7 +179,7 @@ def visible_entries(path, hidden=False):
 
 
 def list_directory(args):
-    path = home_path(args.get("path"))
+    path = home_path(args.get("path"), listing=True)
     try:
         depth = max(1, min(int(args.get("depth") or 1), TREE_DEPTH))
     except (TypeError, ValueError):

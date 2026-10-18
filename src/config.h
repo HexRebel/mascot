@@ -63,9 +63,10 @@
 #define CONFIG_PARAM_CHAT_REMARKS "CHAT_REMARKS"
 #define CONFIG_PARAM_CHAT_MEMORY "CHAT_MEMORY"
 #define CONFIG_PARAM_CHAT_TOOLS "CHAT_TOOLS"
+#define CONFIG_PARAM_CHAT_DOTFILES "CHAT_DOTFILES"
 #define CONFIG_PARAM_BUBBLE_ENABLED "BUBBLE_ENABLED"
 #define CONFIG_PARAM_BUBBLE_COMMAND "BUBBLE_COMMAND"
-#define CONFIG_PARAM_COUNT 36
+#define CONFIG_PARAM_COUNT 37
 
 #define POINTER_PRIMARY_BUTTON 0x01
 #define POINTER_SECONDARY_BUTTON 0x02
@@ -168,6 +169,10 @@ int32_t config_get_chat_memory();
 // (default "time,weather"); NULL = none. Fails on anything else
 bool config_set_chat_tools(const char* value);
 const char* config_get_chat_tools();
+// The hidden files and directories the file tools may see, ";"-separated
+// (default none); NULL = none
+bool config_set_chat_dotfiles(const char* value);
+const char* config_get_chat_dotfiles();
 
 // Whether mascotd starts the chat bubble, and the command to start it with
 bool config_set_bubble_enabled(int32_t value);
@@ -218,6 +223,7 @@ __attribute((unused)) static const char* config_keys[] = {
     CONFIG_PARAM_CHAT_REMARKS,
     CONFIG_PARAM_CHAT_MEMORY,
     CONFIG_PARAM_CHAT_TOOLS,
+    CONFIG_PARAM_CHAT_DOTFILES,
     CONFIG_PARAM_BUBBLE_ENABLED,
     CONFIG_PARAM_BUBBLE_COMMAND,
     NULL
