@@ -28,6 +28,11 @@ PanelWindow {
     // mascot talked to last (-1: none, the daemon picks the first one)
     signal openRequested(int mascot)
 
+    // A reminder is due: asks the daemon to open the bubble without the keyboard
+    // (a remark's tap, see remark()) at this mascot, or a random one if it is
+    // gone (-1: none)
+    signal remarkRequested(int mascot)
+
     // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
     signal talked(int mascot, bool active)
     readonly property bool talking: visible && !!current?.job && current.replying
@@ -54,9 +59,9 @@ PanelWindow {
 
         QtObject {
             // One entry per message: kind is "you" (typed by the user), "reply"
-            // (the model's answer), "remark" (what the mascot said on its own) or
-            // "system" (the bubble's own notes and dot command output), each
-            // drawn in its own pywal colour
+            // (the model's answer), "remark" (what the mascot said on its own),
+            // "reminder" (one that is due) or "system" (the bubble's own notes
+            // and dot command output), each drawn in its own pywal colour
             property ListModel entries: ListModel {}
             property int streaming: -1 // entry the running command writes into
             property var job: null // the running command, see run()
@@ -157,6 +162,7 @@ PanelWindow {
             return;
         }
         bubble.remarking = false;
+        bubble.reminding = false;
         bubble.keepKeyboard = bubble.fromKey;
         bubble.fromKey = false;
         // Double clicks arrive as two taps: keep the open conversation
@@ -181,6 +187,26 @@ PanelWindow {
     property bool remarking: false
 
     function remark(e: var): void {
+        // Asked for to show reminders that are due
+        if (bubble.awaitingTap) {
+            bubble.awaitingTap = false;
+            const due = dueReminders();
+            if (bubble.visible || !due.length) {
+                if (due.length)
+                    showReminders(due, bubble.current);
+                if (bubble.event?.mascot !== e.mascot || !bubble.visible)
+                    bubble.released(e.mascot);
+                return;
+            }
+            bubble.event = e;
+            bubble.current = conversation(e.mascot);
+            input.text = "";
+            bubble.remarking = true;
+            bubble.reminding = true;
+            bubble.visible = true;
+            showReminders(due, bubble.current);
+            return;
+        }
         const c = conversation(e.mascot);
         // Shown already or still answering: the daemon can let the mascot go
         if (bubble.visible || c.job) {
@@ -199,9 +225,90 @@ PanelWindow {
             + `${Qt.locale().name}. Do not mention this note.)`, "remark");
     }
 
+    // Reminders (.remind, the reminders tool): reminderFile is watched, and each
+    // reminder is shown when it is due - in the open bubble, or else the bubble
+    // opens at a mascot like a remark, but stays until closed. One that fell due
+    // while Mascot was not running is shown when it starts again. Once shown,
+    // due_reminders takes them off the file
+    property bool reminding: false // the bubble opened for reminders: no closing by itself
+    property var reminders: [] // { at: ms, text }, from reminderFile
+    property real shownUntil: 0 // reminders due by then are shown (and being taken off)
+    property bool awaitingTap: false // asked the daemon for a remark's tap to show them
+    property real awaitingSince: 0
+
+    function parseReminders(text: string): var {
+        const list = [];
+        for (const line of text.split("\n")) {
+            const m = line.match(/^- (\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)(?::(\d\d))? (.*\S)\s*$/);
+            if (m)
+                list.push({ at: new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0)).getTime(), text: m[7] });
+        }
+        return list.sort((a, b) => a.at - b.at);
+    }
+
+    function dueReminders(): var {
+        const now = Date.now();
+        return bubble.reminders.filter(r => r.at <= now && r.at > bubble.shownUntil);
+    }
+
+    function checkReminders(): void {
+        const due = dueReminders();
+        if (!due.length)
+            return;
+        if (bubble.visible && bubble.current) {
+            showReminders(due, bubble.current);
+            return;
+        }
+        // The daemon gives no tap while a mascot is held, off the floor (falling
+        // after Mascot starts) or there is none: try again
+        if (bubble.awaitingTap && Date.now() - bubble.awaitingSince < 5000)
+            return;
+        bubble.awaitingTap = true;
+        bubble.awaitingSince = Date.now();
+        bubble.remarkRequested(bubble.event?.mascot ?? -1); // the one talked to last
+    }
+
+    function showReminders(due: var, c: QtObject): void {
+        const now = Date.now();
+        for (const r of due) {
+            // Late (Mascot was not running): say when it was for
+            const late = now - r.at > 60000 ? ` (was for ${Qt.formatDateTime(new Date(r.at), "ddd dd.MM HH:mm")})` : "";
+            c.entries.append({ kind: "reminder", body: `⏰ ${r.text}${late}` });
+        }
+        bubble.shownUntil = Math.max(bubble.shownUntil, ...due.map(r => r.at));
+        dueJob.command = [`${bubble.toolsDir}/bin/due_reminders`, JSON.stringify({ until: bubble.shownUntil / 1000 })];
+        dueJob.running = true;
+    }
+
+    FileView {
+        id: reminderView
+
+        path: bubble.reminderFile
+        watchChanges: true
+        printErrors: false
+        onLoaded: bubble.reminders = bubble.parseReminders(this.text())
+        onLoadFailed: bubble.reminders = []
+        onFileChanged: this.reload()
+    }
+
+    Process {
+        id: dueJob
+
+        environment: ({ MASCOT_TOOLS_LOCAL: "1", MASCOT_REMINDER_FILE: bubble.reminderFile })
+        onExited: reminderView.reload()
+    }
+
+    Timer {
+        interval: 5000
+        repeat: true
+        running: bubble.reminders.length > 0
+        triggeredOnStart: true
+        onTriggered: bubble.checkReminders()
+    }
+
     Timer {
         interval: 7000
-        running: bubble.remarking && bubble.visible && !bubble.busy && !remarkHover.hovered
+        running: bubble.remarking && !bubble.reminding && bubble.visible && !bubble.busy && !remarkHover.hovered
         onTriggered: bubble.close()
     }
 
@@ -270,6 +377,7 @@ PanelWindow {
     function dismiss(): void {
         bubble.visible = false;
         bubble.remarking = false; // after hiding, or OnDemand would take the keyboard first
+        bubble.reminding = false;
         bubble.keepKeyboard = false;
     }
 
@@ -300,6 +408,9 @@ PanelWindow {
         ".todo                  show the todo list",
         ".todo add <item>       add to it",
         ".todo done <n|text>    remove an item (by number or text)",
+        ".remind <when> <text>  set a reminder, e.g. .remind 10m tea",
+        ".reminders             list them",
+        ".remind cancel <n|text>  cancel one",
         ".copy                  copy the last answer",
         ".clear                 start this conversation over",
         "",
@@ -342,13 +453,16 @@ PanelWindow {
         time: [],
         weather: ["get_current_weather"],
         files: ["list_directory", "read_file"],
-        todo: ["list_todos", "add_todo", "remove_todo"]
+        todo: ["list_todos", "add_todo", "remove_todo"],
+        reminders: ["set_reminder", "list_reminders", "cancel_reminder"]
     })
     // Only with a local model, so what they read stays on this computer
-    readonly property var localTools: ["files", "todo"]
+    readonly property var localTools: ["files", "todo", "reminders"]
     readonly property string toolsDir: Quickshell.shellPath("../tools")
     // One list for all mascots, in Markdown ("- [ ] item"), kept in the data directory
     readonly property string todoFile: `${bubble.dataDir}/todo.md`
+    // Also one for all mascots, "- YYYY-MM-DD HH:MM[:SS] text" lines, see reminders
+    readonly property string reminderFile: `${bubble.dataDir}/reminders.md`
 
     function toolNames(): var {
         return (bubble.event?.tools ?? "").split(",").map(t => t.trim().toLowerCase())
@@ -368,7 +482,8 @@ PanelWindow {
             AICHAT_FUNCTION_CALLING: "true",
             AICHAT_USE_TOOLS: names.join(","),
             MASCOT_TOOLS_LOCAL: local ? "1" : "0",
-            MASCOT_TODO_FILE: bubble.todoFile
+            MASCOT_TODO_FILE: bubble.todoFile,
+            MASCOT_REMINDER_FILE: bubble.reminderFile
         };
     }
 
@@ -377,7 +492,7 @@ PanelWindow {
     function runTool(name: string, args: var): void {
         const path = `${bubble.toolsDir}/bin/${name}`.replace(/'/g, "'\\''");
         run([JSON.stringify(args)], false, "system", null, bubble.current, `'${path}'`,
-            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile });
+            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile, MASCOT_REMINDER_FILE: bubble.reminderFile });
     }
 
     // aichat --info for these args, asked once per bubble: done(info, ok)
@@ -427,7 +542,10 @@ PanelWindow {
                     + "tools list_todos, add_todo and remove_todo. When the user wants something on it, off it or looked "
                     + "up, call the tool; never say you added or removed something without calling it. The user "
                     + "never sees what a tool returns: when they want to see the list, write it out." : "";
-                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${todo}`), env);
+                const remind = env.AICHAT_USE_TOOLS.includes("set_reminder") ? "\n\nWhen the user wants a reminder or "
+                    + "a timer, call set_reminder (list_reminders and cancel_reminder for the ones set); the bubble "
+                    + "tells them when it is time, so never say you set one without calling it." : "";
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${todo}${remind}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
                 send(false);
@@ -474,9 +592,9 @@ PanelWindow {
             }
             const key = JSON.stringify(persona);
             if (c.memory && c.persona !== key) {
-                const local = /read_file|list_todos/;
+                const local = /read_file|list_todos|list_reminders/;
                 c.entries.append({ kind: "system", body: local.test(c.persona) && !local.test(key)
-                    ? "not a local model - no files or todo list, and the memory starts over, so what the mascot read stays here"
+                    ? "not a local model - no files, todo list or reminders, and the memory starts over, so what the mascot read stays here"
                     : "new role or tools - the memory starts over" });
                 c.memory = "";
             }
@@ -631,7 +749,7 @@ PanelWindow {
             {
                 const tools = toolNames();
                 if (!tools.length) {
-                    say("tools: none (set CHAT_TOOLS to time, weather and/or files)");
+                    say("tools: none (set CHAT_TOOLS to time, weather, files, todo and/or reminders)");
                     return;
                 }
                 const notes = {
@@ -640,6 +758,8 @@ PanelWindow {
                     files: "files - lists and reads files in your home directory, never hidden ones, "
                         + "and only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
                     todo: "todo - shows, adds to and removes from your todo list (also .todo), "
+                        + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
+                    reminders: "reminders - sets, lists and cancels reminders and timers (also .remind), "
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : "")
                 };
                 say(tools.map(t => notes[t]).join("\n"));
@@ -655,6 +775,20 @@ PanelWindow {
                     say("use .todo, .todo add <item> or .todo done <number or text>");
                 else
                     runTool(tool, sub ? { item: item } : {});
+                return;
+            }
+        case ".remind":
+        case ".reminders":
+            {
+                const cancel = ["cancel", "rm", "remove"].includes(rest[0]);
+                if (name === ".reminders" || (!arg && name === ".remind"))
+                    runTool("list_reminders", {});
+                else if (cancel && rest.length > 1)
+                    runTool("cancel_reminder", { item: rest.slice(1).join(" ") });
+                else if (cancel)
+                    say("use .remind cancel <number or text>");
+                else
+                    runTool("set_reminder", { text: arg }); // it finds the time at the start
                 return;
             }
         case ".copy":
@@ -825,6 +959,7 @@ PanelWindow {
                             } catch (e) {}
                         }
                     }
+                    reminderView.reload();
                     c.job = null;
                     if (job.done)
                         job.done(job.output, exitCode === 0);
@@ -953,7 +1088,7 @@ PanelWindow {
                         Component.onDestruction: if (bubble.selected === entry)
                             bubble.selected = null
                         color: thinking ? theme.muted : kind === "you" ? theme.accent : kind === "reply" ? theme.foreground
-                            : kind === "remark" ? theme.remark : theme.muted
+                            : kind === "remark" || kind === "reminder" ? theme.remark : theme.muted
                         font.pixelSize: 13
                     }
                 }

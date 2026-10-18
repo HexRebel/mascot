@@ -155,19 +155,20 @@ static void chat_send_prototypes(int fd);
 static void chat_swap(int fd, const char* line);
 static void chat_send_to(int fd, const char* line, size_t len);
 static void chat_open(const char* line);
-static bool chat_remark(void);
+static bool chat_remark(const char* line);
 
 // Handles one line from a client: {"event":"talking","mascot":N,"active":true|false},
 // {"event":"close","mascot":N}, {"event":"list"},
 // {"event":"swap","mascot":N,"prototype":"name"}, {"event":"toggle"} (from
 // `mascot chat`, passed on to the other clients, i.e. the bubble) or
 // {"event":"open","mascot":N} (the bubble's answer to it) or {"event":"remark"}
-// (a random mascot says something now, as CHAT_REMARKS does). Anything else is
+// (a random mascot says something now, as CHAT_REMARKS does; with "mascot":N
+// that one, if it is still there, e.g. for a reminder). Anything else is
 // ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
     if (strstr(line, "\"event\":\"remark\"")) {
-        chat_remark();
+        chat_remark(line);
         return;
     }
     if (strstr(line, "\"event\":\"toggle\"")) {
@@ -355,7 +356,7 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     char role[512];
     chat_role_json(mascot->prototype, role, sizeof(role));
 
-    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo")
+    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo,reminders")
     char tools[300] = "null";
     const char* chat_tools = config_get_chat_tools();
     if (chat_tools) {
@@ -604,13 +605,24 @@ static struct mascot* chat_random_mascot(void)
     return picked;
 }
 
-// Lets a random mascot say something: the bubble opens without taking the
-// keyboard (see "remark" in docs/protocol.md). Not while the bubble is open
-static bool chat_remark(void)
+// Lets a mascot say something, the one line names ("mascot":N) or else a random
+// one: the bubble opens without taking the keyboard (see "remark" in
+// docs/protocol.md). Not while the bubble is open, nor at a mascot off the floor
+static bool chat_remark(const char* line)
 {
     if (!client_count || held_mascot_id != -1) return false;
-    struct mascot* mascot = chat_random_mascot();
+    struct mascot* mascot = NULL;
+    const char* field = line ? strstr(line, "\"mascot\":") : NULL;
+    if (field) {
+        char* end = NULL;
+        long id = strtol(field + strlen("\"mascot\":"), &end, 10);
+        if (end != field + strlen("\"mascot\":") && id >= 0) mascot = chat_find_mascot(id);
+    }
+    if (!mascot) mascot = chat_random_mascot();
     if (!mascot) return false;
+    // The bubble stays where it opens: not at a mascot that is falling (e.g.
+    // just summoned) or being dragged; the bubble asks again in a moment
+    if (mascot->dragged || mascot_get_border_type(mascot) != environment_border_type_floor) return false;
     environment_t* env = mascot->environment;
     INFO("<Mascot:%s:%u> Saying something on its own", mascot->prototype->name, mascot->id);
     return chat_announce(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i, true);
@@ -631,6 +643,7 @@ void chat_tick(void)
         return;
     }
     if (now < next_remark) return;
-    // Busy (bubble open) or nobody to show it: try again in a couple of minutes
-    next_remark = chat_remark() ? 0 : now + 120;
+    // Busy (bubble open), the mascot off the floor or nobody to show it: try again
+    // in a couple of minutes
+    next_remark = chat_remark(NULL) ? 0 : now + 120;
 }

@@ -353,6 +353,9 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.todo` | Show the todo list (see *Tools*) |
 | `.todo add <item>` | Add an item to it |
 | `.todo done <number or text>` | Remove an item from it |
+| `.remind <when> <text>` | Set a reminder or timer, e.g. `.remind 10m tea` or `.remind tomorrow 12:00 water the plants` (see *Tools*) |
+| `.reminders` | List the reminders |
+| `.remind cancel <number or text>` | Cancel one |
 | `.copy` | Copy the last answer to the clipboard |
 | `.clear` | Start this mascot's conversation over |
 
@@ -397,8 +400,8 @@ with `.mascot` switches to the new mascot's role.
 
 The mascot can look things up while it answers, with Mascot's own tools (aichat's function calling,
 in the [llm-functions](https://github.com/sigoden/llm-functions) layout, installed to
-`$(PREFIX)/share/mascot/tools/`). They only read, but for your todo list; none of them writes, deletes
-or runs anything else:
+`$(PREFIX)/share/mascot/tools/`). They only read, but for your todo list and reminders; none of them
+writes, deletes or runs anything else:
 
 | `CHAT_TOOLS` | Tools | What they do |
 |---|---|---|
@@ -406,10 +409,12 @@ or runs anything else:
 | `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
 | `files` | `list_directory`, `read_file` | List directories and read text files (the first 64 KB) in your home directory |
 | `todo` | `list_todos`, `add_todo`, `remove_todo` | Keep your todo list: ask the mascot to remember something, or tell it something is done |
+| `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 
-`CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files and `todo`
-for the todo list, e.g. `mascot config set CHAT_TOOLS time,weather,files,todo`, or set it empty to
-turn the tools off. It takes effect from the next tap.
+`CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files, `todo`
+for the todo list and `reminders` for reminders, e.g. `mascot config set CHAT_TOOLS
+time,weather,files,todo,reminders`, or set it empty to turn the tools off. It takes effect from the
+next tap.
 
 The todo list is one list for all mascots, `todo.md` in Mascot's data directory
 (`~/.local/share/mascot/todo.md`), with one `- [ ] item` line per item; you can edit it yourself,
@@ -417,13 +422,22 @@ and other lines in it are kept. `.todo`, `.todo add <item>` and `.todo done <num
 it straight away, without the model. When the mascot changes it, the bubble shows what really
 changed (*✓ todo: added …*), so a reply that only claims it did is easy to spot.
 
-The file and todo tools keep to what is yours to share:
+Reminders are kept in `reminders.md` in the data directory, one `- 2026-10-19 12:00 text` line each
+(your local time). When one is due, a mascot says it (*⏰ text*): in the open bubble, or else the
+bubble opens at a mascot without taking the keyboard and stays until you close it or click it. One
+that fell due while Mascot was not running is shown when it starts, with the time it was for. A
+shown reminder is taken off the file. `.remind` understands a duration (`10m`, `1h30m`, `2 hours`,
+`45s`; a bare number is minutes), a time of day (`12:00`, today or else tomorrow), `tomorrow 9:00`,
+or a date and time (`2026-10-19 12:00`, `19.10.26 12:00`). `.remind` works without the tool and with any
+model, like `.todo`; the reminders are shown whatever `CHAT_TOOLS` says.
+
+The file, todo and reminder tools keep to what is yours to share:
 
 - Files: only your home directory, and never hidden files or directories (`.config`, `.ssh`,
   `.env`, …), also not through a link.
 - Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
   your computer. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
-  its memory starts over first, so nothing it read goes along (`.todo` still works).
+  its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).
 - Not in a `.session`, which outlives Mascot and may later go to any model.
 
 The bubble always points aichat at these tools, never at your own llm-functions, and turns function
@@ -457,7 +471,7 @@ models call tools more reliably than others; one that does not just answers with
 | `CHAT_MEMORY` | `8000` | About how many tokens a mascot's memory may hold before it is summed up (counted as 3 characters each); `0` never sums up. Keep it well below the model's context (Ollama's `num_ctx`), which also holds the role and the reply. Takes effect from the next tap. |
 | `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
-| `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files` and/or `todo`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
+| `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo` and/or `reminders`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 

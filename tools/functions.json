@@ -83,5 +83,50 @@
         "item"
       ]
     }
+  },
+  {
+    "name": "set_reminder",
+    "description": "Set a reminder or a timer: the mascot tells the user when the time comes (or when Mascot next starts, if it is not running then). Call it whenever the user asks to be reminded of something or wants a timer; it is only set if you call this.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "when": {
+          "type": "string",
+          "description": "When, in the user's local time: a duration from now (\"10m\", \"1h30m\", \"2 hours\"), a time of day (\"12:00\", today or else tomorrow), \"tomorrow 9:00\", or a date and time (\"2026-10-19 12:00\")."
+        },
+        "text": {
+          "type": "string",
+          "description": "What to remind of, short, in the user's words and language, e.g. \"water the flowers\"; for a plain timer say so, e.g. \"timer, 10 min\" (in their language)."
+        }
+      },
+      "required": [
+        "when",
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "list_reminders",
+    "description": "Show the reminders and timers that are set, numbered, in time order.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "cancel_reminder",
+    "description": "Cancel a reminder or timer when the user asks you to; it is only cancelled if you call this.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "description": "The reminder's number from list_reminders, or (part of) its text."
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
   }
 ]

@@ -880,7 +880,7 @@ held instead. `role` is the new mascot's role, as in `tap`.
 | `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
 | `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
 | `{"event":"toggle"}` | Sent by `mascot chat`. Passed on unchanged to every other client: the bubble closes, or asks to open with `open` |
-| `{"event":"remark"}` | A random mascot says something now, as the `chat_remarks` setting does every N to 2N minutes: a `tap` event with `"remark":true`. Ignored while a mascot is held (the bubble is open) |
+| `{"event":"remark"}`, `{"event":"remark","mascot":N}` | A random mascot (or mascot N, if it is still there) says something now, as the `chat_remarks` setting does every N to 2N minutes: a `tap` event with `"remark":true`. Ignored while a mascot is held (the bubble is open), or when the mascot is not on the floor (falling or dragged). The bubble sends it with the mascot talked to last to show a due reminder |
 | `{"event":"open","mascot":N}` | Open the bubble at mascot N, or at the first mascot if N is -1 or gone: answered with a `tap` event to every client, as if the mascot had been tapped with the pointer at its anchor, and the mascot is held |
 
 Other messages are ignored. Older clients sent `hiding` and `hidden` around unmapping their

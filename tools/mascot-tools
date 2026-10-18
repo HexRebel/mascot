@@ -19,22 +19,25 @@
 reads the result from (the llm-functions layout, see functions.json). Every
 bin/<tool> is a link to this script, which picks the tool by its own name.
 
-Nothing here writes or deletes anything but the todo list, Mascot's own
-MASCOT_TODO_FILE. The file tools only see the home directory without hidden
-files and directories (no dotfiles, .ssh, .config, .env...). The file and todo
-tools only work when the bubble says the model is local (MASCOT_TOOLS_LOCAL=1),
-so what they read stays on this computer."""
+Nothing here writes or deletes anything but the todo list and the reminders,
+Mascot's own MASCOT_TODO_FILE and MASCOT_REMINDER_FILE. The file tools only see
+the home directory without hidden files and directories (no dotfiles, .ssh,
+.config, .env...). The file, todo and reminder tools only work when the bubble
+says the model is local (MASCOT_TOOLS_LOCAL=1), so what they read stays on this
+computer."""
 
 import fcntl
 import json
 import os
+import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 
 READ_LIMIT = 64 * 1024  # bytes of a file handed to the model
 LIST_LIMIT = 200  # entries of a directory
-TODO_LIMIT = 300  # characters of a todo item
+TODO_LIMIT = 300  # characters of a todo item or a reminder
 
 
 class ToolError(Exception):
@@ -133,9 +136,12 @@ def todo_file():
 
 
 def todo_change(change):
-    """Runs change(lines) -> message on the todo file's lines, under a lock on
-    its directory, and writes them back (atomically) if they changed"""
-    path = todo_file()
+    return locked_change(todo_file(), change)
+
+
+def locked_change(path, change):
+    """Runs change(lines) -> message on the file's lines, under a lock on its
+    directory, and writes them back (atomically) if they changed"""
     directory = os.path.dirname(path)
     os.makedirs(directory, exist_ok=True)
     lock = os.open(directory, os.O_RDONLY)
@@ -226,7 +232,183 @@ def remove_todo(args):
     return todo_change(change)
 
 
-TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, list_todos, add_todo, remove_todo)}
+# The reminders are a Markdown file too, one "- YYYY-MM-DD HH:MM[:SS] text" line
+# per reminder (local time), kept in time order; other lines are kept. The
+# bubble reads it itself and shows each one when it is due, or when Mascot
+# starts, if it was not running then; due_reminders then takes them off
+REMINDER = re.compile(r"^- (\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?) (.*\S)\s*$")
+UNITS = {"s": 1, "m": 60, "h": 3600, "t": 3600, "d": 86400}
+DAYS = {"i dag": 0, "idag": 0, "today": 0, "i morgen": 1, "imorgen": 1, "tomorrow": 1}
+
+
+def reminder_file():
+    if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
+        raise ToolError("reminders are only there with a local model")
+    path = os.environ.get("MASCOT_REMINDER_FILE", "")
+    if not os.path.isabs(path):
+        raise ToolError("no reminders")
+    return path
+
+
+def parse_when(when, now):
+    """The time (epoch seconds) for when: a duration ("10m", "1h30m", "2 hours",
+    "45 sek"; a bare number is minutes), a time of day ("12:00", "kl. 12",
+    today or else tomorrow), or a date and time ("2026-10-19 12:00",
+    "19.10.26 12:00", "19.10 kl 12", "i morgen 12:00", "tomorrow 9"); None if it
+    is none of them"""
+    when = " ".join(when.lower().split())
+    clock = bool(re.search(r"\bkl\b", when))  # "kl 12" is a time, "12" minutes
+    when = re.sub(r"^(in|om) ", "", re.sub(r"\s*\bkl\b\.?\s*", " ", when).strip())
+    days = None  # "i morgen 12:00": days from today
+    m = re.match(r"(i morgen|imorgen|tomorrow|i dag|idag|today) ", when)
+    if m:
+        days, clock, when = DAYS[m.group(1)], True, when[m.end():]
+    if re.fullmatch(r"\d+", when) and not clock:
+        return now + int(when) * 60
+    if re.fullmatch(r"(\d+\s*[a-zæøå]+\s*((and|og)\s*)?)+", when):
+        parts = re.findall(r"(\d+)\s*([a-zæøå]+)", when)
+        if not all(unit[0] in UNITS for _, unit in parts):
+            return None
+        return now + sum(int(n) * UNITS[unit[0]] for n, unit in parts)
+    # [date ]hour[:minute[:second]]; "19.10" alone is a time, as in Danish
+    m = re.fullmatch(r"(?:(?:(\d{4})-(\d\d?)-(\d\d?)|(\d\d?)\.(\d\d?)\.?(\d{4}|\d\d)?)[ t])?"
+                     r"(\d\d?)(?:[:.](\d\d))?(?::(\d\d))?", when)
+    if not m or not (m.group(8) or clock or m.group(1) or m.group(4)) or (days is not None and (m.group(1) or m.group(4))):
+        return None
+    if m.group(1):
+        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    elif m.group(4):
+        y = m.group(6)
+        year = (int(y) + (2000 if len(y) == 2 else 0)) if y else time.localtime(now).tm_year
+        month, day = int(m.group(5)), int(m.group(4))
+    else:
+        year, month, day = time.localtime(now)[:3]
+        day += days or 0
+    hour, minute, second = int(m.group(7)), int(m.group(8) or 0), int(m.group(9) or 0)
+    if not (1 <= month <= 12 and 1 <= day <= 31 and hour < 24 and minute < 60 and second < 60):
+        return None
+    at = time.mktime((year, month, day, hour, minute, second, 0, 0, -1))
+    # A time of day that has passed is tomorrow's, a date without a year next year's
+    if at <= now and not (m.group(1) or m.group(6) or days is not None):
+        if m.group(4):
+            year += 1
+        else:
+            day += 1
+        at = time.mktime((year, month, day, hour, minute, second, 0, 0, -1))
+    return at
+
+
+def stamp(at):
+    seconds = time.localtime(at).tm_sec
+    return time.strftime("%Y-%m-%d %H:%M:%S" if seconds else "%Y-%m-%d %H:%M", time.localtime(at))
+
+
+def shown_time(at):
+    return time.strftime("%a %Y-%m-%d %H:%M", time.localtime(at))
+
+
+def reminder_items(lines):
+    """(line index, epoch seconds, text) of each reminder, in time order"""
+    items = []
+    for i, line in enumerate(lines):
+        m = REMINDER.match(line)
+        if m:
+            fmt = "%Y-%m-%d %H:%M:%S" if m.group(1).count(":") == 2 else "%Y-%m-%d %H:%M"
+            try:
+                items.append((i, time.mktime(time.strptime(m.group(1), fmt)), m.group(2)))
+            except ValueError:
+                pass
+    return sorted(items, key=lambda item: item[1])
+
+
+def reminder_listing(lines):
+    items = reminder_items(lines)
+    if not items:
+        return "There are no reminders."
+    return "\n".join(f"{n}. {shown_time(at)}: {text}" for n, (_, at, text) in enumerate(items, 1))
+
+
+def keep_in_order(lines):
+    """Puts the reminder lines in time order, after any other lines"""
+    items = reminder_items(lines)
+    reminders = [lines[i] for i, _, _ in items]
+    lines[:] = [line for i, line in enumerate(lines) if i not in {i for i, _, _ in items}] + reminders
+
+
+def set_reminder(args):
+    now = time.time()
+    when = " ".join(str(args.get("when") or "").split())
+    text = " ".join(str(args.get("text") or "").split())[:TODO_LIMIT]
+    if not when and text:
+        # .remind <when> <text>: the longest start of it that is a time
+        words = text.split()
+        for n in range(len(words) - 1, 0, -1):
+            if parse_when(" ".join(words[:n]), now) is not None:
+                when, text = " ".join(words[:n]), " ".join(words[n:])
+                break
+    if not text:
+        raise ToolError("say what to remind of")
+    if not when:
+        raise ToolError("say when, e.g. 10m, 1h30m, 12:00 or 2026-10-19 12:00")
+    at = parse_when(when, now)
+    if at is None:
+        raise ToolError(f"cannot tell when \"{when}\" is - use e.g. 10m, 1h30m, 12:00 or 2026-10-19 12:00")
+    if at <= now:
+        raise ToolError(f"{shown_time(at)} has passed")
+
+    def change(lines):
+        lines.append(f"- {stamp(at)} {text}")
+        keep_in_order(lines)
+        changed(f"reminder: {shown_time(at)}: {text}")
+        return f"set for {shown_time(at)}: {text}\n\n" + reminder_listing(lines)
+    return locked_change(reminder_file(), change)
+
+
+def list_reminders(args):
+    return locked_change(reminder_file(), reminder_listing)
+
+
+def cancel_reminder(args):
+    which = " ".join(str(args.get("item") or "").split())
+    if not which:
+        raise ToolError("say which reminder to cancel")
+
+    def change(lines):
+        items = reminder_items(lines)
+        if which.isdigit():
+            n = int(which)
+            if not 1 <= n <= len(items):
+                raise ToolError(f"there is no reminder {n}\n\n" + reminder_listing(lines))
+            found = [items[n - 1]]
+        else:
+            found = [item for item in items if item[2].lower() == which.lower()] \
+                or [item for item in items if which.lower() in item[2].lower()]
+        if not found:
+            raise ToolError(f"no reminder matches \"{which}\"\n\n" + reminder_listing(lines))
+        if len(found) > 1:
+            raise ToolError(f"more than one reminder matches \"{which}\": "
+                            + "; ".join(text for _, _, text in found) + " - say which by its number")
+        index, at, text = found[0]
+        del lines[index]
+        changed(f"reminder cancelled: {shown_time(at)}: {text}")
+        return f"cancelled: {text}\n\n" + reminder_listing(lines)
+    return locked_change(reminder_file(), change)
+
+
+def due_reminders(args):
+    """For the bubble, not the model: takes off the reminders due by "until"
+    (epoch seconds), once it has shown them"""
+    until = float(args.get("until") or 0)
+
+    def change(lines):
+        due = {i for i, at, _ in reminder_items(lines) if at <= until}
+        lines[:] = [line for i, line in enumerate(lines) if i not in due]
+        return f"{len(due)} done"
+    return locked_change(reminder_file(), change)
+
+
+TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, list_todos, add_todo, remove_todo,
+                                 set_reminder, list_reminders, cancel_reminder, due_reminders)}
 
 
 def main():

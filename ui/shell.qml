@@ -97,5 +97,6 @@ ShellRoot {
         onListRequested: root.send({ event: "list" })
         onSwapRequested: (mascot, prototype) => root.send({ event: "swap", mascot: mascot, prototype: prototype })
         onOpenRequested: mascot => root.send({ event: "open", mascot: mascot })
+        onRemarkRequested: mascot => root.send({ event: "remark", mascot: mascot })
     }
 }

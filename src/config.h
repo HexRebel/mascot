@@ -164,7 +164,7 @@ int32_t config_get_chat_remarks();
 // up (default 8000); 0 = never
 bool config_set_chat_memory(int32_t value);
 int32_t config_get_chat_memory();
-// The bubble's tools: "time", "weather", "files" and/or "todo", comma-separated
+// The bubble's tools: "time", "weather", "files", "todo" and/or "reminders", comma-separated
 // (default "time,weather"); NULL = none. Fails on anything else
 bool config_set_chat_tools(const char* value);
 const char* config_get_chat_tools();
