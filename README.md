@@ -436,8 +436,14 @@ model, like `.todo`; the reminders are shown whatever `CHAT_TOOLS` says.
 
 The file, todo and reminder tools keep to what is yours to share:
 
-- Files: only your home directory, and never hidden files or directories (`.config`, `.ssh`,
-  `.env`, …), also not through a link.
+- Files: only your home directory. Dotfiles and configs can be read (`~/.zshrc`,
+  `~/.config/hypr/…`; dotfiles are listed only when asked for), but never the places where keys,
+  logins and history are kept, wherever they are (also in a dotfiles repo) and also not through a link:
+  `.ssh`, `.gnupg`, password stores and keyrings, aichat's config, `.env` files, keys and
+  certificates, browser profiles and everything that looks like their storage (cookies, local
+  storage, databases), mail and chat apps, `.git` directories, `.cache`, flatpak's `.var`, shell
+  history, `environment.d` and uwsm's env files. The full list is `SECRET_DIRS` and `SECRET_NAMES` in
+  `tools/mascot-tools`; it cannot know every app, so keep secrets in one of those places.
 - Pictures: a tool can only hand the model text, so `look_at_image` shows the picture to the same
   local model itself, through Ollama's API (`OLLAMA_HOST`, else `127.0.0.1:11434`), and gives the
   model its description. The model must be able to see (Ollama lists `vision` under

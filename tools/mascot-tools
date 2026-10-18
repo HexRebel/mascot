@@ -21,8 +21,9 @@ bin/<tool> is a link to this script, which picks the tool by its own name.
 
 Nothing here writes or deletes anything but the todo list and the reminders,
 Mascot's own MASCOT_TODO_FILE and MASCOT_REMINDER_FILE. The file tools only see
-the home directory without hidden files and directories (no dotfiles, .ssh,
-.config, .env...). The file, todo and reminder tools only work when the bubble
+the home directory, dotfiles too, but never where secrets are kept (see
+SECRET_DIRS and SECRET_NAMES: .ssh, keys, tokens, browser profiles, shell
+history...). The file, todo and reminder tools only work when the bubble
 says the model is local (MASCOT_TOOLS_LOCAL=1), so what they read stays on this
 computer."""
 
@@ -44,8 +45,47 @@ TODO_LIMIT = 300  # characters of a todo item or a reminder
 IMAGE_LIMIT = 30 * 1024 * 1024  # bytes of an image handed to Ollama
 
 
+# Never read, listed or gone into, wherever they are under home (also inside
+# e.g. ~/.dotfiles/aichat/.config/aichat): component sequences of a path...
+SECRET_DIRS = [d.split("/") for d in (
+    # keys, passwords, tokens
+    ".ssh", ".gnupg", ".password-store", ".local/share/keyrings", ".local/share/kwalletd", ".pki", ".android",
+    ".config/aichat", ".config/aichat-bubble", ".claude", ".local/share/claude", ".config/gh", ".aws", ".kube",
+    ".docker", ".qwen", ".config/goa-1.0", ".config/rclone", ".config/hydroxide", ".MakeMKV",
+    # browsers, mail, chat and other apps that keep logins
+    ".mozilla", ".config/mozilla", ".librewolf", ".thunderbird", ".local/share/qutebrowser", ".config/chromium",
+    ".config/google-chrome", ".config/BraveSoftware", ".config/vivaldi", ".config/microsoft-edge", ".config/Google",
+    ".config/discord", ".config/Signal", ".config/Element", ".config/Caprine", ".config/Electron",
+    ".config/Mailspring", ".config/protonmail", ".config/Proton Mail", ".config/Proton Pass",
+    ".local/share/protonmail", ".local/share/proton-drive-cli", ".config/spotify", ".config/spicetify",
+    ".config/spotify-player", ".config/ncspot", ".config/VSCodium", ".vscode-oss", ".config/obsidian",
+    ".config/obs-studio", ".config/Mumble", ".local/share/Mumble", ".config/onlyoffice", ".config/Epic",
+    ".config/CurseForge", ".config/ow-electron", ".config/millennium", ".local/share/millennium",
+    ".config/youtube-tui", ".local/share/youtube-tui", ".local/share/rustypipe", ".local/share/TelegramDesktop",
+    ".local/share/org.localsend.localsend_app", ".local/share/folks", ".steam", ".local/share/Steam",
+    # history, caches and whole app sandboxes
+    ".local/share/fish", ".local/share/zsh", ".local/share/zoxide", ".cache", ".var", ".wine", ".git",
+    # environment variables, where keys tend to end up
+    ".config/environment.d", ".config/uwsm")]
+# ...and names of files or directories: keys, tokens, shell history, and what
+# browsers and Electron apps keep logins and history in
+SECRET_NAMES = re.compile(r"""^(\.env(\..*)?|.*\.env|.*\.(pem|key|p12|pfx|kdbx|keystore|asc|gpg|sqlite3?|db|ldb|vdf|xbel)
+    |id_(rsa|dsa|ecdsa|ed25519)(_sk)?(\.pub)?|adbkey(\.pub)?|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.pgpass
+    |\.claude\.json|\.pulse-cookie|credentials(\..*)?|secrets?(\..*)?|token(s)?(\..*)?
+    |cookies(\..*)?|login\ data|web\ data|local\ storage|session\ storage|indexeddb|leveldb|logins\.json
+    |\.(zsh|bash|python|node_repl|sqlite|mysql|psql|lesshst)_?history|\.histfile|\.viminfo|\.wget-hsts)$""", re.X | re.I)
+
+
 class ToolError(Exception):
     pass
+
+
+def is_secret(rel):
+    """Whether rel (relative to home) is or is inside a secret place"""
+    parts = [part for part in rel.split(os.sep) if part not in ("", ".")]
+    if any(SECRET_NAMES.match(part) for part in parts):
+        return True
+    return any(parts[i:i + len(d)] == d for d in SECRET_DIRS for i in range(len(parts) - len(d) + 1))
 
 
 def get_current_weather(args):
@@ -70,13 +110,13 @@ def home_path(path):
     if not os.path.isabs(path):
         path = os.path.join(home, path)
     # Both as written and with links resolved: a link may not lead out of home
-    # or into a hidden directory
+    # or into a secret place
     for candidate in (os.path.normpath(path), os.path.realpath(path)):
         rel = os.path.relpath(candidate, home)
         if rel == ".." or rel.startswith("../"):
             raise ToolError("only files in the home directory can be read")
-        if any(part.startswith(".") and part != "." for part in rel.split(os.sep)):
-            raise ToolError("hidden files and directories are private")
+        if is_secret(rel):
+            raise ToolError(f"{shown(candidate)} is private (where keys, tokens or history are kept)")
     return os.path.realpath(path)
 
 
@@ -86,12 +126,17 @@ def shown(path):
     return "~" if rel == "." else "~/" + rel
 
 
-def visible_entries(path):
-    """(name, is a directory to go into) of what is in path, hidden ones left
-    out, sorted; links to directories are shown but not gone into"""
+def visible_entries(path, hidden=False):
+    """(name, is a directory to go into) of what is in path, sorted, secret ones
+    left out, and dotfiles unless hidden; links to directories are shown but
+    not gone into"""
+    home = os.path.realpath(os.path.expanduser("~"))
     entries = []
     for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
-        if entry.name.startswith("."):
+        if entry.name.startswith(".") and not hidden:
+            continue
+        if is_secret(os.path.relpath(os.path.join(path, entry.name), home)) \
+                or is_secret(os.path.relpath(os.path.realpath(os.path.join(path, entry.name)), home)):
             continue
         try:
             is_dir = entry.is_dir()
@@ -108,7 +153,8 @@ def list_directory(args):
     except (TypeError, ValueError):
         depth = 1
     try:
-        entries = visible_entries(path)
+        hidden = args.get("hidden") in (True, "true", "1", 1)
+        entries = visible_entries(path, hidden)
     except OSError as e:
         raise ToolError(f"cannot list {shown(path)}: {e.strerror}")
     if depth == 1:
@@ -137,7 +183,7 @@ def list_directory(args):
             if is_dir and level < depth:
                 inner = os.path.join(directory, name.rstrip("/"))
                 try:
-                    walk(inner, visible_entries(inner), prefix + ("    " if last else "│   "), level + 1)
+                    walk(inner, visible_entries(inner, hidden), prefix + ("    " if last else "│   "), level + 1)
                 except OSError:
                     pass
     walk(path, entries, "", 1)

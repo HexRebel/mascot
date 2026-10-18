@@ -764,7 +764,8 @@ PanelWindow {
                 const notes = {
                     time: "time - the date and time, sent with every message",
                     weather: "weather - from wttr.in (only the place name is sent)",
-                    files: "files - lists and reads files and looks at images in your home directory, never hidden ones, "
+                    files: "files - lists and reads files and looks at images in your home directory, dotfiles too, "
+                        + "never where keys, logins or history are kept, "
                         + "and only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
                     todo: "todo - shows, adds to, changes and removes from your todo list (also .todo), "
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),

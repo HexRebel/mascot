@@ -14,7 +14,7 @@
   },
   {
     "name": "list_directory",
-    "description": "List the files and directories in a directory of the user's home directory (directories end with /), or show it as a tree with depth. Hidden files are never shown. The user does not see what this returns: write the names out for them, as a list or the tree, when they want to see them.",
+    "description": "List the files and directories in a directory of the user's home directory (directories end with /), or show it as a tree with depth. Dotfiles are left out unless hidden is true; places with keys, tokens, browser data or shell history are never shown. The user does not see what this returns: write the names out for them, as a list or the tree, when they want to see them.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -25,6 +25,10 @@
         "depth": {
           "type": "integer",
           "description": "How many levels to show: 1 (the default) lists just this directory; 2 to 4 draw a tree of the directories in it, e.g. when the user asks for a tree."
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Also show dotfiles and dot-directories (like .config or .zshrc), e.g. when the user asks about their config files."
         }
       },
       "required": [
@@ -34,7 +38,7 @@
   },
   {
     "name": "read_file",
-    "description": "Read a text file in the user's home directory (at most the first 64 KB). Hidden files cannot be read.",
+    "description": "Read a text file in the user's home directory (at most the first 64 KB), dotfiles and configs too, e.g. \"~/.zshrc\" or \"~/.config/hypr/hyprland.lua\". Files with keys, tokens, browser data or shell history cannot be read.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -50,7 +54,7 @@
   },
   {
     "name": "look_at_image",
-    "description": "Look at a picture (PNG, JPEG or WebP) in the user's home directory and get a description of it. Call it when the user asks what is in an image, e.g. one of their wallpapers; you cannot see images otherwise. Hidden files cannot be read.",
+    "description": "Look at a picture (PNG, JPEG or WebP) in the user's home directory and get a description of it. Call it when the user asks what is in an image, e.g. one of their wallpapers; you cannot see images otherwise.",
     "parameters": {
       "type": "object",
       "properties": {
