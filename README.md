@@ -408,7 +408,7 @@ writes, deletes or runs anything else:
 |---|---|---|
 | `time` | – | The date, weekday and time, put in front of every message (unseen), so it works with any model |
 | `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
-| `files` | `list_directory`, `read_file` | List directories and read text files (the first 64 KB) in your home directory |
+| `files` | `list_directory`, `read_file`, `look_at_image` | List directories, read text files (the first 64 KB) and look at pictures (PNG, JPEG, WebP) in your home directory |
 | `todo` | `list_todos`, `add_todo`, `remove_todo`, `edit_todo` | Keep your todo list: ask the mascot to remember something, to reword an item, or tell it something is done |
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 
@@ -436,6 +436,10 @@ The file, todo and reminder tools keep to what is yours to share:
 
 - Files: only your home directory, and never hidden files or directories (`.config`, `.ssh`,
   `.env`, …), also not through a link.
+- Pictures: a tool can only hand the model text, so `look_at_image` shows the picture to the same
+  local model itself, through Ollama's API (`OLLAMA_HOST`, else `127.0.0.1:11434`), and gives the
+  model its description. The model must be able to see (Ollama lists `vision` under
+  *capabilities* in `ollama show <model>`).
 - Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
   your computer. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
   its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).

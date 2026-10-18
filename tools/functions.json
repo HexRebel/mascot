@@ -45,6 +45,26 @@
     }
   },
   {
+    "name": "look_at_image",
+    "description": "Look at a picture (PNG, JPEG or WebP) in the user's home directory and get a description of it. Call it when the user asks what is in an image, e.g. one of their wallpapers; you cannot see images otherwise. Hidden files cannot be read.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The image file, e.g. \"~/wallpapers/autumn.jpg\"; relative paths are relative to the home directory. Use list_directory first if you do not know its name."
+        },
+        "question": {
+          "type": "string",
+          "description": "Optional: what the user wants to know about it, e.g. \"is there a cat?\"."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
     "name": "list_todos",
     "description": "Show the user's todo list, numbered. Call it when the user asks what is on it, or before removing an item you are not sure of.",
     "parameters": {

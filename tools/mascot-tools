@@ -26,18 +26,21 @@ the home directory without hidden files and directories (no dotfiles, .ssh,
 says the model is local (MASCOT_TOOLS_LOCAL=1), so what they read stays on this
 computer."""
 
+import base64
 import fcntl
 import json
 import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 READ_LIMIT = 64 * 1024  # bytes of a file handed to the model
 LIST_LIMIT = 200  # entries of a directory
 TODO_LIMIT = 300  # characters of a todo item or a reminder
+IMAGE_LIMIT = 30 * 1024 * 1024  # bytes of an image handed to Ollama
 
 
 class ToolError(Exception):
@@ -119,6 +122,51 @@ def read_file(args):
     if len(data) > READ_LIMIT:
         text += f"\n... (only the first {READ_LIMIT // 1024} KB are shown)"
     return text
+
+
+def look_at_image(args):
+    """Tool results are text only, so the image goes to the local model itself
+    through Ollama's API (MASCOT_VISION_MODEL, the model the bubble talks to,
+    without "ollama:"), and its description comes back"""
+    path = home_path(args.get("path"))
+    model = os.environ.get("MASCOT_VISION_MODEL", "")
+    if not model:
+        raise ToolError("images can only be looked at with a local model")
+    if os.path.isdir(path):
+        raise ToolError(f"{shown(path)} is a directory, use list_directory")
+    try:
+        with open(path, "rb") as file:
+            data = file.read(IMAGE_LIMIT + 1)
+    except OSError as e:
+        raise ToolError(f"cannot read {shown(path)}: {e.strerror}")
+    if len(data) > IMAGE_LIMIT:
+        raise ToolError(f"{shown(path)} is too big (over {IMAGE_LIMIT // 1024 // 1024} MB)")
+    # What Ollama can load
+    if not (data.startswith(b"\x89PNG") or data.startswith(b"\xff\xd8") or data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
+        raise ToolError(f"{shown(path)} is not a PNG, JPEG or WebP image")
+    question = " ".join(str(args.get("question") or "").split())
+    prompt = "Describe this image in a few sentences: what is in it, the colours and the mood." \
+        + (f" Then answer this about it: {question}" if question else "")
+    host = os.environ.get("OLLAMA_HOST", "") or "127.0.0.1:11434"
+    url = (host if "://" in host else "http://" + host).rstrip("/") + "/api/generate"
+    body = json.dumps({"model": model, "prompt": prompt, "images": [base64.b64encode(data).decode()],
+                       "stream": False, "think": False}).encode()
+    request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=180) as response:
+            answer = json.loads(response.read())
+    except urllib.error.HTTPError as e:
+        try:
+            reason = json.loads(e.read()).get("error") or str(e)
+        except ValueError:
+            reason = str(e)
+        raise ToolError(f"Ollama could not look at {shown(path)}: {reason}")
+    except (OSError, ValueError) as e:
+        raise ToolError(f"could not reach Ollama: {e}")
+    description = str(answer.get("response") or "").strip()
+    if not description:
+        raise ToolError(f"Ollama said nothing about {shown(path)}")
+    return f"{shown(path)}: {description}"
 
 
 # The todo list is a Markdown file: one "- [ ] item" line per item; other lines
@@ -446,7 +494,7 @@ def due_reminders(args):
     return locked_change(reminder_file(), change)
 
 
-TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, list_todos, add_todo, remove_todo, edit_todo,
+TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
                                  set_reminder, list_reminders, cancel_reminder, due_reminders)}
 
 

@@ -453,7 +453,7 @@ PanelWindow {
     readonly property var toolFunctions: ({
         time: [],
         weather: ["get_current_weather"],
-        files: ["list_directory", "read_file"],
+        files: ["list_directory", "read_file", "look_at_image"],
         todo: ["list_todos", "add_todo", "remove_todo", "edit_todo"],
         reminders: ["set_reminder", "list_reminders", "cancel_reminder"]
     })
@@ -470,10 +470,11 @@ PanelWindow {
             .filter((t, i, all) => t in bubble.toolFunctions && all.indexOf(t) === i);
     }
 
-    // The environment that gives aichat these tools; local: whether the model
-    // is local, so localTools are among them (tools/mascot-tools also refuses
-    // them without it)
-    function toolEnvironment(tools: var, local: bool): var {
+    // The environment that gives aichat these tools; local: the local model's
+    // Ollama name (e.g. "gemma4-16k") or "", so localTools are among them
+    // (tools/mascot-tools also refuses them without it); look_at_image shows
+    // the image to that model
+    function toolEnvironment(tools: var, local: string): var {
         // No flatMap in Qt's JavaScript engine
         const names = [].concat(...tools.filter(t => local || !bubble.localTools.includes(t)).map(t => bubble.toolFunctions[t]));
         if (!names.length)
@@ -483,6 +484,7 @@ PanelWindow {
             AICHAT_FUNCTION_CALLING: "true",
             AICHAT_USE_TOOLS: names.join(","),
             MASCOT_TOOLS_LOCAL: local ? "1" : "0",
+            MASCOT_VISION_MODEL: local,
             MASCOT_TODO_FILE: bubble.todoFile,
             MASCOT_REMINDER_FILE: bubble.reminderFile
         };
@@ -525,7 +527,7 @@ PanelWindow {
         const tools = toolNames();
         const role = roleFlags();
         if (!tools.length) {
-            done(role, toolEnvironment([], false));
+            done(role, toolEnvironment([], ""));
             return;
         }
         const build = (meta, prompt) => {
@@ -551,11 +553,14 @@ PanelWindow {
                 done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${todo}${remind}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
-                send(false);
+                send("");
                 return;
             }
             const probe = (c.model ? ["-m", c.model] : []).concat(role, "-s", "mascot-probe");
-            lookup(probe, c, command, (info, ok) => send(ok && /^model:?\s+ollama:/m.test(info)));
+            lookup(probe, c, command, (info, ok) => {
+                const local = ok ? info.match(/^model:?\s+ollama:(\S+)/m) : null;
+                send(local ? local[1] : "");
+            });
         };
         if (role[0] !== "-r") {
             build([], role[1] ?? ""); // Mascot's prompt, or none
@@ -564,7 +569,7 @@ PanelWindow {
         // "---\n<front matter>\n---\n\n<prompt>"
         lookup(role, c, command, (info, ok) => {
             if (!ok) {
-                done(role, toolEnvironment([], false)); // aichat says why with the message
+                done(role, toolEnvironment([], "")); // aichat says why with the message
                 return;
             }
             const parts = info.match(/^---\n([\s\S]*?)\n---\n\n?([\s\S]*)$/);
@@ -632,7 +637,7 @@ PanelWindow {
                 text = `(What we talked about before, summed up: ${summary.trim()})\n\n${text}`;
             }
             post(text);
-        }, c, command, toolEnvironment([], false));
+        }, c, command, toolEnvironment([], ""));
     }
 
     // Runs CHAT_COMMAND with args appended; they are passed as "$@", never
@@ -758,7 +763,7 @@ PanelWindow {
                 const notes = {
                     time: "time - the date and time, sent with every message",
                     weather: "weather - from wttr.in (only the place name is sent)",
-                    files: "files - lists and reads files in your home directory, never hidden ones, "
+                    files: "files - lists and reads files and looks at images in your home directory, never hidden ones, "
                         + "and only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
                     todo: "todo - shows, adds to, changes and removes from your todo list (also .todo), "
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
