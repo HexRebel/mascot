@@ -549,10 +549,19 @@ PanelWindow {
                     + "calling it. To remove several, name them all in one remove_todo call (the numbers change after "
                     + "a removal). The user "
                     + "never sees what a tool returns: when they want to see the list, write it out." : "";
+                // Where the user's configs are, so it does not ask for the path
+                const dotfiles = (env.MASCOT_DOTFILES ?? "").split(";").map(d => d.trim()).filter(d => d);
+                const files = env.AICHAT_USE_TOOLS.includes("read_file") ? "\n\nYou can read the user's files yourself "
+                    + "with read_file and list_directory: when they mention one, find it and read it with the tools - do "
+                    + "not ask them for the path, and do not say you will look without calling a tool. When you do not "
+                    + "know a file's exact name, look it up with list_directory instead of guessing. " + (dotfiles.length
+                        ? `Of their hidden files and config directories you may see only these: ${dotfiles.join(", ")}; `
+                            + "anything else hidden is off limits, so say so."
+                        : "You may not see their hidden files (dotfiles, ~/.config).") : "";
                 const remind = env.AICHAT_USE_TOOLS.includes("set_reminder") ? "\n\nWhen the user wants a reminder or "
                     + "a timer, call set_reminder (list_reminders and cancel_reminder for the ones set); the bubble "
                     + "tells them when it is time, so never say you set one without calling it." : "";
-                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${todo}${remind}`), env);
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
                 send("");

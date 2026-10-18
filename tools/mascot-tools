@@ -140,8 +140,17 @@ def check_path(path, listing=False):
     return None
 
 
+def on_the_way(path):
+    """Whether path is a directory on the way to an allowed dotfile (~/.config
+    for ~/.config/hypr), so it is shown in listings even without hidden"""
+    allowed = allowed_dotfiles()
+    return any(a != candidate and under(a, candidate)
+               for candidate in (os.path.normpath(path), os.path.realpath(path)) for a in allowed)
+
+
 def home_path(path, listing=False):
-    """The real path under home for path (relative to home), or ToolError"""
+    """(the real path under home, the path as asked for) for path (relative to
+    home), or ToolError"""
     if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
         raise ToolError("files can only be read with a local model")
     home = os.path.realpath(os.path.expanduser("~"))
@@ -151,7 +160,7 @@ def home_path(path, listing=False):
     why = check_path(path, listing)
     if why:
         raise ToolError(why)
-    return os.path.realpath(path)
+    return os.path.realpath(path), os.path.normpath(path)
 
 
 def shown(path):
@@ -160,46 +169,57 @@ def shown(path):
     return "~" if rel == "." else "~/" + rel
 
 
-def visible_entries(path, hidden=False):
+def visible_entries(path, hidden=False, left_out=None):
     """(name, is a directory to go into) of what is in path, sorted, only what
-    check_path() lets through (and dotfiles only if hidden); links to
-    directories are shown but not gone into"""
+    check_path() lets through (and dotfiles only if hidden, or on the way to an
+    allowed one). Links to directories are gone into like directories (dotfiles
+    are often links, e.g. stow's); check_path() has checked where they lead,
+    and TREE_DEPTH and LIST_LIMIT keep a loop short. left_out (a list) gets
+    one item per entry not shown"""
     entries = []
     for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
-        if entry.name.startswith(".") and not hidden:
-            continue
-        if check_path(os.path.join(path, entry.name), listing=True):
+        full = os.path.join(path, entry.name)
+        if (entry.name.startswith(".") and not hidden and not on_the_way(full)) \
+                or check_path(full, listing=True):
+            if left_out is not None:
+                left_out.append(entry.name)
             continue
         try:
             is_dir = entry.is_dir()
-            entries.append((entry.name + ("/" if is_dir else ""), is_dir and not entry.is_symlink()))
+            entries.append((entry.name + ("/" if is_dir else ""), is_dir))
         except OSError:
             entries.append((entry.name, False))
     return entries
 
 
+def nothing_shown(left_out):
+    return "(nothing here the mascot may see: only private or hidden files, or dotfiles not in CHAT_DOTFILES)" \
+        if left_out else "(empty)"
+
+
 def list_directory(args):
-    path = home_path(args.get("path"), listing=True)
+    path, asked = home_path(args.get("path"), listing=True)
     try:
         depth = max(1, min(int(args.get("depth") or 1), TREE_DEPTH))
     except (TypeError, ValueError):
         depth = 1
     try:
         hidden = args.get("hidden") in (True, "true", "1", 1)
-        entries = visible_entries(path, hidden)
+        left_out = []
+        entries = visible_entries(path, hidden, left_out)
     except OSError as e:
-        raise ToolError(f"cannot list {shown(path)}: {e.strerror}")
+        raise ToolError(f"cannot list {shown(asked)}: {e.strerror}")
     if depth == 1:
         names = [name for name, _ in entries]
-        lines = [f"{shown(path)}:"] + names[:LIST_LIMIT]
+        lines = [f"{shown(asked)}:"] + names[:LIST_LIMIT]
         if len(names) > LIST_LIMIT:
             lines.append(f"... and {len(names) - LIST_LIMIT} more")
         if not names:
-            lines.append("(empty)")
+            lines.append(nothing_shown(left_out))
         return "\n".join(lines)
 
     # A tree, as the tree command draws it, at most LIST_LIMIT entries in all
-    lines = [shown(path) + "/"]
+    lines = [shown(asked) + "/"]
     left = [LIST_LIMIT]
 
     def walk(directory, entries, prefix, level):
@@ -220,7 +240,7 @@ def list_directory(args):
                     pass
     walk(path, entries, "", 1)
     if not entries:
-        lines.append("(empty)")
+        lines.append(nothing_shown(left_out))
     tree = "\n".join(lines)
     # Models like to say "here is the tree" without it: the bubble shows it if
     # the reply has not (the names are what it looks for)
@@ -229,17 +249,33 @@ def list_directory(args):
     return tree
 
 
+def not_found(asked):
+    """ToolError for a file that is not there, saying what is in its directory
+    (models like to guess names, e.g. hyprland.conf for hyprland.lua)"""
+    directory = os.path.dirname(asked)
+    try:
+        if check_path(directory, listing=True):
+            raise OSError
+        names = [name for name, _ in visible_entries(os.path.realpath(directory), hidden=True)]
+    except OSError:
+        return ToolError(f"there is no {shown(asked)}")
+    listing = ", ".join(names[:40]) + (", ..." if len(names) > 40 else "") if names else "nothing to show"
+    return ToolError(f"there is no {shown(asked)}; {shown(directory)} has: {listing}")
+
+
 def read_file(args):
-    path = home_path(args.get("path"))
+    path, asked = home_path(args.get("path"))
     if os.path.isdir(path):
-        raise ToolError(f"{shown(path)} is a directory, use list_directory")
+        raise ToolError(f"{shown(asked)} is a directory, use list_directory")
     try:
         with open(path, "rb") as file:
             data = file.read(READ_LIMIT + 1)
+    except FileNotFoundError:
+        raise not_found(asked)
     except OSError as e:
-        raise ToolError(f"cannot read {shown(path)}: {e.strerror}")
+        raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if b"\0" in data[:8192]:
-        raise ToolError(f"{shown(path)} is not a text file")
+        raise ToolError(f"{shown(asked)} is not a text file")
     text = data[:READ_LIMIT].decode("utf-8", "replace")
     if len(data) > READ_LIMIT:
         text += f"\n... (only the first {READ_LIMIT // 1024} KB are shown)"
@@ -250,22 +286,24 @@ def look_at_image(args):
     """Tool results are text only, so the image goes to the local model itself
     through Ollama's API (MASCOT_VISION_MODEL, the model the bubble talks to,
     without "ollama:"), and its description comes back"""
-    path = home_path(args.get("path"))
+    path, asked = home_path(args.get("path"))
     model = os.environ.get("MASCOT_VISION_MODEL", "")
     if not model:
         raise ToolError("images can only be looked at with a local model")
     if os.path.isdir(path):
-        raise ToolError(f"{shown(path)} is a directory, use list_directory")
+        raise ToolError(f"{shown(asked)} is a directory, use list_directory")
     try:
         with open(path, "rb") as file:
             data = file.read(IMAGE_LIMIT + 1)
+    except FileNotFoundError:
+        raise not_found(asked)
     except OSError as e:
-        raise ToolError(f"cannot read {shown(path)}: {e.strerror}")
+        raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if len(data) > IMAGE_LIMIT:
-        raise ToolError(f"{shown(path)} is too big (over {IMAGE_LIMIT // 1024 // 1024} MB)")
+        raise ToolError(f"{shown(asked)} is too big (over {IMAGE_LIMIT // 1024 // 1024} MB)")
     # What Ollama can load
     if not (data.startswith(b"\x89PNG") or data.startswith(b"\xff\xd8") or data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
-        raise ToolError(f"{shown(path)} is not a PNG, JPEG or WebP image")
+        raise ToolError(f"{shown(asked)} is not a PNG, JPEG or WebP image")
     question = " ".join(str(args.get("question") or "").split())
     prompt = "Describe this image in a few sentences: what is in it, the colours and the mood." \
         + (f" Then answer this about it: {question}" if question else "")
@@ -282,13 +320,13 @@ def look_at_image(args):
             reason = json.loads(e.read()).get("error") or str(e)
         except ValueError:
             reason = str(e)
-        raise ToolError(f"Ollama could not look at {shown(path)}: {reason}")
+        raise ToolError(f"Ollama could not look at {shown(asked)}: {reason}")
     except (OSError, ValueError) as e:
         raise ToolError(f"could not reach Ollama: {e}")
     description = str(answer.get("response") or "").strip()
     if not description:
-        raise ToolError(f"Ollama said nothing about {shown(path)}")
-    return f"{shown(path)}: {description}"
+        raise ToolError(f"Ollama said nothing about {shown(asked)}")
+    return f"{shown(asked)}: {description}"
 
 
 # The todo list is a Markdown file: one "- [ ] item" line per item; other lines
