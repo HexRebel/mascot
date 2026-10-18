@@ -454,7 +454,7 @@ PanelWindow {
     readonly property var toolFunctions: ({
         time: [],
         weather: ["get_current_weather"],
-        files: ["list_directory", "read_file", "look_at_image"],
+        files: ["list_directory", "read_file", "search_file", "look_at_image"],
         todo: ["list_todos", "add_todo", "remove_todo", "edit_todo"],
         reminders: ["set_reminder", "list_reminders", "cancel_reminder"]
     })
@@ -554,7 +554,9 @@ PanelWindow {
                 const files = env.AICHAT_USE_TOOLS.includes("read_file") ? "\n\nYou can read the user's files yourself "
                     + "with read_file and list_directory: when they mention one, find it and read it with the tools - do "
                     + "not ask them for the path, and do not say you will look without calling a tool. When you do not "
-                    + "know a file's exact name, look it up with list_directory instead of guessing. " + (dotfiles.length
+                    + "know a file's exact name, look it up with list_directory instead of guessing. For a question "
+                    + "about part of a file (a setting, a key binding), or a big file, use search_file instead of "
+                    + "reading it whole. " + (dotfiles.length
                         ? `Of their hidden files and config directories you may see only these: ${dotfiles.join(", ")}; `
                             + "anything else hidden is off limits, so say so."
                         : "You may not see their hidden files (dotfiles, ~/.config).") : "";

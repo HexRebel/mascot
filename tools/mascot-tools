@@ -39,7 +39,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-READ_LIMIT = 64 * 1024  # bytes of a file handed to the model
+# Bytes of a file handed to the model: with a 16k context, more pushes the
+# start of the conversation (the question) out, which Ollama does silently
+READ_LIMIT = 12 * 1024
+SEARCH_LIMIT = 8 * 1024  # bytes of search results
+SEARCH_FILE_LIMIT = 1024 * 1024  # bytes of one file searched
 LIST_LIMIT = 200  # entries of a directory (or a tree)
 TREE_DEPTH = 4  # levels of a tree
 TODO_LIMIT = 300  # characters of a todo item or a reminder
@@ -276,10 +280,89 @@ def read_file(args):
         raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if b"\0" in data[:8192]:
         raise ToolError(f"{shown(asked)} is not a text file")
-    text = data[:READ_LIMIT].decode("utf-8", "replace")
-    if len(data) > READ_LIMIT:
-        text += f"\n... (only the first {READ_LIMIT // 1024} KB are shown)"
-    return text
+    if len(data) <= READ_LIMIT:
+        return data.decode("utf-8", "replace")
+    size = os.path.getsize(path)
+    shown_part = data[:READ_LIMIT]
+    shown_part = shown_part[:shown_part.rfind(b"\n") + 1] or shown_part  # whole lines
+    return shown_part.decode("utf-8", "replace") + (
+        f"\n... (the file is {size // 1024} KB; only the first {len(shown_part) // 1024} KB are shown. "
+        "Use search_file to find something further on)")
+
+
+def text_files(path, left):
+    """The readable text files at path (a file, or the files in a directory and
+    the ones below it, as list_directory would show them), at most left[0]"""
+    if not os.path.isdir(path):
+        yield path
+        return
+    stack = [(path, 1)]
+    while stack and left[0] > 0:
+        directory, level = stack.pop()
+        try:
+            entries = visible_entries(directory)
+        except OSError:
+            continue
+        for name, is_dir in reversed(entries):
+            full = os.path.join(directory, name.rstrip("/"))
+            if is_dir:
+                if level < TREE_DEPTH:
+                    stack.append((full, level + 1))
+            elif left[0] > 0:
+                left[0] -= 1
+                yield full
+
+
+def search_file(args):
+    """The lines of a file (or of the files in a directory) with text in them,
+    with a line around each, so a big file need not be read whole"""
+    path, asked = home_path(args.get("path"), listing=True)
+    words = " ".join(str(args.get("text") or "").split())
+    if not words:
+        raise ToolError("say what to search for")
+    needle = words.lower()
+    out, used, found = [], 0, 0
+    many = os.path.isdir(path)
+    for file in text_files(path, [500]):
+        if check_path(file):
+            continue
+        try:
+            with open(file, "rb") as f:
+                data = f.read(SEARCH_FILE_LIMIT)
+        except FileNotFoundError:
+            if not many:
+                raise not_found(asked)
+            continue
+        except OSError:
+            continue
+        if b"\0" in data[:8192]:
+            if not many:
+                raise ToolError(f"{shown(asked)} is not a text file")
+            continue
+        lines = data.decode("utf-8", "replace").splitlines()
+        hits = [i for i, line in enumerate(lines) if needle in line.lower()]
+        if not hits:
+            continue
+        # The file as asked for (e.g. ~/.config/hypr/...), not where a link leads
+        name = shown(os.path.join(asked, os.path.relpath(file, path)) if many else asked)
+        block, last = [f"{name}:"], -2
+        for i in hits:
+            for j in range(max(0, i - 1), min(len(lines), i + 2)):
+                if j > last:
+                    if j > last + 1 and last >= 0:
+                        block.append("  ...")
+                    block.append(f"  {j + 1}: {lines[j][:300]}")
+                    last = j
+        found += len(hits)
+        text = "\n".join(block)
+        if used + len(text) > SEARCH_LIMIT:
+            out.append(f"... (more found; search for something more exact, or in one file)")
+            break
+        out.append(text)
+        used += len(text)
+    if not found:
+        return f"\"{words}\" is not in {shown(asked)}"
+    return "\n".join(out)
 
 
 def look_at_image(args):
@@ -654,7 +737,7 @@ def due_reminders(args):
     return locked_change(reminder_file(), change)
 
 
-TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
+TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, search_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
                                  set_reminder, list_reminders, cancel_reminder, due_reminders)}
 
 
