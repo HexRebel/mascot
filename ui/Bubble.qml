@@ -425,7 +425,8 @@ PanelWindow {
                 // Models like to say they noted something without doing it
                 const todo = env.AICHAT_USE_TOOLS.includes("add_todo") ? "\n\nYou keep the user's todo list with the "
                     + "tools list_todos, add_todo and remove_todo. When the user wants something on it, off it or looked "
-                    + "up, call the tool; never say you added or removed something without calling it." : "";
+                    + "up, call the tool; never say you added or removed something without calling it. The user "
+                    + "never sees what a tool returns: when they want to see the list, write it out." : "";
                 done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${todo}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
@@ -806,9 +807,22 @@ PanelWindow {
                     // What Mascot's tools really changed (they say so on stderr),
                     // whatever the reply claims
                     if (c.replying) {
+                        let todos = null;
                         for (const line of jobErrors.text.split("\n")) {
                             if (line.startsWith("mascot-tools: "))
                                 c.entries.append({ kind: "system", body: "✓ " + line.slice(14) });
+                            else if (line.startsWith("mascot-todos: "))
+                                todos = line.slice(14);
+                        }
+                        // The todo list the model looked up, unless its reply has it
+                        if (todos !== null) {
+                            const reply = c.streaming >= 0 && c.streaming < c.entries.count
+                                ? c.entries.get(c.streaming).body.toLowerCase() : "";
+                            try {
+                                const items = JSON.parse(todos);
+                                if (!items.every(t => reply.includes(t.toLowerCase())))
+                                    c.entries.append({ kind: "system", body: items.map((t, i) => `${i + 1}. ${t}`).join("\n") });
+                            } catch (e) {}
                         }
                     }
                     c.job = null;

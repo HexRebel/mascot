@@ -178,7 +178,13 @@ def todo_listing(lines):
 
 
 def list_todos(args):
-    return todo_change(todo_listing)
+    def listing(lines):
+        # The user never sees a tool's output, and models like to say "here is
+        # your list" without it: the bubble shows these if the reply has not
+        print("mascot-todos: " + json.dumps([text for _, text in todo_items(lines)]),
+              file=sys.stderr)
+        return todo_listing(lines)
+    return todo_change(listing)
 
 
 def add_todo(args):
