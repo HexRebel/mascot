@@ -408,7 +408,7 @@ writes, deletes or runs anything else:
 |---|---|---|
 | `time` | – | The date, weekday and time, put in front of every message (unseen), so it works with any model |
 | `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
-| `files` | `list_directory`, `read_file`, `search_file`, `look_at_image` | List directories (or draw a tree of one, up to 4 levels), read text files (the first 12 KB), find lines in a file or a directory of files, and look at pictures (PNG, JPEG, WebP) in your home directory |
+| `files` | `list_directory`, `read_file`, `search_file`, `look_at_image` | List directories (or draw a tree of one, up to 4 levels), read text files (as much as fits the model, see below), find lines in a file or a directory of files, and look at pictures (PNG, JPEG, WebP) in your home directory |
 | `todo` | `list_todos`, `add_todo`, `remove_todo`, `edit_todo` | Keep your todo list: ask the mascot to remember something, to reword an item, or tell it something is done |
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 
@@ -449,10 +449,12 @@ The file, todo and reminder tools keep to what is yours to share:
   history, `environment.d` and uwsm's env files (`SECRET_DIRS` and `SECRET_NAMES` in
   `tools/mascot-tools`). That list is a safety net, not a guarantee: it cannot know every app, so
   allow only the dotfiles you would show anyone.
-- Big files: `read_file` hands the model at most 12 KB, so the conversation fits a 16k-token
-  context (more silently pushes your question out of it in Ollama); for a bigger file the mascot is
-  told to use `search_file`, which finds the lines with what you ask about (e.g. *which font does
-  kitty use?*) and a line around each.
+- Big files: `read_file` hands the model about a quarter of its context, so the conversation still
+  fits (more silently pushes your question out of it in Ollama): it asks Ollama for the model's
+  `num_ctx` (or Ollama's default of 4096 tokens without one), e.g. 12 KB for 16k tokens and 96 KB for
+  128k, and 12 KB if Ollama cannot say. A bigger model gets more without any setting. For a bigger
+  file the mascot is told to use `search_file`, which finds the lines with what you ask about (e.g.
+  *which font does kitty use?*) and a line around each.
 - Pictures: a tool can only hand the model text, so `look_at_image` shows the picture to the same
   local model itself, through Ollama's API (`OLLAMA_HOST`, else `127.0.0.1:11434`), and gives the
   model its description. The model must be able to see (Ollama lists `vision` under

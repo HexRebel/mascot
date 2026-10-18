@@ -39,10 +39,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# Bytes of a file handed to the model: with a 16k context, more pushes the
-# start of the conversation (the question) out, which Ollama does silently
-READ_LIMIT = 12 * 1024
-SEARCH_LIMIT = 8 * 1024  # bytes of search results
+# Bytes of a file handed to the model: about a quarter of the local model's
+# context (see read_limit()), 12 KB for 16k tokens; more pushes the start of
+# the conversation (the question) out, which Ollama does silently
+READ_LIMIT = 12 * 1024  # if Ollama cannot say
+OLLAMA_DEFAULT_CONTEXT = 4096  # tokens, for a model without num_ctx
 SEARCH_FILE_LIMIT = 1024 * 1024  # bytes of one file searched
 LIST_LIMIT = 200  # entries of a directory (or a tree)
 TREE_DEPTH = 4  # levels of a tree
@@ -150,6 +151,38 @@ def on_the_way(path):
     allowed = allowed_dotfiles()
     return any(a != candidate and under(a, candidate)
                for candidate in (os.path.normpath(path), os.path.realpath(path)) for a in allowed)
+
+
+def ollama_url(endpoint):
+    host = os.environ.get("OLLAMA_HOST", "") or "127.0.0.1:11434"
+    return (host if "://" in host else "http://" + host).rstrip("/") + endpoint
+
+
+def context_tokens():
+    """The local model's context in tokens, as Ollama runs it: its num_ctx,
+    or Ollama's default, at most what the model can; None if unknown"""
+    model = os.environ.get("MASCOT_VISION_MODEL", "")
+    if not model:
+        return None
+    request = urllib.request.Request(ollama_url("/api/show"), data=json.dumps({"model": model}).encode(),
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            show = json.loads(response.read())
+    except (OSError, ValueError):
+        return None
+    m = re.search(r"^num_ctx\s+(\d+)", str(show.get("parameters") or ""), re.M)
+    tokens = int(m.group(1)) if m else OLLAMA_DEFAULT_CONTEXT
+    most = [v for k, v in (show.get("model_info") or {}).items()
+            if k.endswith(".context_length") and "original" not in k and isinstance(v, int)]
+    return min([tokens] + most)
+
+
+def read_limit():
+    """Bytes of a file to hand the model: a quarter of its context (at about 3
+    bytes a token), so the prompt, the conversation and the answer still fit"""
+    tokens = context_tokens()
+    return max(2048, tokens * 3 // 4) if tokens else READ_LIMIT
 
 
 def home_path(path, listing=False):
@@ -271,19 +304,20 @@ def read_file(args):
     path, asked = home_path(args.get("path"))
     if os.path.isdir(path):
         raise ToolError(f"{shown(asked)} is a directory, use list_directory")
+    limit = read_limit()
     try:
         with open(path, "rb") as file:
-            data = file.read(READ_LIMIT + 1)
+            data = file.read(limit + 1)
     except FileNotFoundError:
         raise not_found(asked)
     except OSError as e:
         raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if b"\0" in data[:8192]:
         raise ToolError(f"{shown(asked)} is not a text file")
-    if len(data) <= READ_LIMIT:
+    if len(data) <= limit:
         return data.decode("utf-8", "replace")
     size = os.path.getsize(path)
-    shown_part = data[:READ_LIMIT]
+    shown_part = data[:limit]
     shown_part = shown_part[:shown_part.rfind(b"\n") + 1] or shown_part  # whole lines
     return shown_part.decode("utf-8", "replace") + (
         f"\n... (the file is {size // 1024} KB; only the first {len(shown_part) // 1024} KB are shown. "
@@ -322,6 +356,7 @@ def search_file(args):
         raise ToolError("say what to search for")
     needle = words.lower()
     out, used, found = [], 0, 0
+    limit = read_limit() * 2 // 3  # what is found, 8 KB for 16k tokens
     many = os.path.isdir(path)
     for file in text_files(path, [500]):
         if check_path(file):
@@ -355,7 +390,7 @@ def search_file(args):
                     last = j
         found += len(hits)
         text = "\n".join(block)
-        if used + len(text) > SEARCH_LIMIT:
+        if used + len(text) > limit:
             out.append(f"... (more found; search for something more exact, or in one file)")
             break
         out.append(text)
@@ -390,8 +425,7 @@ def look_at_image(args):
     question = " ".join(str(args.get("question") or "").split())
     prompt = "Describe this image in a few sentences: what is in it, the colours and the mood." \
         + (f" Then answer this about it: {question}" if question else "")
-    host = os.environ.get("OLLAMA_HOST", "") or "127.0.0.1:11434"
-    url = (host if "://" in host else "http://" + host).rstrip("/") + "/api/generate"
+    url = ollama_url("/api/generate")
     body = json.dumps({"model": model, "prompt": prompt, "images": [base64.b64encode(data).decode()],
                        "stream": False, "think": False}).encode()
     request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
