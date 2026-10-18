@@ -408,7 +408,7 @@ writes, deletes or runs anything else:
 |---|---|---|
 | `time` | – | The date, weekday and time, put in front of every message (unseen), so it works with any model |
 | `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
-| `files` | `list_directory`, `read_file`, `look_at_image` | List directories, read text files (the first 64 KB) and look at pictures (PNG, JPEG, WebP) in your home directory |
+| `files` | `list_directory`, `read_file`, `look_at_image` | List directories (or draw a tree of one, up to 4 levels), read text files (the first 64 KB) and look at pictures (PNG, JPEG, WebP) in your home directory |
 | `todo` | `list_todos`, `add_todo`, `remove_todo`, `edit_todo` | Keep your todo list: ask the mascot to remember something, to reword an item, or tell it something is done |
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 
@@ -421,7 +421,9 @@ The todo list is one list for all mascots, `todo.md` in Mascot's data directory
 (`~/.local/share/mascot/todo.md`), with one `- [ ] item` line per item; you can edit it yourself,
 and other lines in it are kept. `.todo`, `.todo add <item>`, `.todo done <number or text>` and
 `.todo edit <number> <text>` change it straight away, without the model. When the mascot changes it, the bubble shows what really
-changed (*✓ todo: added …*), so a reply that only claims it did is easy to spot.
+changed (*✓ todo: added …*), so a reply that only claims it did is easy to spot. Models also like to say *here is your list* without it: when the
+mascot looked the todo list up, or drew a tree of a directory, and the reply leaves it out, the bubble
+shows it under the reply.
 
 Reminders are kept in `reminders.md` in the data directory, one `- 2026-10-19 12:00 text` line each
 (your local time). When one is due, a mascot says it (*⏰ text*): in the open bubble, or else the

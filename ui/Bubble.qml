@@ -60,8 +60,9 @@ PanelWindow {
         QtObject {
             // One entry per message: kind is "you" (typed by the user), "reply"
             // (the model's answer), "remark" (what the mascot said on its own),
-            // "reminder" (one that is due) or "system" (the bubble's own notes
-            // and dot command output), each drawn in its own pywal colour
+            // "reminder" (one that is due), "listing" (a tree a tool drew, in a
+            // fixed-width font) or "system" (the bubble's own notes and dot
+            // command output), each drawn in its own pywal colour
             property ListModel entries: ListModel {}
             property int streaming: -1 // entry the running command writes into
             property var job: null // the running command, see run()
@@ -958,19 +959,30 @@ PanelWindow {
                     // whatever the reply claims
                     if (c.replying) {
                         let todos = null, changes = false;
+                        const shows = [];
                         for (const line of jobErrors.text.split("\n")) {
                             if (line.startsWith("mascot-tools: ")) {
                                 c.entries.append({ kind: "system", body: "✓ " + line.slice(14) });
                                 changes = true;
                             } else if (line.startsWith("mascot-todos: ")) {
                                 todos = line.slice(14);
+                            } else if (line.startsWith("mascot-show: ")) {
+                                shows.push(line.slice(13));
                             }
+                        }
+                        const reply = c.streaming >= 0 && c.streaming < c.entries.count
+                            ? c.entries.get(c.streaming).body.toLowerCase() : "";
+                        // What a tool drew for the user (a tree), unless the reply has it
+                        for (const show of shows) {
+                            try {
+                                const s = JSON.parse(show);
+                                if (!s.names.every(n => reply.includes(n.toLowerCase().replace(/\/$/, ""))))
+                                    c.entries.append({ kind: "listing", body: s.text });
+                            } catch (e) {}
                         }
                         // The todo list the model looked up, unless its reply has it,
                         // or it was only looked up to change it (the ✓ says what changed)
                         if (todos !== null && !changes) {
-                            const reply = c.streaming >= 0 && c.streaming < c.entries.count
-                                ? c.entries.get(c.streaming).body.toLowerCase() : "";
                             try {
                                 const items = JSON.parse(todos);
                                 if (!items.every(t => reply.includes(t.toLowerCase())))
@@ -1109,6 +1121,7 @@ PanelWindow {
                         color: thinking ? theme.muted : kind === "you" ? theme.accent : kind === "reply" ? theme.foreground
                             : kind === "remark" || kind === "reminder" ? theme.remark : theme.muted
                         font.pixelSize: 13
+                        font.family: kind === "listing" ? "monospace" : Qt.application.font.family
                     }
                 }
             }

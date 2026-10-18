@@ -38,7 +38,8 @@ import urllib.parse
 import urllib.request
 
 READ_LIMIT = 64 * 1024  # bytes of a file handed to the model
-LIST_LIMIT = 200  # entries of a directory
+LIST_LIMIT = 200  # entries of a directory (or a tree)
+TREE_DEPTH = 4  # levels of a tree
 TODO_LIMIT = 300  # characters of a todo item or a reminder
 IMAGE_LIMIT = 30 * 1024 * 1024  # bytes of an image handed to Ollama
 
@@ -85,26 +86,69 @@ def shown(path):
     return "~" if rel == "." else "~/" + rel
 
 
-def list_directory(args):
-    path = home_path(args.get("path"))
-    try:
-        entries = sorted(os.scandir(path), key=lambda e: e.name.lower())
-    except OSError as e:
-        raise ToolError(f"cannot list {shown(path)}: {e.strerror}")
-    names = []
-    for entry in entries:
+def visible_entries(path):
+    """(name, is a directory to go into) of what is in path, hidden ones left
+    out, sorted; links to directories are shown but not gone into"""
+    entries = []
+    for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
         if entry.name.startswith("."):
             continue
         try:
-            names.append(entry.name + ("/" if entry.is_dir() else ""))
+            is_dir = entry.is_dir()
+            entries.append((entry.name + ("/" if is_dir else ""), is_dir and not entry.is_symlink()))
         except OSError:
-            names.append(entry.name)
-    lines = [f"{shown(path)}:"] + names[:LIST_LIMIT]
-    if len(names) > LIST_LIMIT:
-        lines.append(f"... and {len(names) - LIST_LIMIT} more")
-    if not names:
+            entries.append((entry.name, False))
+    return entries
+
+
+def list_directory(args):
+    path = home_path(args.get("path"))
+    try:
+        depth = max(1, min(int(args.get("depth") or 1), TREE_DEPTH))
+    except (TypeError, ValueError):
+        depth = 1
+    try:
+        entries = visible_entries(path)
+    except OSError as e:
+        raise ToolError(f"cannot list {shown(path)}: {e.strerror}")
+    if depth == 1:
+        names = [name for name, _ in entries]
+        lines = [f"{shown(path)}:"] + names[:LIST_LIMIT]
+        if len(names) > LIST_LIMIT:
+            lines.append(f"... and {len(names) - LIST_LIMIT} more")
+        if not names:
+            lines.append("(empty)")
+        return "\n".join(lines)
+
+    # A tree, as the tree command draws it, at most LIST_LIMIT entries in all
+    lines = [shown(path) + "/"]
+    left = [LIST_LIMIT]
+
+    def walk(directory, entries, prefix, level):
+        for n, (name, is_dir) in enumerate(entries):
+            if left[0] <= 0:
+                if left[0] == 0:  # said once, not again on each level
+                    lines.append(f"... (only the first {LIST_LIMIT} are shown)")
+                    left[0] = -1
+                return
+            last = n == len(entries) - 1
+            lines.append(prefix + ("└── " if last else "├── ") + name)
+            left[0] -= 1
+            if is_dir and level < depth:
+                inner = os.path.join(directory, name.rstrip("/"))
+                try:
+                    walk(inner, visible_entries(inner), prefix + ("    " if last else "│   "), level + 1)
+                except OSError:
+                    pass
+    walk(path, entries, "", 1)
+    if not entries:
         lines.append("(empty)")
-    return "\n".join(lines)
+    tree = "\n".join(lines)
+    # Models like to say "here is the tree" without it: the bubble shows it if
+    # the reply has not (the names are what it looks for)
+    print("mascot-show: " + json.dumps({"text": tree, "names": [line.split("── ", 1)[1] for line in lines
+                                                              if "── " in line]}), file=sys.stderr)
+    return tree
 
 
 def read_file(args):
