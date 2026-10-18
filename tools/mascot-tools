@@ -223,16 +223,35 @@ def find_todo(lines, which):
     return found[0]
 
 
+def find_todos(lines, which):
+    """The items which names, by the numbers they have now: one item (see
+    find_todo), or several, e.g. "1, 4", "1 og 4", "milk; bread" """
+    try:
+        return [find_todo(lines, which)]
+    except ToolError as one:
+        parts = [part for part in re.split(r"\s*(?:,|;|\band\b|\bog\b|\s(?=\d+(?:\s|,|$)))\s*", which) if part]
+        if len(parts) < 2:
+            raise one
+        found = []
+        for part in parts:
+            item = find_todo(lines, part)
+            if item not in found:
+                found.append(item)
+        return found
+
+
 def remove_todo(args):
     which = " ".join(str(args.get("item") or "").split())
     if not which:
         raise ToolError("say which item to remove")
 
     def change(lines):
-        index, text = find_todo(lines, which)
-        del lines[index]
-        changed(f"todo: removed {text}")
-        return f"removed: {text}\n\n" + todo_listing(lines)
+        found = find_todos(lines, which)
+        for index, text in sorted(found, reverse=True):
+            del lines[index]
+        for _, text in found:
+            changed(f"todo: removed {text}")
+        return "removed: " + "; ".join(text for _, text in found) + "\n\n" + todo_listing(lines)
     return todo_change(change)
 
 

@@ -407,7 +407,7 @@ PanelWindow {
         ".tools                 list what the mascot can look up",
         ".todo                  show the todo list",
         ".todo add <item>       add to it",
-        ".todo done <n|text>    remove an item (by number or text)",
+        ".todo done <n|text>    remove items (by number or text, e.g. 1, 4)",
         ".todo edit <n> <text>  change what an item says",
         ".remind <when> <text>  set a reminder, e.g. .remind 10m tea",
         ".reminders             list them",
@@ -542,7 +542,8 @@ PanelWindow {
                 const todo = env.AICHAT_USE_TOOLS.includes("add_todo") ? "\n\nYou keep the user's todo list with the "
                     + "tools list_todos, add_todo, remove_todo and edit_todo. When the user wants something on it, off it, "
                     + "changed or looked up, call the tool; never say you added, removed or changed something without "
-                    + "calling it. The user "
+                    + "calling it. To remove several, name them all in one remove_todo call (the numbers change after "
+                    + "a removal). The user "
                     + "never sees what a tool returns: when they want to see the list, write it out." : "";
                 const remind = env.AICHAT_USE_TOOLS.includes("set_reminder") ? "\n\nWhen the user wants a reminder or "
                     + "a timer, call set_reminder (list_reminders and cancel_reminder for the ones set); the bubble "

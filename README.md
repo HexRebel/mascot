@@ -352,7 +352,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.tools` | List what the mascot can look up (see *Tools*) |
 | `.todo` | Show the todo list (see *Tools*) |
 | `.todo add <item>` | Add an item to it |
-| `.todo done <number or text>` | Remove an item from it |
+| `.todo done <number or text>` | Remove an item from it, or several, e.g. `.todo done 1, 4` |
 | `.todo edit <number> <text>` | Change what an item says |
 | `.remind <when> <text>` | Set a reminder or timer, e.g. `.remind 10m tea` or `.remind tomorrow 12:00 water the plants` (see *Tools*) |
 | `.reminders` | List the reminders |

@@ -70,13 +70,13 @@
   },
   {
     "name": "remove_todo",
-    "description": "Remove an item from the user's todo list, when it is done or the user asks you to; it is only removed if you call this.",
+    "description": "Remove one or more items from the user's todo list, when they are done or the user asks you to; they are only removed if you call this. To remove several, name them all in ONE call: the numbers change after a removal.",
     "parameters": {
       "type": "object",
       "properties": {
         "item": {
           "type": "string",
-          "description": "The item's number from list_todos, or (part of) its text."
+          "description": "The item's number from list_todos, or (part of) its text; several separated by commas, e.g. \"1, 4\"."
         }
       },
       "required": [
