@@ -1646,6 +1646,13 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
         protocol_server_announce_new_click(mascot, env_pointer->x,
                                            env_pointer->y);
       }
+      // Middle click: this mascot falls asleep or wakes up (see mascot sleep)
+      if (!hotspot_press_result &&
+          pressed_button == mascot_hotspot_button_middle) {
+        INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id,
+             mascot->asleep ? "Woken up" : "Put to sleep");
+        mascot_sleep(mascot, !mascot->asleep);
+      }
     } else {
       environment_on_pointer_button(data, pointer, serial, time, button, state);
     }

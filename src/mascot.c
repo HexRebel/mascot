@@ -642,6 +642,12 @@ enum mascot_tick_result mascot_behavior_next(struct mascot *mascot,
     return mascot_tick_ok;
   }
 
+  if (mascot->sleep_behavior &&
+      mascot_get_border_type(mascot) == environment_border_type_floor) {
+    mascot_set_behavior(mascot, mascot->sleep_behavior);
+    return mascot_tick_ok;
+  }
+
   if (mascot->current_behavior)
     INFO("<Mascot:%s:%u> Completed behavior \"%s\"", mascot->prototype->name,
          mascot->id, mascot->current_behavior->name);
@@ -910,7 +916,8 @@ static void mascot_chat_switch(struct mascot *mascot,
 bool mascot_chat_hold(struct mascot *mascot, bool hold) {
   pthread_mutex_lock(&mascot->tick_lock);
   if (!hold) {
-    // The current sit runs to its end, then behaviors are picked as usual
+    // The current sit runs to its end, then behaviors are picked as usual (or,
+    // asleep, it lies down again)
     mascot->chat_behavior = NULL;
     pthread_mutex_unlock(&mascot->tick_lock);
     return true;
@@ -947,6 +954,43 @@ bool mascot_chat_talk(struct mascot *mascot, bool talking) {
     mascot_chat_switch(mascot, behavior);
   pthread_mutex_unlock(&mascot->tick_lock);
   return behavior != NULL;
+}
+
+bool mascot_sleep(struct mascot *mascot, bool asleep) {
+  static const char *const names[] = {"Asleep", "Sleep", "LieDown", "SitDown"};
+
+  pthread_mutex_lock(&mascot->tick_lock);
+  if (mascot->asleep == asleep) {
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return false;
+  }
+  mascot->asleep = asleep;
+
+  if (!asleep) {
+    const struct mascot_behavior *was = mascot->sleep_behavior;
+    mascot->sleep_behavior = NULL;
+    // Wake up now rather than when the nap ends; a held mascot keeps sitting
+    if (was && mascot->current_behavior == was && !mascot->chat_behavior &&
+        !mascot->dragged)
+      mascot_behavior_next(mascot, 0);
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return true;
+  }
+
+  for (size_t i = 0; i < sizeof(names) / sizeof(*names) && !mascot->sleep_behavior; i++)
+    mascot->sleep_behavior =
+        mascot_prototype_behavior_by_name(mascot->prototype, names[i]);
+  if (!mascot->sleep_behavior)
+    WARN("<Mascot:%s:%u> No Asleep, Sleep, LieDown or SitDown behavior, "
+         "cannot sleep",
+         mascot->prototype->name, mascot->id);
+  // As for chat: right away on the floor, otherwise once it lands
+  else if (!mascot->chat_behavior && !mascot->dragged &&
+           mascot_get_border_type(mascot) == environment_border_type_floor &&
+           mascot->current_behavior != mascot->sleep_behavior)
+    mascot_set_behavior(mascot, mascot->sleep_behavior);
+  pthread_mutex_unlock(&mascot->tick_lock);
+  return true;
 }
 
 // Set the environment of the mascot
@@ -1157,6 +1201,10 @@ static void mascot_init_(struct mascot *mascot,
 
   mascot->hotspot_active = false;
   mascot->hotspot_behavior = NULL;
+
+  // Its sleep behavior belongs to the old prototype, so it wakes up
+  mascot->asleep = false;
+  mascot->sleep_behavior = NULL;
 
   free(mascot->action_data);
   mascot->action_data = NULL;

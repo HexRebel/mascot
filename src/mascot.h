@@ -445,6 +445,10 @@ struct mascot {
     // Repeated while the chat bubble is open, see mascot_chat_hold()
     const struct mascot_behavior* chat_behavior;
 
+    // Repeated while asleep (mascot sleep), see mascot_sleep()
+    bool asleep;
+    const struct mascot_behavior* sleep_behavior;
+
     environment_t* environment; // opaque pointer to the environment
     environment_subsurface_t* subsurface; // opaque pointer to the mascot's surface
 
@@ -527,6 +531,11 @@ bool mascot_chat_hold(struct mascot* mascot, bool hold);
 // prototype has one (otherwise it keeps sitting); talking=false sits it down
 // again. Returns false if the mascot is not held
 bool mascot_chat_talk(struct mascot* mascot, bool talking);
+// Puts the mascot to sleep: repeats the first of the behaviors "Asleep",
+// "Sleep", "LieDown" and "SitDown" the prototype has, on the floor and not
+// while held for chat. asleep=false wakes it up right away. Returns false if
+// nothing changed
+bool mascot_sleep(struct mascot* mascot, bool asleep);
 
 // Callback for position change
 bool mascot_moved(struct mascot* mascot, int32_t x, int32_t y);

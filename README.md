@@ -235,6 +235,25 @@ You can replace mascot's behavior by using `mascot set-behavior {behavior}` comm
 
 You can get all available behaviors by using `mascot prototypes info {prototype_name}` command, where `{prototype_name}` is the name of the mascot prototype you want to get information about.
 
+## Putting mascots to sleep
+
+`mascot sleep` puts every mascot to sleep until `mascot wake`: each one lies down as soon as it is on
+the floor, and mascots summoned meanwhile fall asleep too. A mascot sleeps with the first of these
+behaviors its prototype has: `Asleep`, `Sleep`, `LieDown`, `SitDown`. Shimeji-ee's `Sleep` often
+ends by getting up again; to choose another pose, add a behavior `Asleep` with `frequency` 0 that
+points to it. A sleeping mascot does not disturb: it makes no remarks (`CHAT_REMARKS`), and
+reminders wait until one wakes up. A middle click on a mascot puts just that one to sleep, or wakes
+it up. Neither command starts Mascot, so both are safe to run when it is not running, e.g. from
+hypridle:
+
+```
+listener {
+    timeout = 600
+    on-timeout = mascot sleep
+    on-resume = mascot wake
+}
+```
+
 # Exporting prototypes
 
 You can export mascot prototype by using `mascot prototypes export` command. It will produce .wlshm file that you can then share with others.

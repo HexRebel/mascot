@@ -56,6 +56,10 @@ static char listen_path[PATH_MAX] = {0};
 
 // Mascot kept sitting for the open bubble, by id (pointers may be freed)
 static int64_t held_mascot_id = -1;
+// Set by "sleep", cleared by "wake"; mascots that appear meanwhile fall asleep too
+static bool asleep = false;
+// The newest mascot chat_sleep_all() has seen (ids are not reused)
+static int64_t newest_mascot_id = -1;
 
 size_t chat_socket_path(const char* ipc_socket_path, char* pathbuf, size_t pathbuf_len)
 {
@@ -156,6 +160,7 @@ static void chat_swap(int fd, const char* line);
 static void chat_send_to(int fd, const char* line, size_t len);
 static void chat_open(const char* line);
 static bool chat_remark(const char* line);
+static void chat_sleep_all(bool sleep, bool only_new);
 
 // Handles one line from a client: {"event":"talking","mascot":N,"active":true|false},
 // {"event":"close","mascot":N}, {"event":"list"},
@@ -163,10 +168,17 @@ static bool chat_remark(const char* line);
 // `mascot chat`, passed on to the other clients, i.e. the bubble) or
 // {"event":"open","mascot":N} (the bubble's answer to it) or {"event":"remark"}
 // (a random mascot says something now, as CHAT_REMARKS does; with "mascot":N
-// that one, if it is still there, e.g. for a reminder). Anything else is
-// ignored, e.g. the "hiding"/"hidden" events older bubbles still send
+// that one, if it is still there, e.g. for a reminder), {"event":"sleep"} and
+// {"event":"wake"} (from `mascot sleep`/`mascot wake`, e.g. hypridle). Anything
+// else is ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
+    if (strstr(line, "\"event\":\"sleep\"") || strstr(line, "\"event\":\"wake\"")) {
+        asleep = strstr(line, "\"event\":\"sleep\"") != NULL;
+        INFO(asleep ? "Mascots fall asleep" : "Mascots wake up");
+        chat_sleep_all(asleep, false);
+        return;
+    }
     if (strstr(line, "\"event\":\"remark\"")) {
         chat_remark(line);
         return;
@@ -587,7 +599,7 @@ static void chat_open(const char* line)
     chat_announce_tap(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i);
 }
 
-// A random mascot on any screen
+// A random mascot on any screen that is awake
 static struct mascot* chat_random_mascot(void)
 {
     struct protocol_server_state* state = protocol_get_server_state();
@@ -606,7 +618,7 @@ static struct mascot* chat_random_mascot(void)
         for (size_t j = 0; j < list_size(mascots); j++) {
             struct mascot* mascot = list_get(mascots, j);
             // Reservoir sampling: each of the n mascots is kept with chance 1/n
-            if (mascot && lrand48() % ++seen == 0) picked = mascot;
+            if (mascot && !mascot->asleep && lrand48() % ++seen == 0) picked = mascot;
         }
         pthread_mutex_unlock(mutex);
     }
@@ -617,6 +629,7 @@ static struct mascot* chat_random_mascot(void)
 // Lets a mascot say something, the one line names ("mascot":N) or else a random
 // one: the bubble opens without taking the keyboard (see "remark" in
 // docs/protocol.md). Not while the bubble is open, nor at a mascot off the floor
+// or asleep
 static bool chat_remark(const char* line)
 {
     if (!client_count || held_mascot_id != -1) return false;
@@ -627,6 +640,9 @@ static bool chat_remark(const char* line)
         long id = strtol(field + strlen("\"mascot\":"), &end, 10);
         if (end != field + strlen("\"mascot\":") && id >= 0) mascot = chat_find_mascot(id);
     }
+    // Asleep means do not disturb: another one says it, or the bubble asks again
+    // for a reminder until one wakes up
+    if (mascot && mascot->asleep) mascot = NULL;
     if (!mascot) mascot = chat_random_mascot();
     if (!mascot) return false;
     // The bubble stays where it opens: not at a mascot that is falling (e.g.
@@ -637,8 +653,46 @@ static bool chat_remark(const char* line)
     return chat_announce(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i, true);
 }
 
+// Puts every mascot (only_new: those that appeared since the last call) to sleep
+// or wakes it up. Not the others again, so one woken with a middle click stays awake
+static void chat_sleep_all(bool sleep, bool only_new)
+{
+    struct protocol_server_state* state = protocol_get_server_state();
+    uint32_t ids[256];
+    size_t count = 0;
+    int64_t newest = newest_mascot_id;
+
+    // Only the ids: mascot_sleep() takes the mascot's tick lock, not under these
+    pthread_mutex_lock(&state->environment_mutex);
+    for (uint32_t i = 0, c = list_count(state->environments); i < list_size(state->environments) && c; i++) {
+        environment_t* environment = list_get(state->environments, i);
+        if (!environment) continue;
+        c--;
+        pthread_mutex_t* mutex = NULL;
+        struct list* mascots = environment_mascot_list(environment, &mutex);
+        if (!mascots) continue;
+        pthread_mutex_lock(mutex);
+        for (size_t j = 0; j < list_size(mascots) && count < sizeof(ids) / sizeof(*ids); j++) {
+            struct mascot* mascot = list_get(mascots, j);
+            if (!mascot) continue;
+            if (mascot->id > newest_mascot_id) newest_mascot_id = mascot->id;
+            if ((!only_new || mascot->id > newest) && mascot->asleep != sleep) ids[count++] = mascot->id;
+        }
+        pthread_mutex_unlock(mutex);
+    }
+    pthread_mutex_unlock(&state->environment_mutex);
+
+    for (size_t i = 0; i < count; i++) {
+        struct mascot* mascot = chat_find_mascot(ids[i]);
+        if (mascot) mascot_sleep(mascot, sleep);
+    }
+}
+
 void chat_tick(void)
 {
+    // New (summoned, swapped) mascots fall asleep too
+    if (asleep) chat_sleep_all(true, true);
+
     static time_t next_remark = 0;
     int32_t minutes = config_get_chat_remarks();
     time_t now = time(NULL);

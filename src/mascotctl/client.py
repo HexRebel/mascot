@@ -1,6 +1,7 @@
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 from __future__ import annotations
 import socket
+import errno
 import os
 import sys
 import shutil
@@ -1485,6 +1486,9 @@ if __name__ == "__main__":
     chat_parser = category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
     chat_parser.add_argument("--remark", action="store_true", help="Let a random mascot say something now instead (as CHAT_REMARKS does)")
 
+    category.add_parser("sleep", help="Put the mascots to sleep until 'mascot wake' (e.g. from hypridle)")
+    category.add_parser("wake", help="Wake the mascots up again")
+
 # Foreground
     foreground_parser = category.add_parser("foreground", help="Run overlay daemon in foreground")
 
@@ -1544,13 +1548,20 @@ if __name__ == "__main__":
 
     # Goes straight to the chat socket next to the IPC socket (foo.sock ->
     # foo-chat.sock, see src/chat.c); never starts the overlay
-    if arguments.category == "chat":
+    if arguments.category in ("chat", "sleep", "wake"):
         chat_path = socket_path[:-len(".sock")] + "-chat.sock" if socket_path.endswith(".sock") else socket_path + "-chat"
+        if arguments.category != "chat":
+            event = arguments.category
+        else:
+            event = "remark" if arguments.remark else "toggle"
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:
                 chat.connect(chat_path)
-                chat.sendall(b'{"event":"remark"}\n' if arguments.remark else b'{"event":"toggle"}\n')
+                chat.sendall(b'{"event":"%s"}\n' % event.encode())
         except OSError as e:
+            # hypridle runs these whether Mascot is running or not
+            if arguments.category != "chat" and e.errno in (errno.ENOENT, errno.ECONNREFUSED):
+                exit(0)
             print(f"Cannot reach the chat bubble at {chat_path} ({e.strerror}); is mascotd running?", file=sys.stderr)
             exit(1)
         exit(0)
