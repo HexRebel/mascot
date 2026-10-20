@@ -1486,6 +1486,8 @@ if __name__ == "__main__":
     chat_parser = category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
     chat_parser.add_argument("--remark", action="store_true", help="Let a random mascot say something now instead (as CHAT_REMARKS does)")
 
+    category.add_parser("menu", help="Open the right-click menu at the mascot you last talked to (keyboard: arrows, Enter, Esc), or close it")
+
     sleep_parser = category.add_parser("sleep", help="Put the mascots to sleep until 'mascot wake' (e.g. from hypridle)")
     sleep_parser.add_argument("-m", "--minutes", type=float, help="Sleep this long instead; a plain 'mascot wake' does not end it")
     wake_parser = category.add_parser("wake", help="Wake the mascots up again")
@@ -1550,10 +1552,12 @@ if __name__ == "__main__":
 
     # Goes straight to the chat socket next to the IPC socket (foo.sock ->
     # foo-chat.sock, see src/chat.c); never starts the overlay
-    if arguments.category in ("chat", "sleep", "wake"):
+    if arguments.category in ("chat", "menu", "sleep", "wake"):
         chat_path = socket_path[:-len(".sock")] + "-chat.sock" if socket_path.endswith(".sock") else socket_path + "-chat"
         if arguments.category == "chat":
             message: dict[str, Any] = {"event": "remark" if arguments.remark else "toggle"}
+        elif arguments.category == "menu":
+            message = {"event": "menu_toggle"}
         else:
             message = {"event": arguments.category}
             if arguments.category == "sleep" and arguments.minutes and arguments.minutes > 0:
@@ -1567,7 +1571,7 @@ if __name__ == "__main__":
                 chat.sendall(json.dumps(message, separators=(",", ":")).encode() + b"\n")
         except OSError as e:
             # hypridle runs these whether Mascot is running or not
-            if arguments.category != "chat" and e.errno in (errno.ENOENT, errno.ECONNREFUSED):
+            if arguments.category in ("sleep", "wake") and e.errno in (errno.ENOENT, errno.ECONNREFUSED):
                 exit(0)
             print(f"Cannot reach the chat bubble at {chat_path} ({e.strerror}); is mascotd running?", file=sys.stderr)
             exit(1)

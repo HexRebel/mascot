@@ -167,6 +167,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Bubble.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
+	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Menu.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/prompt.md
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/functions.json
 	for tool in $(TOOLS); do rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done

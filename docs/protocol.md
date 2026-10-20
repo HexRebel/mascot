@@ -853,6 +853,18 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
 | tools | string or null | The `chat_tools` setting: the bubble's tools, comma-separated; null if it is empty |
 | dotfiles | string or null | The `chat_dotfiles` setting: the hidden files and directories the file tools may see, `;`-separated; null if it is empty |
 
+### menu
+
+Sent to every client when a mascot is right-clicked (and has no hotspot there); the bubble shows a
+menu at the pointer. The same fields as `tap`, but `"event":"menu"` and no `remark`; the mascot is
+held as for a tap, until the client sends `close` (when the menu closes, unless it opened the bubble
+at the mascot). Also:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| asleep | bool | Whether this mascot is asleep (`sleep`, a middle click) |
+| all_asleep | bool | Whether a `sleep` without `mascot` holds (e.g. from hypridle, or with `minutes`) |
+
 ### dragged
 
 `{"event":"dragged","mascot":N}`: the user started dragging mascot N. The mascot is no longer
@@ -883,8 +895,12 @@ held instead. `role` is the new mascot's role, as in `tap`.
 | `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
 | `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
 | `{"event":"toggle"}` | Sent by `mascot chat`. Passed on unchanged to every other client: the bubble closes, or asks to open with `open` |
+| `{"event":"menu_toggle"}` | Sent by `mascot menu`. Passed on unchanged to every other client: the bubble closes its menu, or asks for one with `menu` |
+| `{"event":"menu","mascot":N}` | Open the menu at mascot N, or at the first mascot if N is -1 or gone: answered with a `menu` event to every client, as if the mascot had been right-clicked with the pointer at the top of its sprite, and the mascot is held |
 | `{"event":"remark"}`, `{"event":"remark","mascot":N}` | A random mascot (or mascot N, if it is still there) says something now, as the `chat_remarks` setting does every N to 2N minutes: a `tap` event with `"remark":true`. Ignored while a mascot is held (the bubble is open), or when the mascot is not on the floor (falling or dragged). Never a mascot that is asleep (`sleep`): mascot N asleep, a random awake one says it. The bubble sends it with the mascot talked to last to show a due reminder |
 | `{"event":"open","mascot":N}` | Open the bubble at mascot N, or at the first mascot if N is -1 or gone: answered with a `tap` event to every client, as if the mascot had been tapped with the pointer at its anchor, and the mascot is held |
+| `{"event":"sleep","mascot":N}`, `{"event":"wake","mascot":N}` | Put only mascot N to sleep, or wake it up, as a middle click does (the menu) |
+| `{"event":"dismiss","mascot":N}` | Send mascot N away, with its dismiss animation if `allow_dismiss_animations` is on (the menu). If it was the last mascot, the overlay stops |
 | `{"event":"sleep"}`, `{"event":"wake"}` | Sent by `mascot sleep`/`mascot wake`. With `"minutes":N` (`mascot sleep --minutes`, the `sleep_mode` tool) they sleep N minutes; a `wake` without `"all":true` does not end that early. Every mascot (also those summoned later) repeats its `Asleep`, `Sleep`, `LieDown` or `SitDown` behaviour, whichever the prototype has first, on the floor and not while held; `wake` lets them pick behaviours as usual again. A mascot asleep never says anything: `remark` picks an awake one, or is ignored if none is |
 
 Other messages are ignored. Older clients sent `hiding` and `hidden` around unmapping their

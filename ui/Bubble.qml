@@ -171,6 +171,7 @@ PanelWindow {
         if (bubble.visible && bubble.event && bubble.event.mascot === e.mascot) {
             bubble.grabKeyboard();
             input.forceActiveFocus();
+            runPending();
             return;
         }
 
@@ -180,6 +181,25 @@ PanelWindow {
         bubble.grabKeyboard(); // before showing it, so it maps with the keyboard
         bubble.visible = true;
         input.forceActiveFocus();
+        runPending();
+    }
+
+    // The menu's "Todo list", "Reminders" and "Info": open the bubble at the mascot
+    // (the daemon answers with a tap, see openFor()) and run the dot command there
+    property string pendingCommand: ""
+
+    function openWith(mascot: int, command: string): void {
+        bubble.pendingCommand = command;
+        bubble.openRequested(mascot);
+    }
+
+    function runPending(): void {
+        const command = bubble.pendingCommand;
+        bubble.pendingCommand = "";
+        if (!command || bubble.busy)
+            return;
+        bubble.entries.append({ kind: "you", body: command });
+        dotCommand(command);
     }
 
     // CHAT_REMARKS: the mascot says something on its own. The bubble opens
@@ -394,6 +414,12 @@ PanelWindow {
     // mascot's conversation until changed
     function chosen(): QtObject {
         return bubble.current;
+    }
+
+    // A mascot's .model, .role and .session, for the menu (Menu.qml)
+    function choiceOf(mascot: int): var {
+        const c = bubble.conversations[mascot];
+        return { model: c?.model ?? "", role: c?.role ?? "", noRole: c?.noRole ?? false, session: c?.session ?? "" };
     }
 
     readonly property string helpText: [
@@ -935,6 +961,9 @@ PanelWindow {
     // away, then drop to OnDemand (see grabKeyboard())
     WlrLayershell.keyboardFocus: bubble.grabbing || bubble.keepKeyboard ? WlrKeyboardFocus.Exclusive
         : bubble.remarking ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
+
+    // For the right-click menu (Menu.qml)
+    readonly property QtObject colors: theme
 
     // Colours from pywal (read only), with fallbacks if the cache is missing
     QtObject {

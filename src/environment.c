@@ -1645,6 +1645,9 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
           pressed_button == mascot_hotspot_button_right) {
         protocol_server_announce_new_click(mascot, env_pointer->x,
                                            env_pointer->y);
+        // ...and the bubble shows a menu for it
+        if (config_get_chat_enabled())
+          chat_announce_menu(mascot, env, env_pointer->x, env_pointer->y);
       }
       // Middle click: this mascot falls asleep or wakes up (see mascot sleep)
       if (!hotspot_press_result &&

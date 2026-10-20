@@ -163,24 +163,43 @@ static void chat_send_prototypes(int fd);
 static void chat_swap(int fd, const char* line);
 static void chat_send_to(int fd, const char* line, size_t len);
 static void chat_open(const char* line);
+static void chat_open_menu(const char* line);
 static bool chat_remark(const char* line);
 static void chat_sleep_all(bool sleep, bool only_new);
 static void chat_wake_all(void);
+static struct mascot* chat_line_mascot(const char* line);
 
 // Handles one line from a client: {"event":"talking","mascot":N,"active":true|false},
 // {"event":"close","mascot":N}, {"event":"list"},
-// {"event":"swap","mascot":N,"prototype":"name"}, {"event":"toggle"} (from
-// `mascot chat`, passed on to the other clients, i.e. the bubble) or
-// {"event":"open","mascot":N} (the bubble's answer to it) or {"event":"remark"}
+// {"event":"swap","mascot":N,"prototype":"name"}, {"event":"toggle"} and
+// {"event":"menu_toggle"} (from `mascot chat`/`mascot menu`, passed on to the
+// other clients, i.e. the bubble), {"event":"open","mascot":N} and
+// {"event":"menu","mascot":N} (the bubble's answers to them), {"event":"remark"}
 // (a random mascot says something now, as CHAT_REMARKS does; with "mascot":N
 // that one, if it is still there, e.g. for a reminder), {"event":"sleep"} and
 // {"event":"wake"} (from `mascot sleep`/`mascot wake`, e.g. hypridle; with
 // "minutes":N they sleep that long, and only "wake" with "all":true ends it
-// early, e.g. the sleep_mode tool). Anything else is ignored, e.g. the
-// "hiding"/"hidden" events older bubbles still send
+// early, e.g. the sleep_mode tool; with "mascot":N only that one, from the
+// menu) and {"event":"dismiss","mascot":N} (the menu's "Send away"). Anything
+// else is ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
-    if (strstr(line, "\"event\":\"sleep\"")) {
+    bool sleep = strstr(line, "\"event\":\"sleep\"") != NULL;
+    if ((sleep || strstr(line, "\"event\":\"wake\"")) && strstr(line, "\"mascot\":")) {
+        struct mascot* mascot = chat_line_mascot(line);
+        if (mascot && mascot_sleep(mascot, sleep))
+            INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id, sleep ? "Put to sleep" : "Woken up");
+        return;
+    }
+    if (strstr(line, "\"event\":\"dismiss\"")) {
+        struct mascot* mascot = chat_line_mascot(line);
+        if (!mascot) return;
+        if (mascot->id == held_mascot_id) held_mascot_id = -1;
+        INFO("<Mascot:%s:%u> Sent away", mascot->prototype->name, mascot->id);
+        environment_remove_mascot(mascot->environment, mascot);
+        return;
+    }
+    if (sleep) {
         const char* field = strstr(line, "\"minutes\":");
         double minutes = field ? strtod(field + strlen("\"minutes\":"), NULL) : 0;
         if (minutes > 0) {
@@ -209,10 +228,17 @@ static void chat_handle_line(int fd, const char* line)
         chat_remark(line);
         return;
     }
-    if (strstr(line, "\"event\":\"toggle\"")) {
+    if (strstr(line, "\"event\":\"toggle\"") || strstr(line, "\"event\":\"menu_toggle\"")) {
         static const char toggle[] = "{\"event\":\"toggle\"}\n";
+        static const char menu_toggle[] = "{\"event\":\"menu_toggle\"}\n";
+        bool menu = strstr(line, "\"event\":\"menu_toggle\"") != NULL;
         for (int i = 0; i < client_count; i++)
-            if (clients[i].fd != fd) chat_send_to(clients[i].fd, toggle, sizeof(toggle) - 1);
+            if (clients[i].fd != fd)
+                chat_send_to(clients[i].fd, menu ? menu_toggle : toggle, menu ? sizeof(menu_toggle) - 1 : sizeof(toggle) - 1);
+        return;
+    }
+    if (strstr(line, "\"event\":\"menu\"")) {
+        chat_open_menu(line);
         return;
     }
     if (strstr(line, "\"event\":\"open\"")) {
@@ -371,8 +397,10 @@ static void chat_role_json(const struct mascot_prototype* prototype, char* dest,
     snprintf(dest, size, "\"%s\"", escaped);
 }
 
+enum chat_announce_kind { chat_tap, chat_remark_tap, chat_menu };
+
 static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y,
-                          bool remark)
+                          enum chat_announce_kind kind)
 {
     if (!client_count || !mascot || !env) return false;
 
@@ -419,22 +447,31 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
                  box.x, box.y, box.width, box.height);
     }
 
+    // The menu shows what it can do: wake it or let it sleep, and wake them all
+    // after "sleep" (with minutes)
+    char extra[160] = "";
+    if (kind == chat_remark_tap)
+        snprintf(extra, sizeof(extra), ",\"remark\":true");
+    else if (kind == chat_menu)
+        snprintf(extra, sizeof(extra), ",\"asleep\":%s,\"all_asleep\":%s",
+                 mascot->asleep ? "true" : "false", asleep ? "true" : "false");
+
     // Everything is environment-local, logical px, top-referenced
     char line[8192];
     int len = snprintf(line, sizeof(line),
-        "{\"event\":\"tap\",\"mascot\":%u,\"prototype\":\"%s\",\"output\":\"%s\","
+        "{\"event\":\"%s\",\"mascot\":%u,\"prototype\":\"%s\",\"output\":\"%s\","
         "\"pointer\":{\"x\":%d,\"y\":%d},"
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
         "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s%s}\n",
-        mascot->id, prototype, output,
+        kind == chat_menu ? "menu" : "tap", mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role, config_get_chat_memory(), tools, dotfiles, remark ? ",\"remark\":true" : "");
+        command, role, config_get_chat_memory(), tools, dotfiles, extra);
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;
@@ -442,14 +479,19 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
 
     bool delivered = chat_broadcast(line, len);
 
-    // Keep the mascot still while someone is talking to it
+    // Keep the mascot still while someone is talking to it (or picking from its menu)
     if (delivered) chat_hold(mascot);
     return delivered;
 }
 
 bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
 {
-    return chat_announce(mascot, env, pointer_x, pointer_y, false);
+    return chat_announce(mascot, env, pointer_x, pointer_y, chat_tap);
+}
+
+bool chat_announce_menu(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
+{
+    return chat_announce(mascot, env, pointer_x, pointer_y, chat_menu);
 }
 
 static void chat_send_to(int fd, const char* line, size_t len)
@@ -625,6 +667,37 @@ static void chat_open(const char* line)
     chat_announce_tap(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i);
 }
 
+// The mascot a line names with "mascot":N, if it is still there
+static struct mascot* chat_line_mascot(const char* line)
+{
+    const char* field = strstr(line, "\"mascot\":");
+    if (!field) return NULL;
+    char* end = NULL;
+    long id = strtol(field + strlen("\"mascot\":"), &end, 10);
+    if (end == field + strlen("\"mascot\":") || id < 0) return NULL;
+    return chat_find_mascot(id);
+}
+
+// Opens the menu at mascot N, or at the first mascot if N is gone or not given,
+// as if it had been right-clicked (pointer at the top of its sprite)
+static void chat_open_menu(const char* line)
+{
+    struct mascot* mascot = chat_line_mascot(line);
+    if (!mascot) mascot = chat_first_mascot();
+    if (!mascot) {
+        INFO("Menu asked for, but there are no mascots");
+        return;
+    }
+    environment_t* env = mascot->environment;
+    int32_t x = mascot->X->value.i, y = environment_workarea_height(env) - mascot->Y->value.i;
+    struct bounding_box box;
+    if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
+        x = box.x + box.width / 2;
+        y = box.y;
+    }
+    chat_announce_menu(mascot, env, x, y);
+}
+
 // A random mascot on any screen that is awake
 static struct mascot* chat_random_mascot(void)
 {
@@ -676,7 +749,8 @@ static bool chat_remark(const char* line)
     if (mascot->dragged || mascot_get_border_type(mascot) != environment_border_type_floor) return false;
     environment_t* env = mascot->environment;
     INFO("<Mascot:%s:%u> Saying something on its own", mascot->prototype->name, mascot->id);
-    return chat_announce(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i, true);
+    return chat_announce(mascot, env, mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
+                         chat_remark_tap);
 }
 
 // Puts every mascot (only_new: those that appeared since the last call) to sleep

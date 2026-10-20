@@ -54,6 +54,10 @@ void chat_close(void);
 // pointer_x/pointer_y are environment-local, top-referenced
 bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y);
 
+// Same for a right click: {"event":"menu",...} with what the bubble's menu for
+// the mascot needs; the mascot is held as for a tap
+bool chat_announce_menu(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y);
+
 // Called about once a second from the main loop: lets a random mascot say
 // something every CHAT_REMARKS to 2 * CHAT_REMARKS minutes
 void chat_tick(void);

@@ -235,6 +235,24 @@ You can replace mascot's behavior by using `mascot set-behavior {behavior}` comm
 
 You can get all available behaviors by using `mascot prototypes info {prototype_name}` command, where `{prototype_name}` is the name of the mascot prototype you want to get information about.
 
+## Right click
+
+A right click on a mascot opens a small menu next to it (with the chat bubble enabled): **Talk**
+(opens the bubble), **Sleep** or **Wake up** (just this mascot, like a middle click), **Quiet for 30
+min** (all of them, like `mascot sleep --minutes 30`; **Wake everyone** while they sleep), **Todo
+list** and **Reminders** (the bubble with `.todo` or `.reminders`), **Change mascot** (like `.mascot`),
+**Info** (the bubble with `.help`, `.info` or `.tools`, and the mascot's **Model**, **Role** and
+**Session** to pick from, as `.model`, `.role` and `.session`; the one in use is ticked. A new
+session is named with `.session <name>` in the bubble) and **Send away** (sending the last one
+away stops Mascot). It takes no keyboard and closes when you pick something or move the pointer
+off it.
+
+**`mascot menu`** opens the menu at the mascot you last talked to (or the first one) and closes it
+again; bind it to a key like `mascot chat`, e.g. in Hyprland `bind = SUPER SHIFT, N, exec, mascot
+menu`. Opened this way, it takes the keyboard until it closes: **↑/↓** (or **Ctrl+K/Ctrl+J**) move,
+**Enter** or **→** picks or opens a page, **←** or **Backspace** goes back, **Esc** (or the key
+again) closes it. What it opens in the bubble keeps the keyboard too.
+
 ## Putting mascots to sleep
 
 `mascot sleep` puts every mascot to sleep until `mascot wake`: each one lies down as soon as it is on

@@ -37,18 +37,33 @@ ShellRoot {
             return;
         }
 
-        if (event.event === "tap")
+        if (event.event === "tap") {
+            menu.close();
             bubble.openFor(event);
-        else if (event.event === "dragged")
+        } else if (event.event === "menu") {
+            // The daemon holds this mascot now, not the one the bubble shows
+            if (bubble.visible && bubble.event?.mascot !== event.mascot)
+                bubble.dismiss();
+            menu.openFor(event, bubble.choiceOf(event.mascot));
+        } else if (event.event === "dragged") {
             bubble.closeFor(event.mascot);
-        else if (event.event === "prototypes")
-            bubble.prototypesListed(event.names);
+            if (menu.event?.mascot === event.mascot)
+                menu.close();
+        } else if (event.event === "prototypes") {
+            // Asked for by the menu's "Change mascot", or by .mascots
+            if (menu.waiting)
+                menu.listed(event.names);
+            else
+                bubble.prototypesListed(event.names);
+        }
         else if (event.event === "swapped")
             bubble.swapped(event);
         else if (event.event === "swap_failed")
             bubble.swapFailed(event);
         else if (event.event === "toggle")
             bubble.toggle();
+        else if (event.event === "menu_toggle")
+            menu.toggle(bubble.event?.mascot ?? -1);
     }
 
     Socket {
@@ -98,5 +113,51 @@ ShellRoot {
         onSwapRequested: (mascot, prototype) => root.send({ event: "swap", mascot: mascot, prototype: prototype })
         onOpenRequested: mascot => root.send({ event: "open", mascot: mascot })
         onRemarkRequested: mascot => root.send({ event: "remark", mascot: mascot })
+    }
+
+    // The menu's mascot sits while it is open; let go of it, unless the
+    // bubble shows it (and keeps it sitting)
+    function releaseMenu(mascot: int): void {
+        if (!(bubble.visible && bubble.event?.mascot === mascot))
+            root.send({ event: "close", mascot: mascot });
+    }
+
+    // The right-click menu
+    Menu {
+        id: menu
+
+        theme: bubble.colors
+        onListRequested: root.send({ event: "list" })
+        onMenuRequested: mascot => root.send({ event: "menu", mascot: mascot })
+        onDismissed: mascot => root.releaseMenu(mascot)
+        onPicked: (action, mascot, argument) => {
+            // What opens the bubble keeps the mascot sitting; the rest lets
+            // go first (so "Sleep" lies down straight away). From a key, the
+            // bubble keeps the keyboard too, as with `mascot chat`
+            if (!["talk", "todo", "reminders", "command"].includes(action))
+                root.releaseMenu(mascot);
+            else if (menu.lastKeyboard)
+                bubble.fromKey = true;
+            if (action === "talk")
+                root.send({ event: "open", mascot: mascot });
+            else if (action === "sleep" || action === "wake")
+                root.send({ event: action, mascot: mascot });
+            else if (action === "nap")
+                root.send({ event: "sleep", minutes: 30 });
+            else if (action === "wake_all")
+                root.send({ event: "wake", all: true });
+            else if (action === "todo")
+                bubble.openWith(mascot, ".todo");
+            else if (action === "reminders")
+                bubble.openWith(mascot, ".reminders");
+            else if (action === "command")
+                bubble.openWith(mascot, argument);
+            else if (action === "swap")
+                root.send({ event: "swap", mascot: mascot, prototype: argument });
+            else if (action === "dismiss") {
+                bubble.closeFor(mascot);
+                root.send({ event: "dismiss", mascot: mascot });
+            }
+        }
     }
 }
