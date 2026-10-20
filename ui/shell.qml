@@ -134,13 +134,11 @@ ShellRoot {
             // What opens the bubble keeps the mascot sitting; the rest lets
             // go first (so "Sleep" lies down straight away). From a key, the
             // bubble keeps the keyboard too, as with `mascot chat`
-            if (!["talk", "todo", "reminders", "command"].includes(action))
+            if (!["todo", "reminders", "command"].includes(action))
                 root.releaseMenu(mascot);
             else if (menu.lastKeyboard)
                 bubble.fromKey = true;
-            if (action === "talk")
-                root.send({ event: "open", mascot: mascot });
-            else if (action === "sleep" || action === "wake")
+            if (action === "sleep" || action === "wake")
                 root.send({ event: action, mascot: mascot });
             else if (action === "nap")
                 root.send({ event: "sleep", minutes: 30 });

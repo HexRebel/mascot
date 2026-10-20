@@ -18,8 +18,8 @@ PanelWindow {
     property var event: null
     // The bubble's colours (pywal)
     property QtObject theme: null
-    // The page shown: "main", "info" (the bubble's dot commands that tell
-    // about the chat), "swap" ("Change mascot"), "models", "roles" or "sessions"
+    // The page shown: "main", "settings" (the mascot's chat: model, role,
+    // session, tools), "swap" ("Change mascot"), "models", "roles" or "sessions"
     property string page: "main"
     // The mascot's model and role in the bubble, see Bubble.choiceOf()
     property var choice: ({ model: "", role: "", noRole: false, session: "" })
@@ -146,7 +146,8 @@ PanelWindow {
         else
             neverEntered.restart();
         scroller.contentY = 0;
-        menu.selected = menu.keyboard ? 0 : -1;
+        // The keyboard starts on the first thing to pick (not the heading)
+        menu.selected = menu.keyboard ? Math.max(0, menu.items.findIndex(item => item.action)) : -1;
     }
 
     // The keyboard's way around: up and down, into a page or pick (Enter,
@@ -154,10 +155,20 @@ PanelWindow {
     function key(event: var): void {
         const k = event.key, ctrl = event.modifiers & Qt.ControlModifier;
         const count = menu.items.length;
+        // Past what cannot be picked (the "Mascot" heading, "…")
+        const step = by => {
+            let i = menu.selected;
+            for (let n = 0; n < count; n++) {
+                i = (i + by + count) % count;
+                if (menu.items[i].action)
+                    return i;
+            }
+            return menu.selected;
+        };
         if (k === Qt.Key_Down || k === Qt.Key_Tab || (ctrl && k === Qt.Key_J))
-            menu.selected = (menu.selected + 1) % count;
+            menu.selected = step(1);
         else if (k === Qt.Key_Up || k === Qt.Key_Backtab || (ctrl && k === Qt.Key_K))
-            menu.selected = (menu.selected - 1 + count) % count;
+            menu.selected = step(-1);
         else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)
             menu.choose(menu.items[menu.selected] ?? {});
         else if (k === Qt.Key_Right) {
@@ -220,11 +231,9 @@ PanelWindow {
         menu.picked(action, mascot, argument);
     }
 
-    readonly property var back: ({ label: "‹ Back", action: "page", argument: "main" })
-
     readonly property var items: ({
         main: mainItems,
-        info: infoItems,
+        settings: settingsItems,
         swap: swapItems,
         models: modelItems,
         roles: roleItems,
@@ -236,21 +245,21 @@ PanelWindow {
         if (!e)
             return [];
         return [
-            { label: "Talk", action: "talk" },
+            { label: "Mascot", heading: true },
+            { label: "Settings ›", action: "page", argument: "settings" },
             e.asleep ? { label: "Wake up", action: "wake" } : { label: "Sleep", action: "sleep" },
             e.all_asleep ? { label: "Wake everyone", action: "wake_all" }
                 : { label: "Quiet for 30 min", action: "nap" },
             { label: "Todo list", action: "todo" },
             { label: "Reminders", action: "reminders" },
-            { label: "Change mascot ›", action: "page", argument: "swap" },
-            { label: "Info ›", action: "page", argument: "info" },
-            { label: "Send away", action: "dismiss" } // the last one going stops Mascot
+            { label: "Help", action: "command", argument: ".help" },
+            { label: "Send away", action: "dismiss" } // last, out of the way; the last mascot going stops Mascot
         ];
     }
 
-    readonly property var infoItems: [
+    readonly property var settingsItems: [
         { label: "‹ Back", action: "page", argument: "main" },
-        { label: "Help", action: "command", argument: ".help" },
+        { label: "Change mascot ›", action: "page", argument: "swap" },
         { label: "Model and role", action: "command", argument: ".info" },
         { label: "Model ›", action: "page", argument: "models" },
         { label: "Role ›", action: "page", argument: "roles" },
@@ -259,28 +268,28 @@ PanelWindow {
     ]
 
     readonly property var swapItems: !menu.event ? []
-        : [menu.back].concat(menu.names.length
+        : [{ label: "‹ Back", action: "page", argument: "settings" }].concat(menu.names.length
             ? menu.names.filter(n => n.toLowerCase() !== menu.event.prototype.toLowerCase())
                 .map(n => ({ label: n, action: "swap", argument: n }))
             : [{ label: "…", action: "" }])
 
     // Picking runs .model/.role in the bubble, as typing it would
     readonly property var modelItems: [
-        { label: "‹ Back", action: "page", argument: "info" },
+        { label: "‹ Back", action: "page", argument: "settings" },
         { label: "Default", action: "command", argument: ".exit model", checked: !menu.choice.model }
     ].concat(menu.models.map(m => ({ label: m, action: "command", argument: `.model ${m}`,
                                     checked: m === menu.choice.model })))
 
     readonly property string currentRole: menu.choice.role || (menu.choice.noRole ? "" : menu.event?.role ?? "")
     readonly property var roleItems: [
-        { label: "‹ Back", action: "page", argument: "info" },
+        { label: "‹ Back", action: "page", argument: "settings" },
         { label: "No role", action: "command", argument: ".exit role", checked: !menu.currentRole }
     ].concat(menu.roles.map(r => ({ label: r, action: "command", argument: `.role ${r}`,
                                    checked: r === menu.currentRole })))
 
     // aichat's own sessions (.session; a new one is named in the bubble)
     readonly property var sessionItems: [
-        { label: "‹ Back", action: "page", argument: "info" },
+        { label: "‹ Back", action: "page", argument: "settings" },
         { label: "None", action: "command", argument: ".exit session", checked: !menu.choice.session }
     ].concat(menu.sessions.map(s => ({ label: s, action: "command", argument: `.session ${s}`,
                                       checked: s === menu.choice.session })))
@@ -310,7 +319,7 @@ PanelWindow {
 
     readonly property int menuWidth: widthOf(items)
     readonly property int menuHeight: heightOf(items)
-    readonly property var pages: [mainItems, infoItems, swapItems, modelItems, roleItems, sessionItems]
+    readonly property var pages: [mainItems, settingsItems, swapItems, modelItems, roleItems, sessionItems]
     readonly property int windowWidth: Math.max(...pages.map(p => widthOf(p)))
     readonly property int windowHeight: Math.max(...pages.map(p => heightOf(p)))
 
@@ -452,9 +461,11 @@ PanelWindow {
                             width: parent.width - 2 * menu.textMargin - menu.checkWidth
                             elide: Text.ElideRight
                             text: modelData.label
-                            color: modelData.action === "dismiss" ? (menu.theme?.muted ?? "#a6adc8")
+                            color: modelData.heading ? (menu.theme?.accent ?? "#89b4fa")
+                                : modelData.action === "dismiss" ? (menu.theme?.muted ?? "#a6adc8")
                                 : (menu.theme?.foreground ?? "#cdd6f4")
                             font.pixelSize: 13
+                            font.bold: !!modelData.heading
                         }
 
                         Text {
