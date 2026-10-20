@@ -915,8 +915,41 @@ def last_commands(args):
     return "\n".join(lines)
 
 
+def sleep_mode(args):
+    """Puts all mascots to sleep until wake_up (or wakes them up now): no
+    remarks, and reminders wait. A plain mascot wake (hypridle) does not end it"""
+    now = time.time()
+    when = " ".join(str(args.get("wake_up") or "").split())
+    if not when:
+        raise ToolError("say when to wake up, e.g. 30m, 1h or 14:00 (or now)")
+    if when.lower() in ("0", "now", "nu"):
+        message, at = {"event": "wake", "all": True}, None
+    else:
+        at = parse_when(when, now)
+        if at is None:
+            raise ToolError(f"cannot tell when \"{when}\" is - use e.g. 30m, 1h30m or 14:00")
+        if at <= now:
+            raise ToolError(f"{shown_time(at)} has passed")
+        message = {"event": "sleep", "minutes": round((at - now) / 60, 2)}
+    path = os.environ.get("MASCOT_CHAT_SOCKET") or os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp",
+                                                              "mascotd-chat.sock")
+    import socket
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:
+            chat.connect(path)
+            chat.sendall(json.dumps(message, separators=(",", ":")).encode() + b"\n")
+    except OSError as e:
+        raise ToolError(f"cannot reach Mascot ({e.strerror})")
+    if at is None:
+        changed("awake")
+        return "the mascots are awake"
+    changed(f"asleep until {shown_time(at)}")
+    return (f"the mascots sleep until {shown_time(at)}: no remarks, and reminders wait; they lie down once the "
+            "bubble is closed")
+
+
 TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, search_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
-                                 set_reminder, list_reminders, cancel_reminder, due_reminders, last_commands, context_size)}
+                                 set_reminder, list_reminders, cancel_reminder, due_reminders, last_commands, sleep_mode, context_size)}
 
 
 def main():

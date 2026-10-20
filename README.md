@@ -243,8 +243,10 @@ behaviors its prototype has: `Asleep`, `Sleep`, `LieDown`, `SitDown`. Shimeji-ee
 ends by getting up again; to choose another pose, add a behavior `Asleep` with `frequency` 0 that
 points to it. A sleeping mascot does not disturb: it makes no remarks (`CHAT_REMARKS`), and
 reminders wait until one wakes up. A middle click on a mascot puts just that one to sleep, or wakes
-it up. Neither command starts Mascot, so both are safe to run when it is not running, e.g. from
-hypridle:
+it up. `mascot sleep --minutes 30` (or asking a mascot, with `sleep` in `CHAT_TOOLS`) lets them
+sleep for a while instead: a plain `mascot wake` does not end that, so hypridle's does not either,
+but `mascot wake --all` and a middle click do. Neither command starts Mascot, so both are safe to
+run when it is not running, e.g. from hypridle:
 
 ```
 listener {
@@ -430,11 +432,13 @@ writes, deletes or runs anything else:
 | `files` | `list_directory`, `read_file`, `search_file`, `look_at_image` | List directories (or draw a tree of one, up to 4 levels), read text files (as much as fits the model, see below), find lines in a file or a directory of files, and look at pictures (PNG, JPEG, WebP) in your home directory |
 | `todo` | `list_todos`, `add_todo`, `remove_todo`, `edit_todo` | Keep your todo list: ask the mascot to remember something, to reword an item, or tell it something is done |
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
+| `sleep` | `sleep_mode` | "I need to focus, sleep for an hour": all mascots sleep until then (see *Putting mascots to sleep*); "wake up" wakes them early |
 | `shell` | `last_commands` | Your last commands in the terminal (5, or up to 10), to explain one: "what did my last command do?", "explain the git command I just ran" |
 
 `CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files, `todo`
-for the todo list, `reminders` for reminders and `shell` for your last commands, e.g. `mascot config
-set CHAT_TOOLS time,weather,files,todo,reminders,shell`, or set it empty to turn the tools off. It takes effect from the
+for the todo list, `reminders` for reminders, `shell` for your last commands and `sleep` to let the
+mascots nap, e.g. `mascot config set CHAT_TOOLS time,weather,files,todo,reminders,shell,sleep`, or set
+it empty to turn the tools off. It takes effect from the
 next tap.
 
 The todo list is one list for all mascots, `todo.md` in Mascot's data directory
@@ -524,7 +528,7 @@ models call tools more reliably than others; one that does not just answers with
 | `CHAT_MEMORY` | `8000` | About how many tokens a mascot's memory may hold before it is summed up (counted as 3 characters each, what the tools returned included); `0` never sums up. With a local model it is at most half the model's context (Ollama's `num_ctx`, or Ollama's default of 4096 tokens), which also holds the prompt, a file a tool reads and the reply; with a bigger model, raise it to use more. Takes effect from the next tap. |
 | `CHAT_REMARKS` | `0` | A random mascot says something on its own every N to 2N minutes; `0` turns it off. Takes effect without a restart. |
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
-| `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo`, `reminders` and/or `shell`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
+| `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo`, `reminders`, `shell` and/or `sleep`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
 | `CHAT_DOTFILES` | *(empty)* | The hidden files and directories the file tools may see, `;`-separated, e.g. `~/.zshrc;~/.config/hypr`; empty: none (see *Tools*). Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |

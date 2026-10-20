@@ -215,5 +215,21 @@
         }
       }
     }
+  },
+  {
+    "name": "sleep_mode",
+    "description": "Put all the mascots to sleep for a while (do not disturb): no remarks, and reminders wait until they wake up. Use it when the user wants quiet, to focus, or asks you to sleep or take a nap. Also wakes them up early.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "wake_up": {
+          "type": "string",
+          "description": "When to wake up: a duration (\"30m\", \"1h30m\", \"2 hours\") or a time of day (\"14:00\"). \"now\" wakes them up now."
+        }
+      },
+      "required": [
+        "wake_up"
+      ]
+    }
   }
 ]

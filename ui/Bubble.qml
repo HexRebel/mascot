@@ -493,7 +493,8 @@ PanelWindow {
         files: ["list_directory", "read_file", "search_file", "look_at_image"],
         todo: ["list_todos", "add_todo", "remove_todo", "edit_todo"],
         reminders: ["set_reminder", "list_reminders", "cancel_reminder"],
-        shell: ["last_commands"]
+        shell: ["last_commands"],
+        sleep: ["sleep_mode"]
     })
     // Only with a local model, so what they read stays on this computer
     readonly property var localTools: ["files", "todo", "reminders", "shell"]
@@ -525,7 +526,10 @@ PanelWindow {
             MASCOT_VISION_MODEL: local,
             MASCOT_DOTFILES: bubble.event?.dotfiles ?? "",
             MASCOT_TODO_FILE: bubble.todoFile,
-            MASCOT_REMINDER_FILE: bubble.reminderFile
+            MASCOT_REMINDER_FILE: bubble.reminderFile,
+            // For sleep_mode, which tells the daemon
+            MASCOT_CHAT_SOCKET: Quickshell.env("MASCOT_CHAT_SOCKET")
+                || `${Quickshell.env("XDG_RUNTIME_DIR")}/mascotd-chat.sock`
         };
     }
 
@@ -603,7 +607,10 @@ PanelWindow {
                 const shell = env.AICHAT_USE_TOOLS.includes("last_commands") ? "\n\nWhen the user asks about a "
                     + "command they ran (the last one, what they just did in the terminal), call last_commands instead "
                     + "of asking them for it, and explain it." : "";
-                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}${shell}`), env);
+                const sleep = env.AICHAT_USE_TOOLS.includes("sleep_mode") ? "\n\nWhen the user wants quiet or to "
+                    + "focus, or asks you to sleep for a while, call sleep_mode; never say you will sleep without "
+                    + "calling it." : "";
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}${shell}${sleep}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
                 send("");
@@ -814,7 +821,7 @@ PanelWindow {
             {
                 const tools = toolNames();
                 if (!tools.length) {
-                    say("tools: none (set CHAT_TOOLS to time, weather, files, todo, reminders and/or shell)");
+                    say("tools: none (set CHAT_TOOLS to time, weather, files, todo, reminders, shell and/or sleep)");
                     return;
                 }
                 const notes = {
@@ -829,7 +836,9 @@ PanelWindow {
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
                     shell: "shell - the last commands you ran (zsh, bash or fish history), hiding those that may "
                         + "hold a password or key, only with a local (ollama:) model"
-                        + (chosen().session ? "; not in a .session" : "")
+                        + (chosen().session ? "; not in a .session" : ""),
+                    sleep: "sleep - the mascots sleep for a while when you ask (do not disturb: no remarks, "
+                        + "reminders wait), also mascot sleep --minutes"
                 };
                 say(tools.map(t => notes[t]).join("\n"));
                 return;

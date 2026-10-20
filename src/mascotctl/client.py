@@ -1486,8 +1486,10 @@ if __name__ == "__main__":
     chat_parser = category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
     chat_parser.add_argument("--remark", action="store_true", help="Let a random mascot say something now instead (as CHAT_REMARKS does)")
 
-    category.add_parser("sleep", help="Put the mascots to sleep until 'mascot wake' (e.g. from hypridle)")
-    category.add_parser("wake", help="Wake the mascots up again")
+    sleep_parser = category.add_parser("sleep", help="Put the mascots to sleep until 'mascot wake' (e.g. from hypridle)")
+    sleep_parser.add_argument("-m", "--minutes", type=float, help="Sleep this long instead; a plain 'mascot wake' does not end it")
+    wake_parser = category.add_parser("wake", help="Wake the mascots up again")
+    wake_parser.add_argument("-a", "--all", action="store_true", help="Also from a sleep with --minutes")
 
 # Foreground
     foreground_parser = category.add_parser("foreground", help="Run overlay daemon in foreground")
@@ -1550,14 +1552,19 @@ if __name__ == "__main__":
     # foo-chat.sock, see src/chat.c); never starts the overlay
     if arguments.category in ("chat", "sleep", "wake"):
         chat_path = socket_path[:-len(".sock")] + "-chat.sock" if socket_path.endswith(".sock") else socket_path + "-chat"
-        if arguments.category != "chat":
-            event = arguments.category
+        if arguments.category == "chat":
+            message: dict[str, Any] = {"event": "remark" if arguments.remark else "toggle"}
         else:
-            event = "remark" if arguments.remark else "toggle"
+            message = {"event": arguments.category}
+            if arguments.category == "sleep" and arguments.minutes and arguments.minutes > 0:
+                message["minutes"] = arguments.minutes
+            if arguments.category == "wake" and arguments.all:
+                message["all"] = True
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:
                 chat.connect(chat_path)
-                chat.sendall(b'{"event":"%s"}\n' % event.encode())
+                # No spaces: mascotd matches "event":"..." as it is
+                chat.sendall(json.dumps(message, separators=(",", ":")).encode() + b"\n")
         except OSError as e:
             # hypridle runs these whether Mascot is running or not
             if arguments.category != "chat" and e.errno in (errno.ENOENT, errno.ECONNREFUSED):

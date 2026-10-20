@@ -56,8 +56,12 @@ static char listen_path[PATH_MAX] = {0};
 
 // Mascot kept sitting for the open bubble, by id (pointers may be freed)
 static int64_t held_mascot_id = -1;
-// Set by "sleep", cleared by "wake"; mascots that appear meanwhile fall asleep too
+// Asleep while "sleep" (e.g. from hypridle) holds, until "wake", or until
+// sleep_until ("sleep" with "minutes", which only "wake" with "all" ends early);
+// mascots that appear meanwhile fall asleep too
 static bool asleep = false;
+static bool sleep_held = false;
+static time_t sleep_until = 0;
 // The newest mascot chat_sleep_all() has seen (ids are not reused)
 static int64_t newest_mascot_id = -1;
 
@@ -161,6 +165,7 @@ static void chat_send_to(int fd, const char* line, size_t len);
 static void chat_open(const char* line);
 static bool chat_remark(const char* line);
 static void chat_sleep_all(bool sleep, bool only_new);
+static void chat_wake_all(void);
 
 // Handles one line from a client: {"event":"talking","mascot":N,"active":true|false},
 // {"event":"close","mascot":N}, {"event":"list"},
@@ -169,14 +174,35 @@ static void chat_sleep_all(bool sleep, bool only_new);
 // {"event":"open","mascot":N} (the bubble's answer to it) or {"event":"remark"}
 // (a random mascot says something now, as CHAT_REMARKS does; with "mascot":N
 // that one, if it is still there, e.g. for a reminder), {"event":"sleep"} and
-// {"event":"wake"} (from `mascot sleep`/`mascot wake`, e.g. hypridle). Anything
-// else is ignored, e.g. the "hiding"/"hidden" events older bubbles still send
+// {"event":"wake"} (from `mascot sleep`/`mascot wake`, e.g. hypridle; with
+// "minutes":N they sleep that long, and only "wake" with "all":true ends it
+// early, e.g. the sleep_mode tool). Anything else is ignored, e.g. the
+// "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
-    if (strstr(line, "\"event\":\"sleep\"") || strstr(line, "\"event\":\"wake\"")) {
-        asleep = strstr(line, "\"event\":\"sleep\"") != NULL;
-        INFO(asleep ? "Mascots fall asleep" : "Mascots wake up");
-        chat_sleep_all(asleep, false);
+    if (strstr(line, "\"event\":\"sleep\"")) {
+        const char* field = strstr(line, "\"minutes\":");
+        double minutes = field ? strtod(field + strlen("\"minutes\":"), NULL) : 0;
+        if (minutes > 0) {
+            if (minutes > 24 * 60) minutes = 24 * 60;
+            sleep_until = time(NULL) + (time_t)(minutes * 60 + 0.5);
+            INFO("Mascots fall asleep for %g minutes", minutes);
+        } else {
+            sleep_held = true;
+            INFO("Mascots fall asleep");
+        }
+        asleep = true;
+        chat_sleep_all(true, false);
+        return;
+    }
+    if (strstr(line, "\"event\":\"wake\"")) {
+        sleep_held = false;
+        if (strstr(line, "\"all\":true")) sleep_until = 0;
+        if (sleep_until) {
+            INFO("Mascots sleep on until their time is up");
+            return;
+        }
+        if (asleep) chat_wake_all();
         return;
     }
     if (strstr(line, "\"event\":\"remark\"")) {
@@ -368,7 +394,7 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     char role[512];
     chat_role_json(mascot->prototype, role, sizeof(role));
 
-    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo,reminders,shell")
+    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo,reminders,shell,sleep")
     char tools[300] = "null";
     const char* chat_tools = config_get_chat_tools();
     if (chat_tools) {
@@ -688,8 +714,19 @@ static void chat_sleep_all(bool sleep, bool only_new)
     }
 }
 
+static void chat_wake_all(void)
+{
+    asleep = false;
+    INFO("Mascots wake up");
+    chat_sleep_all(false, false);
+}
+
 void chat_tick(void)
 {
+    if (sleep_until && time(NULL) >= sleep_until) {
+        sleep_until = 0;
+        if (!sleep_held) chat_wake_all();
+    }
     // New (summoned, swapped) mascots fall asleep too
     if (asleep) chat_sleep_all(true, true);
 
