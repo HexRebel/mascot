@@ -2,33 +2,33 @@
 
 from __future__ import annotations
 import json
+import subprocess
+import argparse
+import xml
+import stat
+import tempfile
+import zipfile
 import re
-import logging
-import os
+import errno
+import struct
+import sys
 from dataclasses import dataclass, field
-from xml.etree import ElementTree
 from dataclasses import dataclass
+from xml.etree import ElementTree
+import socket
+import os
+import enum
+import pathlib
+from PIL import Image
+from typing import Callable, Any
+import xml.etree.ElementTree as ET
+import random
+import logging
+import time
 from typing import Dict, Optional
 import io
 import tarfile
-import argparse
-import xml
-import enum
-from typing import Callable, Any
-import subprocess
-import xml.etree.ElementTree as ET
-import socket
-import sys
-import struct
-import stat
-import tempfile
-import pathlib
 import shutil
-from PIL import Image
-import time
-import random
-import errno
-import zipfile
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -3004,11 +3004,417 @@ def prototype_find(name: str) -> Prototype | None:
 
     return None
 
-def converter_handler(arguments: argparse.Namespace, parser):
-    if not os.path.exists(arguments.input):
-        print(f"Input file '{arguments.input}' does not exist.")
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
+def asset_name(file: str) -> str:
+    """What an image is called in the prototype's assets (any letter case of the suffix)"""
+    base, suffix = os.path.splitext(file)
+    return base + ".qoi" if suffix.lower() in IMAGE_SUFFIXES else file
+
+
+def match_image_case(actions_json: str, image_dir: str) -> tuple[str, list[str]]:
+    """Shimeji-ee packs come from Windows, where swag1.png finds Swag1.png: points
+    each frame at the image it means, whatever the letter case. Returns the
+    actions and the images not there at all"""
+    assets = {}
+    for path, dirs, files in os.walk(image_dir):
+        rel = os.path.relpath(path, image_dir)
+        for file in files:
+            if file.lower().endswith(IMAGE_SUFFIXES):
+                name = asset_name(file) if rel == "." else os.path.join(rel, asset_name(file))
+                assets.setdefault(os.path.splitext(name)[0].lower(), name)
+
+    missing = set()
+
+    def fix(node):
+        if isinstance(node, dict):
+            if node.get("type") == "Frame":
+                for key in ("image", "image_right"):
+                    image = node.get(key)
+                    if isinstance(image, str):
+                        found = assets.get(os.path.splitext(image)[0].lower())
+                        if found:
+                            node[key] = found
+                        else:
+                            missing.add(image)
+            for value in node.values():
+                fix(value)
+        elif isinstance(node, list):
+            for value in node:
+                fix(value)
+
+    actions = json.loads(actions_json)
+    fix(actions)
+    return json.dumps(actions, indent=4), sorted(missing)
+
+
+def pack_name(path: str) -> str:
+    """A name for the mascot of a pack that does not name it: the file's,
+    without "Shimeji(-ee)" and a version, e.g. "Testy" for "Testy Shimeji v1.2.zip" """
+    name = os.path.splitext(os.path.basename(os.path.normpath(path)))[0] if os.path.isfile(path) \
+        else os.path.basename(os.path.normpath(path))
+    name = re.sub(r"(?i)[\s_-]*(shimeji(-?ee)?|pack)\b", " ", name)
+    name = re.sub(r"(?i)\s+v?\d+(\.\d+)*\s*$", "", name)
+    return " ".join(name.replace("_", " ").split()) or "Mascot"
+
+
+def has_images(directory: str) -> bool:
+    return any(f.lower().endswith(IMAGE_SUFFIXES) for f in os.listdir(directory)
+               if os.path.isfile(os.path.join(directory, f)))
+
+
+def is_shime_dir(directory: str) -> bool:
+    """Whether a directory holds a Shimeji's images (shime1.png, ...)"""
+    return any(re.fullmatch(r"shime1\.(png|gif|jpe?g|webp)", f, re.I) for f in os.listdir(directory))
+
+
+def open_instance(path: str) -> tuple[list[dict], tempfile.TemporaryDirectory | None]:
+    """The mascots in a pack (a directory or a zip file, unpacked into a
+    temporary directory that is returned too); exits if there are none.
+
+    A mascot is {"name", "images", "confs"}: its image directory and the conf
+    directories that may have its actions.xml and behaviors.xml, its own first.
+    Packs come as a Shimeji-ee instance (img/<name>/ and conf/, maybe a few
+    directories down, conf/ maybe only inside img/<name>/), as img/ with the
+    images right in it, or as images alone (shime1.png ...): no confs, so the
+    bundled Shimeji's actions are used"""
+    if not os.path.exists(path):
+        print(f"Input file '{path}' does not exist.")
         exit(1)
 
+    root = path
+    unpacked = None
+    if not os.path.isdir(root):
+        try:
+            zipf = zipfile.ZipFile(root, 'r')
+        except Exception as e:
+            print(f"Cannot open '{path}': not a zip file or a directory ({e})")
+            exit(1)
+        unpacked = tempfile.TemporaryDirectory()
+        root = unpacked.name
+        zipf.extractall(root)
+
+    default_name = pack_name(path)
+    figures = []
+    for directory, dirs, files in os.walk(root):
+        dirs.sort()
+        depth = os.path.relpath(directory, root).count(os.sep) + (directory != root)
+        if depth > 4 or os.path.basename(directory).lower() in ("unused", "__macosx"):
+            dirs[:] = []
+            continue
+        img = next((os.path.join(directory, d) for d in dirs if d.lower() == "img"), None)
+        if img:
+            conf = next((os.path.join(directory, d) for d in dirs if d.lower() == "conf"), None)
+            shared = [conf] if conf else []
+            for entry in sorted(os.listdir(img)):
+                images = os.path.join(img, entry)
+                if os.path.isdir(images) and entry.lower() != "unused" and has_images(images):
+                    own = os.path.join(images, "conf")
+                    figures.append({"name": entry, "images": images,
+                                    "confs": ([own] if os.path.isdir(own) else []) + shared})
+            # Shimeji 1.0: img/shime1.png and conf/ next to it
+            # Shimeji 1.0: img/shime1.png and conf/ next to it
+            if is_shime_dir(img):
+                figures.append({"name": default_name, "images": img, "confs": shared})
+            dirs[:] = []
+        elif is_shime_dir(directory):
+            own = os.path.join(directory, "conf")
+            name = default_name if directory == root else os.path.basename(directory)
+            figures.append({"name": name, "images": directory, "confs": [own] if os.path.isdir(own) else []})
+            dirs[:] = []
+
+    # The same name twice (e.g. two copies of a pack in one zip): keep the first
+    # The same name twice (e.g. two copies of a pack in one zip): keep the first
+    seen = set()
+    figures = [f for f in figures if not (f["name"].lower() in seen or seen.add(f["name"].lower()))]
+    if not figures:
+        print(f"No mascots found in '{path}': it has neither a Shimeji-ee img directory nor shime1.png")
+        exit(1)
+    return figures, unpacked
+
+
+def choose_prototypes(figures: list[dict], wanted: list[str] | None, everything: bool) -> list[dict]:
+    """The mascots of a pack to convert: those named with --figure (any letter
+    case), all with --all, the only one, or else the ones the user picks"""
+    prototype_names = [f["name"] for f in figures]
+
+    if wanted:
+        selected = []
+        for figure in wanted:
+            match = next((f for f in figures if f["name"].lower() == figure.lower()), None)
+            if not match:
+                print(f"No mascot called '{figure}' in the pack. It has: {', '.join(prototype_names)}")
+                exit(1)
+            selected.append(match)
+        return selected
+    if everything or len(figures) == 1:
+        return figures
+
+    print("Prototypes available for conversion:")
+    for i, prototype_name in enumerate(prototype_names):
+        print(f"{i+1}. {prototype_name}")
+    print("\nEnter prototypes index or name to convert (can be comma-separated or A to convert all)")
+    user_input = input(">").rstrip().lstrip()
+
+    if user_input.upper() == "A":
+        return figures
+
+    selected = []
+    for index in user_input.split(","):
+        index = index.strip()
+        if not index.isnumeric():
+            match = next((f for f in figures if f["name"].lower() == index.lower()), None)
+            if match:
+                selected.append(match)
+        else:
+            index = int(index)
+            if index > 0 and index <= len(figures):
+                selected.append(figures[index-1])
+
+    if not selected:
+        print("No prototypes selected")
+        exit(1)
+    return selected
+
+
+def bundled_shimeji() -> str | None:
+    """The bundled Shimeji (installed to share/mascot/prototypes next to bin/,
+    or prototypes/ in the source tree), whose actions a pack of images alone uses"""
+    here = os.path.dirname(os.path.realpath(sys.argv[0]))
+    for candidate in (os.path.join(here, "..", "share", "mascot", "prototypes", "Shimeji.Shimeji"),
+                      os.path.join(here, "..", "prototypes", "Shimeji.Shimeji")):
+        if os.path.isfile(os.path.join(candidate, "actions.json")):
+            return os.path.normpath(candidate)
+    return None
+
+
+def broken_actions(actions: dict, missing: set) -> tuple[set, set]:
+    """The actions the overlay drops (by name), and the action names used but
+    not defined: an animation whose image is missing drops the action it is
+    part of, and that every action it is a part of, and so on up"""
+    def frames(node):
+        if isinstance(node, dict):
+            if node.get("type") == "Frame":
+                yield node
+            for value in node.values():
+                yield from frames(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from frames(value)
+
+    def references(node):
+        if isinstance(node, dict):
+            if node.get("type") == "ActionReference":
+                yield node.get("action_name")
+            for value in node.values():
+                yield from references(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from references(value)
+
+    broken = {name for name, action in actions.items()
+              if any(f.get("image") in missing or f.get("image_right") in missing for f in frames(action))}
+    unknown = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, action in actions.items():
+            if name in broken:
+                continue
+            for ref in references(action):
+                if ref not in actions:
+                    unknown.add(ref)
+                if ref not in actions or ref in broken:
+                    broken.add(name)
+                    changed = True
+                    break
+    return broken, unknown
+
+
+def check_prototype(actions_json: str, behaviors_json: str, missing_images: list[str]) -> list[str]:
+    """What will not work in a converted mascot, in words for its user (see
+    broken_actions(); every behavior that uses a dropped action goes too)"""
+    actions = {a["name"]: a for a in json.loads(actions_json)}
+    behaviors = json.loads(behaviors_json).get("definitions", [])
+    missing = set(missing_images)
+    broken, unknown = broken_actions(actions, missing)
+
+    problems = []
+    if missing:
+        problems.append(f"uses images that are not in the pack: {', '.join(sorted(missing))}")
+    if unknown:
+        problems.append(f"uses actions that are not defined: {', '.join(sorted(unknown))}")
+    lost = sorted(b["name"] for b in behaviors
+                  if b.get("action") and (b["action"] not in actions or b["action"] in broken))
+    if lost:
+        problems.append(f"goes without these behaviors because of that: {', '.join(lost)}")
+    names = {b["name"] for b in behaviors if b.get("action") and b["action"] in actions and b["action"] not in broken}
+    for needed, what in (("Fall", "falling"), ("Dragged", "being dragged"), ("Thrown", "being thrown"),
+                         ("SitDown", "sitting while you chat")):
+        if needed not in names:
+            problems.append(f"has no working {needed} behavior, used for {what}")
+    return problems
+
+
+def convert_prototype(figure: dict, output: str, name: str | None = None) -> str | None:
+    """Converts one mascot of a pack (see open_instance()) to a .wlshm at
+    output, as name (else its own); returns output, or None if it failed (and
+    says why)"""
+    label = figure["name"]
+    # Its own conf wins if it has both files (many packs keep only info.xml
+    # Its own conf wins if it has both files (many packs keep only info.xml
+    # there), else the pack's; with neither, the bundled Shimeji's actions
+    # there), else the pack's; with neither, the bundled Shimeji's actions
+    conf = next((c for c in figure["confs"]
+                 if all(os.path.isfile(os.path.join(c, xml)) for xml in ("actions.xml", "behaviors.xml"))), None)
+    if conf:
+        config_dirfd = os.open(conf, os.O_PATH)
+        try:
+            scripts, actions, behaviors = Compiler.compile_shimeji(figure["images"], config_dirfd)
+        except Exception as e:
+            print(f"Conversion failed for {label}: {e}")
+            return None
+        finally:
+            os.close(config_dirfd)
+    else:
+        bundled = bundled_shimeji()
+        if not bundled:
+            print(f"Conversion failed for {label}: it has no actions.xml, and the bundled Shimeji's are not installed")
+            return None
+        print(f"{label} has no actions of its own: it uses the bundled Shimeji's")
+        with open(os.path.join(bundled, "scripts.json")) as f:
+            scripts = f.read()
+        with open(os.path.join(bundled, "actions.json")) as f:
+            actions = f.read()
+        with open(os.path.join(bundled, "behaviors.json")) as f:
+            behaviors = f.read()
+
+    actions, missing = match_image_case(actions, figure["images"])
+    for problem in check_prototype(actions, behaviors, missing):
+        print(f"Warning: {label} {problem}")
+
+    manifest = \
+    {
+        "name": f"Shimeji.{name or figure['name']}",
+        "version": "0.0.1",
+        "description": "",
+        "display_name": name or figure["name"],
+        "programs": "scripts.json",
+        "actions": "actions.json",
+        "behaviors": "behaviors.json",
+        "assets": "assets",
+        "icon": None,
+        "artist": None,
+        "scripter": None,
+        "commissioner": None,
+        "support": None
+    }
+
+    # info.xml sits next to actions.xml, or in the image directory or its conf
+    # info.xml sits next to actions.xml, or in the image directory or its conf
+    info_path = None
+    for candidate in figure["confs"] + [figure["images"]]:
+        if os.path.isfile(os.path.join(candidate, "info.xml")):
+            info_path = os.path.join(candidate, "info.xml")
+            break
+
+    root = None
+    if info_path:
+        try:
+            root = ET.parse(info_path).getroot()
+        except ET.ParseError as e:
+            print(f"Ignoring {info_path}: {e}")
+
+    if root is not None:
+        # Shimeji-ee files use the http://www.group-finity.com/Mascot namespace
+        # Shimeji-ee files use the http://www.group-finity.com/Mascot namespace
+        for element in root.iter():
+            element.tag = element.tag.rpartition("}")[2]
+
+        # Credits are usually <Artist Name="…" URL="…"/>, but accept text too
+        # Credits are usually <Artist Name="…" URL="…"/>, but accept text too
+        def info_text(tag):
+            element = root.find(f"Information/{tag}")
+            if element is None:
+                return None
+            text = (element.text or "").strip() or element.get("Name", "").strip()
+            return text or None
+
+        manifest["display_name"] = name or info_text("Name") or manifest["display_name"]
+        for key, tag in (("artist", "Artist"), ("scripter", "Scripter"),
+                         ("commissioner", "Commissioner"), ("support", "Support")):
+            manifest[key] = info_text(tag)
+
+        icon_name = info_text("PreviewImage")
+        if icon_name is not None:
+            manifest["icon"] = icon_name.removesuffix(".png")\
+            .removesuffix(".jpg")\
+            .removesuffix(".jpeg")\
+            .removesuffix(".gif")\
+            .removesuffix(".webp") + ".qoi"
+
+    memfile = io.BytesIO()
+    tar = tarfile.open(fileobj=memfile, mode="w")
+
+    tarinfo = tarfile.TarInfo("manifest.json")
+    tarinfo.size = len(json.dumps(manifest).encode("utf-8"))
+    tar.addfile(tarinfo, io.BytesIO(json.dumps(manifest).encode("utf-8")))
+
+    tarinfo = tarfile.TarInfo("scripts.json")
+    tarinfo.size = len(scripts.encode("utf-8"))
+    tar.addfile(tarinfo, io.BytesIO(scripts.encode("utf-8")))
+
+    tarinfo = tarfile.TarInfo("actions.json")
+    tarinfo.size = len(actions.encode("utf-8"))
+    tar.addfile(tarinfo, io.BytesIO(actions.encode("utf-8")))
+
+    tarinfo = tarfile.TarInfo("behaviors.json")
+    tarinfo.size = len(behaviors.encode("utf-8"))
+    tar.addfile(tarinfo, io.BytesIO(behaviors.encode("utf-8")))
+
+    tarinfo = tarfile.TarInfo("assets/")
+    tarinfo.type = tarfile.DIRTYPE
+    tar.addfile(tarinfo)
+
+    for path, dirs, files in os.walk(figure["images"]):
+        # A figure's conf directory holds no images, nor does "unused"
+        # A figure's conf directory holds no images, nor does "unused"
+        dirs[:] = [d for d in dirs if d.lower() not in ("conf", "unused")]
+        if path != figure["images"]:
+            tarinfo = tarfile.TarInfo("assets/" + path.removeprefix(figure["images"]))
+            tarinfo.type = tarfile.DIRTYPE
+            tar.addfile(tarinfo)
+
+        for file in files:
+            if file.lower().endswith(IMAGE_SUFFIXES):
+                img = Image.open(os.path.join(path, file))
+                tempf = tempfile.NamedTemporaryFile(delete=False)
+                tempf.close()
+                encode_img(img, False, tempf.name)
+                tempf = open(tempf.name, "rb")
+                tarinfo = tarfile.TarInfo("assets/" + os.path.join(path.removeprefix(figure["images"]), asset_name(file)))
+                tarinfo.size = os.path.getsize(tempf.name)
+                tar.addfile(tarinfo, tempf)
+                tempf.close()
+                os.remove(tempf.name)
+
+    tar.close()
+
+    wlpak_prefix = b"WLPK"
+    wlpak_prefix += struct.pack(f"B{len(manifest['name'].encode('utf-8'))}s", len(manifest['name'].encode("utf-8")), manifest['name'].encode("utf-8"))
+    wlpak_prefix += struct.pack(f"B{len(manifest['version'].encode('utf-8'))}s", len(manifest['version'].encode("utf-8")), manifest['version'].encode("utf-8"))
+    wlpak_prefix += b"\x00" * (512 - len(wlpak_prefix))
+
+    # Only create the file once conversion has succeeded
+    # Only create the file once conversion has succeeded
+    with open(output, "wb") as wlpak:
+        wlpak.write(wlpak_prefix)
+        wlpak.write(memfile.getvalue())
+    return output
+
+
+def converter_handler(arguments: argparse.Namespace, parser):
     if not os.path.exists(arguments.output):
         os.makedirs(arguments.output, exist_ok=True)
 
@@ -3016,224 +3422,101 @@ def converter_handler(arguments: argparse.Namespace, parser):
         print("Output is not a directory.")
         exit(1)
 
-    instance_root = arguments.input
-    tmpdir_instance_root = None
-
-    if not os.path.isdir(instance_root):
-        try:
-            zipf = zipfile.ZipFile(instance_root, 'r')
-        except Exception as e:
-            print(f'Failed to parse Shimeji-EE instance: Cannot open zip file: {e}')
-            exit(1)
-
-        tmpdir_instance_root = tempfile.TemporaryDirectory()
-        instance_root = tmpdir_instance_root.name
-        zipf.extractall(instance_root)
-
-    filelist = os.listdir(instance_root)
-    if len(os.listdir(instance_root)) == 1:
-        instance_root = os.path.join(instance_root, os.listdir(instance_root)[0])
-        if not os.path.isdir(instance_root):
-            print("Failed to parse Shimeji-EE instance: Passed input does not contain a valid directory nor is Shimeji-EE instance")
-            exit(1)
-        filelist = os.listdir(instance_root)
-
-    if not all([
-        "img" in filelist,
-        "conf" in filelist
-    ]):
-        print("Failed to parse Shimeji-EE instance: Passed input is not a valid Shimeji-EE instance")
-        exit(1)
-
-    if not os.path.isdir(os.path.join(instance_root, "img")):
-        print(f"Failed to parse Shimeji-EE instance: \"img\" inside instance is not a directory")
-        exit(1)
-
-    if not os.path.isdir(os.path.join(instance_root, "conf")):
-        print(f"Failed to parse Shimeji-EE instance: \"conf\" inside instance is not a directory")
-        exit(1)
-
-    prototype_names = [dnode for dnode in os.listdir(os.path.join(instance_root, "img")) if (os.path.isdir(os.path.join(instance_root, "img", dnode)) and dnode != "unused")]
-    print("Prototypes available for conversion:")
-    for i, prototype_name in enumerate(prototype_names):
-        print(f"{i+1}. {prototype_name}")
-    print("\nEnter prototypes index or name to convert (can be comma-separated or A to convert all)")
-    user_input = input(">").rstrip().lstrip()
-
-    if user_input == "A":
-        user_input = ",".join([str(i+1) for i in range(len(prototype_names))])
-
-    selected = []
-    for index in user_input.split(","):
-        if not index.isnumeric():
-            if index in prototype_names:
-                selected.append(index)
-        else:
-            index = int(index)
-            if index > 0 and index <= len(prototype_names):
-                selected.append(prototype_names[index-1])
-
-    if not selected:
-        print("No prototypes selected")
+    figures, unpacked = open_instance(arguments.input)
+    selected = choose_prototypes(figures, arguments.figure, arguments.all)
+    if arguments.name and len(selected) != 1:
+        print("--name gives one mascot a name; pick one with --figure")
         exit(1)
 
     failed = 0
-    for prototype in selected:
-
-        if os.path.exists(os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")):
-            if not arguments.force:
-                print(f"File {os.path.join(arguments.output, f'Shimeji.{prototype}.wlshm')} already exists")
-                failed += 1
-                continue
-
-        config_base_dir_name = os.path.join(instance_root, "conf")
-
-        if os.path.exists(os.path.join(instance_root, "img", prototype, "conf")):
-            if os.path.isdir(os.path.join(instance_root, "img", prototype, "conf")):
-                config_base_dir_name = os.path.join(instance_root, "img", prototype, "conf")
-
-        config_dirfd = os.open(config_base_dir_name, os.O_PATH)
-        try:
-            scripts, actions, behaviors = \
-            Compiler.compile_shimeji(
-                os.path.join(instance_root, "img", prototype),
-                config_dirfd
-            )
-        except Exception as e:
-            print(f"Conversion failed for {prototype}: {e}")
+    for figure in selected:
+        name = arguments.name or figure["name"]
+        output = os.path.join(arguments.output, f"Shimeji.{name}.wlshm")
+        if os.path.exists(output) and not arguments.force:
+            print(f"File {output} already exists")
             failed += 1
             continue
-        finally:
-            os.close(config_dirfd)
-
-        manifest = \
-        {
-            "name": f"Shimeji.{prototype}",
-            "version": "0.0.1",
-            "description": "",
-            "display_name": prototype,
-            "programs": "scripts.json",
-            "actions": "actions.json",
-            "behaviors": "behaviors.json",
-            "assets": "assets",
-            "icon": None,
-            "artist": None,
-            "scripter": None,
-            "commissioner": None,
-            "support": None
-        }
-
-        # info.xml sits next to actions.xml, or in the image directory
-        # info.xml sits next to actions.xml, or in the image directory
-        info_path = None
-        for candidate in (config_base_dir_name, os.path.join(instance_root, "img", prototype)):
-            if os.path.isfile(os.path.join(candidate, "info.xml")):
-                info_path = os.path.join(candidate, "info.xml")
-                break
-
-        root = None
-        if info_path:
-            try:
-                root = ET.parse(info_path).getroot()
-            except ET.ParseError as e:
-                print(f"Ignoring {info_path}: {e}")
-
-        if root is not None:
-            # Shimeji-ee files use the http://www.group-finity.com/Mascot namespace
-            # Shimeji-ee files use the http://www.group-finity.com/Mascot namespace
-            for element in root.iter():
-                element.tag = element.tag.rpartition("}")[2]
-
-            # Credits are usually <Artist Name="…" URL="…"/>, but accept text too
-            # Credits are usually <Artist Name="…" URL="…"/>, but accept text too
-            def info_text(tag):
-                element = root.find(f"Information/{tag}")
-                if element is None:
-                    return None
-                text = (element.text or "").strip() or element.get("Name", "").strip()
-                return text or None
-
-            manifest["display_name"] = info_text("Name") or manifest["display_name"]
-            for key, tag in (("artist", "Artist"), ("scripter", "Scripter"),
-                             ("commissioner", "Commissioner"), ("support", "Support")):
-                manifest[key] = info_text(tag)
-
-            icon_name = info_text("PreviewImage")
-            if icon_name is not None:
-                manifest["icon"] = icon_name.removesuffix(".png")\
-                .removesuffix(".jpg")\
-                .removesuffix(".jpeg")\
-                .removesuffix(".gif")\
-                .removesuffix(".webp") + ".qoi"
-
-        memfile = io.BytesIO()
-        tar = tarfile.open(fileobj=memfile, mode="w")
-
-        tarinfo = tarfile.TarInfo("manifest.json")
-        tarinfo.size = len(json.dumps(manifest).encode("utf-8"))
-        tar.addfile(tarinfo, io.BytesIO(json.dumps(manifest).encode("utf-8")))
-
-        tarinfo = tarfile.TarInfo("scripts.json")
-        tarinfo.size = len(scripts.encode("utf-8"))
-        tar.addfile(tarinfo, io.BytesIO(scripts.encode("utf-8")))
-
-        tarinfo = tarfile.TarInfo("actions.json")
-        tarinfo.size = len(actions.encode("utf-8"))
-        tar.addfile(tarinfo, io.BytesIO(actions.encode("utf-8")))
-
-        tarinfo = tarfile.TarInfo("behaviors.json")
-        tarinfo.size = len(behaviors.encode("utf-8"))
-        tar.addfile(tarinfo, io.BytesIO(behaviors.encode("utf-8")))
-
-        tarinfo = tarfile.TarInfo("assets/")
-        tarinfo.type = tarfile.DIRTYPE
-        tar.addfile(tarinfo)
-
-        for path, dirs, files in os.walk(os.path.join(instance_root, "img", prototype)):
-            if path != os.path.join(instance_root, "img", prototype):
-                tarinfo = tarfile.TarInfo("assets/" + path.removeprefix(os.path.join(instance_root, "img", prototype)))
-                tarinfo.type = tarfile.DIRTYPE
-                tar.addfile(tarinfo)
-
-            for file in files:
-                if file.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
-                    img = Image.open(os.path.join(path, file))
-                    tempf = tempfile.NamedTemporaryFile(delete=False)
-                    tempf.close()
-                    encode_img(img, False, tempf.name)
-                    tempf = open(tempf.name, "rb")
-                    tarinfo = tarfile.TarInfo("assets/" + os.path.join(path.removeprefix(os.path.join(instance_root, "img", prototype)), file.removesuffix(".png")\
-                    .removesuffix(".jpg")\
-                    .removesuffix(".jpeg")\
-                    .removesuffix(".gif")\
-                    .removesuffix(".webp") + ".qoi"))
-                    tarinfo.size = os.path.getsize(tempf.name)
-                    tar.addfile(tarinfo, tempf)
-                    tempf.close()
-                    os.remove(tempf.name)
-
-        tar.close()
-
-        wlpak_prefix = b"WLPK"
-        wlpak_prefix += struct.pack(f"B{len(manifest['name'].encode('utf-8'))}s", len(manifest['name'].encode("utf-8")), manifest['name'].encode("utf-8"))
-        wlpak_prefix += struct.pack(f"B{len(manifest['version'].encode('utf-8'))}s", len(manifest['version'].encode("utf-8")), manifest['version'].encode("utf-8"))
-        wlpak_prefix += b"\x00" * (512 - len(wlpak_prefix))
-
-        # Only create the file once conversion has succeeded
-        # Only create the file once conversion has succeeded
-        with open(os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm"), "wb") as wlpak:
-            wlpak.write(wlpak_prefix)
-            wlpak.write(memfile.getvalue())
-        print(f'Converted {prototype} to {os.path.join(arguments.output, f"Shimeji.{prototype}.wlshm")}')
+        if convert_prototype(figure, output, arguments.name):
+            print(f'Converted {figure["name"]} to {output}')
+        else:
+            failed += 1
 
     if failed:
         exit(1)
 
-def wlshm_adjusted(path: str, no_climb: bool, talk: str | None):
-    """Copy of a .wlshm with --no-climb/--talk applied, as an unlinked temporary file.
+
+def converted_for_import(arguments: argparse.Namespace) -> list:
+    """mascot import takes Shimeji-ee packs too: replaces each one in
+    arguments.input with its mascots converted to .wlshm files, in temporary
+    directories that are returned (keep them until the import is done)"""
+    keep = []
+    inputs = []
+    for path in arguments.input:
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                if f.read(4) == b"WLPK":
+                    inputs.append(path)
+                    continue
+        figures, unpacked = open_instance(path)
+        keep.append(unpacked)
+        selected = choose_prototypes(figures, arguments.figure, arguments.all)
+        if arguments.name and len(selected) != 1:
+            print("--name gives one mascot a name; pick one with --figure")
+            exit(1)
+        arguments.renamed = True
+        out = tempfile.TemporaryDirectory()
+        keep.append(out)
+        for figure in selected:
+            name = arguments.name or figure["name"]
+            print(f"Converting {figure['name']}" + (f" as {name}" if name != figure["name"] else "") + "...")
+            converted = convert_prototype(figure, os.path.join(out.name, f"Shimeji.{name}.wlshm"), arguments.name)
+            if converted:
+                inputs.append(converted)
+    arguments.input = inputs
+    return keep
+
+
+# What a Talk behavior is picked from without --talk: the first hint some
+# What a Talk behavior is picked from without --talk: the first hint some
+# action's name has (petting, talking, waving...)
+# action's name has (petting, talking, waving...)
+TALK_HINTS = ("pet", "talk", "speak", "wave", "spinhead", "lookup", "facemouse")
+
+
+def guess_talk(actions: list[str]) -> str | None:
+    for hint in TALK_HINTS:
+        found = [a for a in actions if hint in a.lower()]
+        if found:
+            # "SitPetting" rather than its part "SitPettingAction"
+            # "SitPetting" rather than its part "SitPettingAction"
+            return sorted(found, key=lambda a: (a.lower().endswith("action"), len(a)))[0]
+    return None
+
+
+def wlshm_header(name: str, version: str) -> bytes:
+    """A .wlshm's 512 bytes before its tar: WLPK, then the name and version, each a length byte and the text"""
+    header = b"WLPK"
+    for text in (name, version):
+        data = text.encode("utf-8")[:255]
+        header += struct.pack(f"B{len(data)}s", len(data), data)
+    return header + b"\x00" * (512 - len(header))
+
+
+def wlshm_manifest(path: str) -> dict:
+    with open(path, "rb") as f:
+        f.seek(512)
+        with tarfile.open(fileobj=io.BytesIO(f.read()), mode="r:*") as source:
+            return json.load(source.extractfile("manifest.json")) if "manifest.json" in source.getnames() else {}
+
+
+def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | None = None, name: str | None = None):
+    """Copy of a .wlshm with --no-climb/--talk/--sleep/--name applied, as an
+    unlinked temporary file. Without --talk, a Talk behavior is picked (see
+    guess_talk()), unless it has one; --talk none adds none. --sleep adds an
+    Asleep behavior, which the daemon prefers to Sleep.
 
     The daemon unpacks whatever fd it is given, so the original file is never touched.
-    Returns the file and what was changed, one line each.
+    Returns the file, its manifest and what it does, one line each.
     """
     with open(path, "rb") as f:
         header = f.read(512)
@@ -3248,14 +3531,46 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None):
             raise ValueError(f"{needed} not found")
     behaviors = json.load(source.extractfile(behaviors_name))
     changes = []
+    if name:
+        manifest["name"] = f"Shimeji.{name}"
+        manifest["display_name"] = name
+        header = wlshm_header(manifest["name"], manifest.get("version", "0.0.1"))
 
-    if talk:
-        # Inlined actions are anonymous parts of other actions, not something to pick
-        # Inlined actions are anonymous parts of other actions, not something to pick
-        actions = [a["name"] for a in json.load(source.extractfile(actions_name)) if not a["name"].startswith("___")]
+    # Never one the overlay drops (an image missing, see broken_actions())
+    # Never one the overlay drops (an image missing, see broken_actions())
+    definitions = json.load(source.extractfile(actions_name))
+    assets = {n.removeprefix(manifest.get("assets", "assets") + "/") for n in names}
+    referenced = set()
+
+    def collect(node):
+        if isinstance(node, dict):
+            if node.get("type") == "Frame":
+                referenced.update(i for i in (node.get("image"), node.get("image_right")) if i)
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(definitions)
+    broken, _ = broken_actions({a["name"]: a for a in definitions}, referenced - assets)
+    # Inlined actions are anonymous parts of other actions, not something to pick
+    # Inlined actions are anonymous parts of other actions, not something to pick
+    actions = [a["name"] for a in definitions if not a["name"].startswith("___") and a["name"] not in broken]
+    has_talk = any(d.get("name") == "Talk" for d in behaviors.get("definitions", []))
+    match = None
+    if talk and talk.lower() != "none":
         match = next((a for a in actions if a.lower() == talk.lower()), None)
         if not match:
             raise ValueError(f"no action called '{talk}'. Actions: {', '.join(actions)}")
+    elif not talk and has_talk:
+        changes.append("keeps its own Talk")
+    elif not talk:
+        match = guess_talk(actions)
+        if not match:
+            changes.append("no action to talk with (it sits); --talk <action> to pick one")
+
+    if match:
         definitions = behaviors.setdefault("definitions", [])
         definitions[:] = [d for d in definitions if d.get("name") != "Talk"]
         # Never picked at random (frequency 0); the daemon switches to it while a reply streams
@@ -3263,13 +3578,40 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None):
         definitions.append({"name": "Talk", "action": match, "next_behavior_list": [], "next_behavior_list_count": 0,
                             "hidden": True, "condition": None, "is_conditioner": False,
                             "next_behavior_list_add": True, "frequency": 0})
-        changes.append(f"talks with {match}")
+        picked = "" if talk else " (picked; --talk <action> for another, --talk none for none)"
+        changes.insert(0, f"talks with {match}{picked}")
+
+    if sleep:
+        found = next((a for a in actions if a.lower() == sleep.lower()), None)
+        if not found:
+            raise ValueError(f"no action called '{sleep}'. Actions: {', '.join(actions)}")
+        definitions = behaviors.setdefault("definitions", [])
+        definitions[:] = [d for d in definitions if d.get("name") != "Asleep"]
+        # Like Talk: never picked at random; repeated while the mascot is asleep
+        # Like Talk: never picked at random; repeated while the mascot is asleep
+        definitions.append({"name": "Asleep", "action": found, "next_behavior_list": [], "next_behavior_list_count": 0,
+                            "hidden": True, "condition": None, "is_conditioner": False,
+                            "next_behavior_list_add": True, "frequency": 0})
+        changes.append(f"sleeps with {found}")
 
     if no_climb:
         disabled = strip_climbing(behaviors)
         changes.append(f"climbing removed ({len(disabled)} behaviors)" if disabled else "no climbing to remove")
 
+    # What it sleeps with (mascot sleep, a middle click), see mascot_sleep() in mascotd
+    # What it sleeps with (mascot sleep, a middle click), see mascot_sleep() in mascotd
+    defined = {d.get("name") for d in behaviors.get("definitions", [])}
+    if "Asleep" not in defined:
+        if "Sleep" in defined:
+            changes.append("sleeps with its own Sleep (if that does not look like sleeping, import it again "
+                           "with --sleep <action>)")
+        elif "LieDown" in defined:
+            changes.append("lies down to sleep")
+        else:
+            changes.append("has nothing to sleep with, so it sits (--sleep <action> to pick one)")
+
     behaviors_data = json.dumps(behaviors).encode("utf-8")
+    manifest_data = json.dumps(manifest).encode("utf-8")
     out = tempfile.TemporaryFile()
     out.write(header)
     with tarfile.open(fileobj=out, mode="w") as tar:
@@ -3277,11 +3619,14 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None):
             if member.name == behaviors_name:
                 member.size = len(behaviors_data)
                 tar.addfile(member, io.BytesIO(behaviors_data))
+            elif member.name == "manifest.json" and name:
+                member.size = len(manifest_data)
+                tar.addfile(member, io.BytesIO(manifest_data))
             else:
                 tar.addfile(member, source.extractfile(member) if member.isfile() else None)
     source.close()
     out.seek(0)
-    return out, changes
+    return out, manifest, changes
 
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
     match arguments.action:
@@ -3443,14 +3788,19 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     7: "FD opened in invalid mode"
                 }
 
-                logger.error(f"Failed to import prototype referenced by id {packet.object_id}: {errors.get(packet.error_code, 'Unknown error')}")
+                label = getattr(import_object, "label", f"id {packet.object_id}")
+                if packet.error_code == 3:
+                    print(f"You already have {label}: use -f to replace it, or --name to keep both")
+                else:
+                    logger.error(f"Failed to import {label}: {errors.get(packet.error_code, 'Unknown error')}")
                 imports.pop(packet.object_id, None)
                 objects.pop(packet.object_id, None)
 
             def finished(client: Client, packet: ImportFinished):
                 import_object = imports.get(packet.object_id)
                 if import_object:
-                    logger.info(f"Successfully imported prototype referenced by id {packet.object_id}")
+                    print(f"Imported {getattr(import_object, 'label', f'id {packet.object_id}')}: "
+                          + "; ".join(getattr(import_object, "changes", [])))
                     rpacket = ReloadPrototype(packet.relative_path)
                     client.queue_packet(rpacket)
 
@@ -3464,6 +3814,12 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
             # Kept open until the daemon is done with them
             # Kept open until the daemon is done with them
             adjusted = []
+            # A pack's mascots were renamed when converted, see converted_for_import()
+            # A pack's mascots were renamed when converted, see converted_for_import()
+            rename = None if getattr(arguments, "renamed", False) else arguments.name
+            if rename and len(arguments.input) != 1:
+                logger.error("--name gives one mascot a name; import one file at a time")
+                exit(1)
             for input_file in arguments.input:
                 if not os.path.exists(input_file):
                     logger.error(f"File '{input_file}' does not exist")
@@ -3472,17 +3828,31 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     if f.read(4) != b'WLPK':
                         logger.warning(f"File '{input_file}' is not a valid mascot prototype, please first convert it to a mascot prototype using the convert command (mascot convert)")
                         continue
-                    if not arguments.no_climb and not arguments.talk:
-                        Import(f.fileno(), arguments.force, client.socket)
-                        continue
                 try:
-                    copy, changes = wlshm_adjusted(input_file, arguments.no_climb, arguments.talk)
+                    copy, manifest, changes = wlshm_adjusted(input_file, arguments.no_climb, arguments.talk,
+                                                             arguments.sleep, rename)
                 except (tarfile.TarError, ValueError, KeyError) as e:
                     logger.error(f"Could not prepare '{input_file}': {e}")
                     continue
-                print(f"{input_file}: {', '.join(changes)}")
+
+                # The same name as a mascot you have: a different one (another
+                # The same name as a mascot you have: a different one (another
+                # pack's "Red") is never replaced, the same one only with -f
+                # pack's "Red") is never replaced, the same one only with -f
+                display = manifest.get("display_name") or manifest.get("name", "").removeprefix("Shimeji.")
+                internal = manifest.get("name")
+                other = next((p for p in prototypes.values() if p.name != internal
+                              and (p.display_name or "").lower() == display.lower()), None)
+                if other:
+                    print(f"You already have another mascot called {display} ({other.name}): "
+                          f"give this one another name with --name")
+                    copy.close()
+                    continue
+
                 adjusted.append(copy)
-                Import(copy.fileno(), arguments.force, client.socket)
+                imported = Import(copy.fileno(), arguments.force, client.socket)
+                imported.label = display
+                imported.changes = changes
 
 
             client.dispatch_events(until=lambda: len(imports) == 0)
@@ -4106,10 +4476,14 @@ if __name__ == "__main__":
     prototype_exporter.add_argument("-f", "--force", action="store_true", help="Overwrite existing files")
 
     prototype_importer = prototype_subparsers.add_parser("import", help="Import a prototype")
-    prototype_importer.add_argument("input", nargs="*", help="Path(s) of the prototype to import. Can be either in wlshm format or in Shimeji-ee format. Can be specified multiple times.")
+    prototype_importer.add_argument("input", nargs="*", help="Path(s) of the prototype to import: a .wlshm file, or a Shimeji-ee pack (zip file or directory), converted on the way. Can be specified multiple times.")
     prototype_importer.add_argument("-f", "--force", action="store_true", help="Overwrite existing prototypes")
     prototype_importer.add_argument("--no-climb", action="store_true", help="Remove wall and ceiling behaviors, so the mascot stays on the floor")
-    prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info')")
+    prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info'); without it one is picked (a petting, talking or waving one), 'none' for none")
+    prototype_importer.add_argument("--sleep", metavar="ACTION", help="Action the mascot plays while asleep (mascot sleep, a middle click), if its own Sleep does not look like sleeping")
+    prototype_importer.add_argument("--figure", action="append", metavar="NAME", help="Mascot of a Shimeji-ee pack to import (can be given more than once); without it, the pack's only one, or you pick")
+    prototype_importer.add_argument("--all", action="store_true", help="Import all mascots of a Shimeji-ee pack")
+    prototype_importer.add_argument("--name", help="Name for the mascot from a Shimeji-ee pack (one mascot)")
 
 # Convert category
 # Convert category
@@ -4118,6 +4492,9 @@ if __name__ == "__main__":
     convert_category.add_argument("input", help="Path of the instance to convert. Should be either a directory or a zip file. Must be Shimeji-EE instance.")
     convert_category.add_argument("-O", "--output", help="Output directory.", required=True)
     convert_category.add_argument("-f", "--force", action="store_true", help="Overwrite existing files")
+    convert_category.add_argument("--figure", action="append", metavar="NAME", help="Mascot of the pack to convert (can be given more than once); without it, the pack's only one, or you pick")
+    convert_category.add_argument("--all", action="store_true", help="Convert all mascots of the pack")
+    convert_category.add_argument("--name", help="Name for the converted mascot (one mascot)")
 
 # Config category
 # Config category
@@ -4188,10 +4565,14 @@ if __name__ == "__main__":
     prototype_exporter.add_argument("-f", "--force", action="store_true", help="Overwrite existing files")
 
     prototype_importer = category.add_parser("import", help="Import a prototype")
-    prototype_importer.add_argument("input", nargs="*", help="Path(s) of the prototype to import. Can be either in wlshm format or in Shimeji-ee format. Can be specified multiple times.")
+    prototype_importer.add_argument("input", nargs="*", help="Path(s) of the prototype to import: a .wlshm file, or a Shimeji-ee pack (zip file or directory), converted on the way. Can be specified multiple times.")
     prototype_importer.add_argument("-f", "--force", action="store_true", help="Overwrite existing prototypes")
     prototype_importer.add_argument("--no-climb", action="store_true", help="Remove wall and ceiling behaviors, so the mascot stays on the floor")
-    prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info')")
+    prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info'); without it one is picked (a petting, talking or waving one), 'none' for none")
+    prototype_importer.add_argument("--sleep", metavar="ACTION", help="Action the mascot plays while asleep (mascot sleep, a middle click), if its own Sleep does not look like sleeping")
+    prototype_importer.add_argument("--figure", action="append", metavar="NAME", help="Mascot of a Shimeji-ee pack to import (can be given more than once); without it, the pack's only one, or you pick")
+    prototype_importer.add_argument("--all", action="store_true", help="Import all mascots of a Shimeji-ee pack")
+    prototype_importer.add_argument("--name", help="Name for the mascot from a Shimeji-ee pack (one mascot)")
 
     prototype_list = category.add_parser("list", help="List known prototypes")
     prototype_list.add_argument("-d", "--detailed", action="store_true", help="Show detailed information about the prototypes")
@@ -4207,6 +4588,16 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG if arguments.verbose else logging.INFO)
         converter_handler(arguments, convert_category)
         exit(0)
+
+    # Shimeji-ee packs are converted before the overlay is asked (or started)
+    # Shimeji-ee packs are converted before the overlay is asked (or started)
+    importing = arguments.category == "import" or (arguments.category == "prototypes" and getattr(arguments, "action", None) == "import")
+    if importing:
+        logging.basicConfig(level=logging.DEBUG if arguments.verbose else logging.INFO)
+        converted_dirs = converted_for_import(arguments)
+        if not arguments.input:
+            logger.error("Nothing to import")
+            exit(1)
 
     socket_path = arguments.socket or (
         os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "mascotd.sock")

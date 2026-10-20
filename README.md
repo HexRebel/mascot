@@ -41,8 +41,9 @@ mascot summon Shimeji     # starts the daemon and the chat bubble
 mascot stop               # stops both again
 ```
 
-Mascot ships with the original Shimeji. For the chat bubble you also need Quickshell and a
-configured aichat (see [Chat bubble](#chat-bubble)).
+Mascot ships with the original Shimeji; `mascot import <shimeji-ee pack.zip>` adds others (see
+[Adding mascots](#adding-mascots)). For the chat bubble you also need Quickshell and a configured
+aichat (see [Chat bubble](#chat-bubble)).
 
 # Requirements
 
@@ -145,57 +146,67 @@ make install-plugins
 
 # How to use
 
-## Converting to mascot format
+## Adding mascots
 
-First, you need to find some Shimeji-ee mascots. They are usually distributed as zip archives. You can find them on the internet.
-When you got shimejis of your choice, you need to convert them to the mascot format.
+Shimeji-ee mascots are usually shared as zip files; you can find many on the internet. Import one
+straight from the zip (or from its unpacked directory):
 
 ```sh
-mascot convert /path/to/shimeji-ee.zip -O /some/output/directory
+mascot import "Shiba Inu Shimeji.zip"
 ```
 
-It will try to read the zip archive and will ask you to select which mascots you want to convert:
+Packs come in many shapes, and the import finds the mascots in them: a Shimeji-ee instance
+(`img/<name>/` and `conf/`, also a few directories down, or with `conf/` only inside the mascot's
+directory), `img/` with the images right in it, or just the images (`shime1.png` to `shime46.png`),
+which use the bundled Shimeji's actions. A mascot without a name of its own is named after the file
+(`Testy Shimeji v1.2.zip` gives *Testy*). When it is done, it says what each mascot talks and sleeps
+with; anything in the pack that will not work (a missing image, an action that is not defined, and
+the behaviors that go with them) is named while converting.
+
+A pack with one mascot is imported as it is. For a pack with several, pick them with `--figure`
+(any letter case, more than once), take them all with `--all`, or choose from the list it shows:
 
 ```bash
-$ mascot convert "The Neuroling Collection v0.7.zip" -O output/
+$ mascot import "The Neuroling Collection v0.7.zip"
 Prototypes available for conversion:
 1. Weuron
 2. Vedaling
-3. Tuteling Cursor
-4. Tuteling
-5. Neuron
-6. Neuroling
-7. Eviling
-8. Evil Neuroling
-9. Broken Neuron
-
+...
 Enter prototypes index or name to convert (can be comma-separated or A to convert all)
 >
 ```
 
-When you selected mascot types that you need, mascot will convert them to the mascot format and will save them to the output directory with names like
-`Shimeji.{mascot_name}.wlshm`. Converting does not start Mascot.
+- `--name "Red Shiba"` gives the mascot another name than the pack's (for one mascot), e.g. when
+  it is called just `Red`: `mascot import --figure Red --name "Red Shiba" "Shiba Inu Shimeji.zip"`.
+- `--no-climb`: the mascot never climbs walls or hangs from the ceiling. Every behavior whose name
+  mentions a wall, the ceiling, climbing or hanging is never picked; falling, being thrown and being
+  dragged still work.
+- While the chat bubble answers, the mascot plays a `Talk` behavior (never picked at random). The
+  import picks its action from the mascot's own (one with petting, talking or waving in its name) and
+  says which; `--talk <action>` picks another (`mascot prototypes info <name>` lists them; take one
+  that looks right on the floor), `--talk none` none, and the mascot just sits.
+- Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
+  `LieDown` or `SitDown`. Some packs' `Sleep` is something else (the Shiba Inu rolls on its back);
+  `--sleep <action>` picks the action it sleeps with instead, e.g. `--sleep SitAndDangleLegs`.
+- If you already have a mascot of that name, it is not imported: `-f` replaces it, `--name` keeps
+  both. A mascot with the same name in another letter case (*Red* and *red*) is never replaced; give
+  the new one another name. `--name` works for `.wlshm` files too.
 
-# Importing .wlshm prototypes
+Packs made for Windows sometimes name their images in another letter case than their actions do
+(`swag1.png` for `Swag1.png`); that is matched.
 
-After you successfully converted your mascots, you can import them to the mascot format using the following command:
+`scripts/make_test_packs.py <directory>` builds a few packs in these shapes from the bundled
+Shimeji's images, to try the import on.
+
+### Converting to .wlshm files
+
+`mascot convert` writes the mascots of a pack to `.wlshm` files instead, e.g. to share them; it
+takes the same `--figure`, `--all` and `--name` and does not start Mascot. `mascot import` takes
+those files too (as does `mascot prototypes import`).
 
 ```sh
-mascot prototypes import /path/to/Shimeji.{first_name}.wlshm /path/to/Shimeji.{second_name}.wlshm ...
-```
-
-If prototype already exists, mascot will skip it unless -f is used.
-
-With `--no-climb`, the mascot never climbs walls or hangs from the ceiling: every behavior whose name
-mentions a wall, the ceiling, climbing or hanging is never picked. Falling, being thrown and being
-dragged still work.
-
-With `--talk <action>`, the mascot plays that action while the chat bubble answers (a `Talk` behavior
-that is never picked at random). `mascot prototypes info <name>` lists the actions; pick one that
-looks right on the floor. Without it, the mascot just sits. The `.wlshm` file itself is left unchanged.
-
-```sh
-mascot import --no-climb --talk SitAndSpinHead "Shimeji.Example.wlshm"
+mascot convert "Shiba Inu Shimeji.zip" --all -O ~/mascots
+mascot import --no-climb ~/mascots/Shimeji.Sesame.wlshm
 ```
 
 # Listing available prototypes
