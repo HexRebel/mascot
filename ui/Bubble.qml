@@ -492,10 +492,11 @@ PanelWindow {
         weather: ["get_current_weather"],
         files: ["list_directory", "read_file", "search_file", "look_at_image"],
         todo: ["list_todos", "add_todo", "remove_todo", "edit_todo"],
-        reminders: ["set_reminder", "list_reminders", "cancel_reminder"]
+        reminders: ["set_reminder", "list_reminders", "cancel_reminder"],
+        shell: ["last_commands"]
     })
     // Only with a local model, so what they read stays on this computer
-    readonly property var localTools: ["files", "todo", "reminders"]
+    readonly property var localTools: ["files", "todo", "reminders", "shell"]
     readonly property string toolsDir: Quickshell.shellPath("../tools")
     // One list for all mascots, in Markdown ("- [ ] item"), kept in the data directory
     readonly property string todoFile: `${bubble.dataDir}/todo.md`
@@ -599,7 +600,10 @@ PanelWindow {
                 const remind = env.AICHAT_USE_TOOLS.includes("set_reminder") ? "\n\nWhen the user wants a reminder or "
                     + "a timer, call set_reminder (list_reminders and cancel_reminder for the ones set); the bubble "
                     + "tells them when it is time, so never say you set one without calling it." : "";
-                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}`), env);
+                const shell = env.AICHAT_USE_TOOLS.includes("last_commands") ? "\n\nWhen the user asks about a "
+                    + "command they ran (the last one, what they just did in the terminal), call last_commands instead "
+                    + "of asking them for it, and explain it." : "";
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}${shell}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
                 send("");
@@ -649,9 +653,9 @@ PanelWindow {
             }
             const key = JSON.stringify(persona);
             if (c.memory && c.persona !== key) {
-                const local = /read_file|list_todos|list_reminders/;
+                const local = /read_file|list_todos|list_reminders|last_commands/;
                 c.entries.append({ kind: "system", body: local.test(c.persona) && !local.test(key)
-                    ? "not a local model - no files, todo list or reminders, and the memory starts over, so what the mascot read stays here"
+                    ? "not a local model - no files, todo list, reminders or shell history, and the memory starts over, so what the mascot read stays here"
                     : "new role or tools - the memory starts over" });
                 c.memory = "";
             }
@@ -810,7 +814,7 @@ PanelWindow {
             {
                 const tools = toolNames();
                 if (!tools.length) {
-                    say("tools: none (set CHAT_TOOLS to time, weather, files, todo and/or reminders)");
+                    say("tools: none (set CHAT_TOOLS to time, weather, files, todo, reminders and/or shell)");
                     return;
                 }
                 const notes = {
@@ -822,7 +826,10 @@ PanelWindow {
                     todo: "todo - shows, adds to, changes and removes from your todo list (also .todo), "
                         + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
                     reminders: "reminders - sets, lists and cancels reminders and timers (also .remind), "
-                        + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : "")
+                        + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
+                    shell: "shell - the last commands you ran (zsh, bash or fish history), hiding those that may "
+                        + "hold a password or key, only with a local (ollama:) model"
+                        + (chosen().session ? "; not in a .session" : "")
                 };
                 say(tools.map(t => notes[t]).join("\n"));
                 return;

@@ -368,7 +368,7 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     char role[512];
     chat_role_json(mascot->prototype, role, sizeof(role));
 
-    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo,reminders")
+    // And CHAT_TOOLS, the bubble's tools ("time,weather,files,todo,reminders,shell")
     char tools[300] = "null";
     const char* chat_tools = config_get_chat_tools();
     if (chat_tools) {

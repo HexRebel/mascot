@@ -26,7 +26,8 @@ let them see (CHAT_DOTFILES, passed as MASCOT_DOTFILES). Even there, never where
 secrets are kept (SECRET_DIRS and SECRET_NAMES: .ssh, keys, tokens, browser
 profiles, shell history...). The file, todo and reminder tools only work when the bubble
 says the model is local (MASCOT_TOOLS_LOCAL=1), so what they read stays on this
-computer."""
+computer. So does last_commands, the one tool that reads shell history: only
+its last commands, and never one that looks like it holds a secret."""
 
 import base64
 import fcntl
@@ -49,6 +50,9 @@ LIST_LIMIT = 200  # entries of a directory (or a tree)
 TREE_DEPTH = 4  # levels of a tree
 TODO_LIMIT = 300  # characters of a todo item or a reminder
 IMAGE_LIMIT = 30 * 1024 * 1024  # bytes of an image handed to Ollama
+COMMANDS_LIMIT = 10  # shell commands last_commands shows
+COMMANDS_LEAST = 5  # ...at least: models ask for 1 even for "the find command before"
+HISTORY_TAIL = 64 * 1024  # bytes read from the end of a shell's history
 
 
 # Never read, listed or gone into, wherever they are under home (also inside
@@ -777,8 +781,142 @@ def due_reminders(args):
     return locked_change(reminder_file(), change)
 
 
+# Shell history files, (shell, path); last_commands reads the one written last,
+# so the shell in use wins whatever $SHELL says
+def history_files():
+    home = os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local/share")
+    zdotdir = os.environ.get("ZDOTDIR") or home
+    files = [("fish", os.path.join(data, "fish/fish_history")),
+             ("bash", os.path.join(home, ".bash_history"))]
+    files += [("zsh", os.path.join(zdotdir, name)) for name in (".zsh_history", ".histfile")]
+    files.append(("zsh", os.path.join(data, "zsh/history")))
+    # Only when exported, which shells do not do themselves
+    histfile = os.environ.get("HISTFILE")
+    if histfile:
+        shell = os.path.basename(os.environ.get("SHELL", ""))
+        files.insert(0, (shell if shell in ("bash", "zsh") else "zsh", os.path.expanduser(histfile)))
+    return files
+
+
+def unmetafy(data):
+    """zsh writes some bytes (e.g. those of æ, ø, å) as 0x83 and the byte ^ 32"""
+    out = bytearray()
+    meta = False
+    for byte in data:
+        if meta:
+            out.append(byte ^ 32)
+            meta = False
+        elif byte == 0x83:
+            meta = True
+        else:
+            out.append(byte)
+    return bytes(out)
+
+
+def history_entries(shell, text):
+    """[(unix time or None, command)], oldest first, from the end of a history
+    file (the first entry may be cut off)"""
+    entries = []
+    if shell == "fish":
+        # - cmd: echo hi\n  when: 1697000000
+        for line in text.split("\n"):
+            if line.startswith("- cmd: "):
+                command = line[len("- cmd: "):]
+                command = re.sub(r"\\(.)", lambda m: "\n" if m[1] == "n" else m[1], command)
+                entries.append([None, command])
+            elif line.startswith("  when: ") and entries and line[8:].strip().isdigit():
+                entries[-1][0] = int(line[8:].strip())
+        return [tuple(e) for e in entries]
+    stamp = None
+    continued = False
+    for line in text.split("\n"):
+        if continued:
+            # zsh: a line of a command over several lines ends in a backslash
+            entries[-1][1] += "\n" + line
+        elif shell == "bash" and re.fullmatch(r"#\d{9,}", line):
+            stamp = int(line[1:])  # HISTTIMEFORMAT
+            continue
+        elif shell == "zsh" and (m := re.match(r": (\d+):\d+;(.*)", line)):
+            entries.append([int(m[1]), m[2]])  # EXTENDED_HISTORY
+        elif line.strip():
+            entries.append([stamp, line])
+        else:
+            continue
+        stamp = None
+        continued = shell == "zsh" and entries[-1][1].endswith("\\")
+        if continued:
+            entries[-1][1] = entries[-1][1][:-1]
+    return [tuple(e) for e in entries]
+
+
+# Commands that may hold a password, key or token: the model never sees them
+SECRET_WORDS = re.compile(r"pass(wd|word)?\b|secret|token|api[_-]?key|apikey|auth|bearer|credential|private[_-]?key"
+                          r"|\b(gpg|pass|ssh-add|age|openssl)\b|-p\S|--password|://[^/\s:]+:[^@\s]+@", re.I)
+RANDOM_LOOKING = re.compile(r"[A-Za-z0-9+/_=-]{32,}")
+
+
+def looks_secret(command):
+    if SECRET_WORDS.search(command):
+        return True
+    # Long runs of letters and digits mixed, like keys; not paths or words
+    return any(re.search(r"\d", run) and re.search(r"[A-Za-z]", run) and "/" not in run
+               for run in RANDOM_LOOKING.findall(command))
+
+
+def last_commands(args):
+    if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
+        raise ToolError("the shell history can only be read with a local model")
+    try:
+        count = int(args.get("count") or COMMANDS_LEAST)
+    except (TypeError, ValueError):
+        count = COMMANDS_LEAST
+    count = max(COMMANDS_LEAST, min(COMMANDS_LIMIT, count))
+    text = str(args.get("text") or "").strip().lower()
+
+    found = [(os.path.getmtime(path), shell, path) for shell, path in history_files() if os.path.isfile(path)]
+    if not found:
+        raise ToolError("no shell history found (zsh, bash or fish)")
+    _, shell, path = max(found)
+    with open(path, "rb") as file:
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(max(0, size - HISTORY_TAIL))
+        data = file.read()
+    if shell == "zsh":
+        data = unmetafy(data)
+    entries = history_entries(shell, data.decode("utf-8", "replace"))
+    if size > HISTORY_TAIL:
+        entries = entries[1:]  # may be cut off
+    # The newest of each command (shells may keep duplicates), as the model may
+    # see it: text cannot find what is hidden
+    newest = []
+    for at, command in reversed(entries):
+        command = command.strip()
+        if command and command not in (c for _, c in newest):
+            newest.append((at, command))
+    newest = [(at, "[hidden: may hold a password or key]" if looks_secret(c) else c) for at, c in newest]
+    if text:
+        newest = [(at, c) for at, c in newest if text in c.lower()]
+    shown_commands = list(reversed(newest[:count]))
+    if not shown_commands:
+        return f"no command with \"{text}\" among the last ones" if text else "the shell history is empty"
+
+    lines = [f"The user's last {shell} command{'s' if len(shown_commands) > 1 else ''}, oldest first "
+             "(only the command is known, not its output or whether it failed):"]
+    for i, (at, command) in enumerate(shown_commands, 1 - len(shown_commands)):
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(at)) + " " if at else ""
+        command = command.replace("\n", "\n  ")
+        last = "" if i or text else "  <- the last command"
+        lines.append(f"- {when}{command}{last}")
+    if shell == "bash":
+        lines.append("(bash writes its history when a shell exits, unless PROMPT_COMMAND runs history -a, so a "
+                     "terminal still open may have newer commands)")
+    return "\n".join(lines)
+
+
 TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, search_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
-                                 set_reminder, list_reminders, cancel_reminder, due_reminders, context_size)}
+                                 set_reminder, list_reminders, cancel_reminder, due_reminders, last_commands, context_size)}
 
 
 def main():

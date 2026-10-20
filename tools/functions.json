@@ -198,5 +198,22 @@
         "item"
       ]
     }
+  },
+  {
+    "name": "last_commands",
+    "description": "Get the last commands the user ran in their terminal (shell history), oldest first and the last one marked, to explain what a command does or what they just did. Only the commands are known, not their output.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "How many of the last commands, 5 to 10 (default 5)."
+        },
+        "text": {
+          "type": "string",
+          "description": "Only commands with this text (any letter case), e.g. \"git\" for \"the git command I just ran\". Leave it empty for any command."
+        }
+      }
+    }
   }
 ]
