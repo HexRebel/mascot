@@ -119,8 +119,12 @@ struct mascot_action_next move_action_next(struct mascot* mascot, struct mascot_
 
     DEBUG("<Mascot:%s:%u> Move action next, TargetX, TargetY: %d, %d", mascot->prototype->name, mascot->id, mascot->TargetX->value.i, mascot->TargetY->value.i);
     DEBUG("<Mascot:%s:%u> Move action next, X, Y: %d, %d", mascot->prototype->name, mascot->id, mascot->X->value.i, mascot->Y->value.i);
-    // Check if target is reached
-    if ((mascot->X->value.i == mascot->TargetX->value.i || mascot->TargetX->value.i == -1) &&
+    // Check if target is reached. One without any target goes on for its
+    // duration, as in Shimeji-ee (a Shiba's Sleep is a Move that stays put),
+    // and without a duration too it is done at once
+    bool untargeted = mascot->TargetX->value.i == -1 && mascot->TargetY->value.i == -1;
+    if (untargeted ? !mascot->action_duration :
+        (mascot->X->value.i == mascot->TargetX->value.i || mascot->TargetX->value.i == -1) &&
         (mascot->Y->value.i == mascot_screen_y_to_mascot_y(mascot, mascot->TargetY->value.i) || mascot->TargetY->value.i == -1)) {
         result.status = mascot_tick_next;
         return result;
@@ -254,6 +258,12 @@ enum mascot_tick_result move_action_tick(struct mascot *mascot, struct mascot_ac
     if (mascot->LookingRight->value.i != looking_right) {
         mascot->LookingRight->value.i = looking_right;
         mascot_reattach_pose(mascot);
+    }
+
+    // Without any target it stays put for its duration (see move_action_next());
+    // reentering would run it again within this tick, forever
+    if (target_x == -1 && mascot->TargetY->value.i == -1) {
+        return mascot_tick_ok;
     }
 
     if ((posx == target_x || target_x == -1 ) && (posy == target_y || target_y == -1)) {
