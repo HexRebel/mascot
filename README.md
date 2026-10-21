@@ -397,7 +397,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.models <search>` | Find models on OpenRouter, newest first, with price, context and whether they can use tools, e.g. `.models gemini flash` |
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
-| `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot) |
+| `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot); started with a local model it is private (see *Tools*) |
 | `.exit model\|session` | Go back to the default |
 | `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
@@ -548,7 +548,13 @@ The file, todo, reminder and shell tools keep to what is yours to share:
 - Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
   your computer. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
   its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).
-- Not in a `.session`, which outlives Mascot and may later go to any model.
+- In a `.session` (it outlives Mascot) only when it is private: a session whose first message went to
+  a local model is private, has these tools, and only local models may go on with it - the bubble
+  refuses to send a model online what it read. A session started with another model, or one Mascot
+  did not start (made in a terminal), has none of them. Mascot keeps which is which in
+  `~/.local/share/mascot/sessions`; aichat itself does not know, so do not open a private session in a
+  terminal with a model online. Sessions are files with all that was said; keep them out of git
+  (e.g. `.config/aichat/sessions/` in a dotfiles repo's `.gitignore`).
 
 The bubble always points aichat at these tools, never at your own llm-functions, and turns function
 calling off when `CHAT_TOOLS` is empty, so none of your tools can write or run anything unconfirmed

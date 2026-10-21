@@ -624,9 +624,10 @@ PanelWindow {
     // with tools the role is sent as --prompt=<its front matter and text> with
     // Mascot's tools as use_tools, and its model as -m (a --prompt keeps none).
     // The file and todo tools (localTools) are offered only when a local model
-    // (ollama:…) answers, so what they read stays on this computer, and never to a .session (it
-    // outlives Mascot): aichat --info on a fresh session says which model that
-    // is, as .model and the role may each choose it
+    // (ollama:…) answers, so what they read stays on this computer, and in a
+    // .session (it outlives Mascot) only a private one, which only local models
+    // may go on with (see sessionKind()): aichat --info on a fresh session says
+    // which model that is, as .model and the role may each choose it
     function withTools(c: QtObject, command: string, done: var): void {
         const tools = toolNames();
         const role = roleFlags();
@@ -673,7 +674,7 @@ PanelWindow {
                     + "calling it." : "";
                 done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}${shell}${sleep}`), env);
             };
-            if (!tools.some(t => bubble.localTools.includes(t)) || c.session) {
+            if (!tools.some(t => bubble.localTools.includes(t)) || (c.session && bubble.sessionKinds[c.session] !== "private")) {
                 send("");
                 return;
             }
@@ -708,6 +709,73 @@ PanelWindow {
     function ask(text: string, kind: string): void {
         const c = bubble.current;
         const command = bubble.event?.command || "aichat";
+        if (c.session) {
+            sessionKind(c, command, ok => ok && askWithTools(text, kind, c, command));
+            return;
+        }
+        askWithTools(text, kind, c, command);
+    }
+
+    // A .session is "private" when its first message went to a local model:
+    // it gets the file, todo and other local tools, and so holds what they
+    // read, which must stay on this computer - only a local model may go on
+    // with it. Any other is "open": no local tools, any model. One Mascot
+    // did not start (made in a terminal, or before this) counts as open.
+    // Kept in the data directory, as sessions outlive Mascot
+    property var sessionKinds: ({})
+
+    FileView {
+        id: sessionKindsView
+
+        path: `${bubble.dataDir}/sessions`
+        printErrors: false
+        onLoaded: {
+            try {
+                bubble.sessionKinds = JSON.parse(this.text()) ?? {};
+            } catch (e) {}
+        }
+    }
+
+    // For .tools: whether the local tools are there in this .session
+    function sessionNote(): string {
+        const session = chosen().session;
+        if (!session)
+            return "";
+        const kind = bubble.sessionKinds[session];
+        return kind === "private" ? `; ${session} is a private session, so only local models go on with it`
+            : kind === "open" ? `; not in ${session}, which a model online may see`
+            : `; in ${session} only if its first message goes to a local model (a private session)`;
+    }
+
+    // done(ok): ok when the message may go to c.session with this model
+    function sessionKind(c: QtObject, command: string, done: var): void {
+        const probe = (c.model ? ["-m", c.model] : []).concat(roleFlags(), "-s", "mascot-probe");
+        lookup(probe, c, command, (info, ok) => {
+            const local = ok && /^model:?\s+ollama:/m.test(info);
+            const kind = bubble.sessionKinds[c.session];
+            if (kind === "private" && !local) {
+                c.entries.append({ kind: "system", body: `${c.session} is a private session: it holds what your `
+                    + "files, todo list and history said, so only a local (ollama:) model may go on with it - pick one "
+                    + "under Settings › Model, or .exit session" });
+                done(false);
+                return;
+            }
+            if (kind) {
+                done(true);
+                return;
+            }
+            // New: it takes after the model of its first message; one aichat
+            // has already is open
+            run(["--list-sessions"], false, "", (list, listed) => {
+                const known = listed && list.split("\n").map(l => l.trim()).includes(c.session);
+                bubble.sessionKinds[c.session] = !known && local ? "private" : "open";
+                sessionKindsView.setText(JSON.stringify(bubble.sessionKinds, null, 1) + "\n");
+                done(true);
+            }, c, command);
+        });
+    }
+
+    function askWithTools(text: string, kind: string, c: QtObject, command: string): void {
         withTools(c, command, (persona, env) => {
             // The model always knows the time, without a tool call, which not
             // every model makes; not shown, but kept in the memory
@@ -844,6 +912,9 @@ PanelWindow {
                         c.entries.append({ kind: "system", body: threshold && threshold !== "0"
                             ? `memory: aichat's session ${c.session}, summed up by aichat past ${threshold} tokens (compress_threshold)`
                             : `memory: aichat's session ${c.session}, never summed up (compress_threshold)` });
+                        if (bubble.sessionKinds[c.session] === "private")
+                            c.entries.append({ kind: "system", body: `${c.session} is a private session: `
+                                + "it has the local tools, and only local models may go on with it" });
                     });
                     return;
                 }
@@ -914,14 +985,14 @@ PanelWindow {
                     weather: "weather - from wttr.in (only the place name is sent)",
                     files: "files - lists and reads files and looks at images in your home directory, "
                         + "dotfiles only those in CHAT_DOTFILES, never where keys, logins or history are kept, "
-                        + "and only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
+                        + "and only with a local (ollama:) model" + bubble.sessionNote(),
                     todo: "todo - shows, adds to, changes and removes from your todo list (also .todo), "
-                        + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
+                        + "only with a local (ollama:) model" + bubble.sessionNote(),
                     reminders: "reminders - sets, lists and cancels reminders and timers (also .remind), "
-                        + "only with a local (ollama:) model" + (chosen().session ? "; not in a .session" : ""),
+                        + "only with a local (ollama:) model" + bubble.sessionNote(),
                     shell: "shell - the last commands you ran (zsh, bash or fish history), hiding those that may "
                         + "hold a password or key, only with a local (ollama:) model"
-                        + (chosen().session ? "; not in a .session" : ""),
+                        + bubble.sessionNote(),
                     sleep: "sleep - the mascots sleep for a while when you ask (do not disturb: no remarks, "
                         + "reminders wait), also mascot sleep --minutes"
                 };
