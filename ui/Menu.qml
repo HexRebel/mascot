@@ -37,6 +37,8 @@ PanelWindow {
     // The models that have answered in the bubble (Bubble.usedModels), also
     // ones aichat does not list
     property var usedModels: []
+    // Which sessions are private (Bubble.sessionKinds)
+    property var sessionKinds: ({})
     // The models OpenRouter has now, by id (Bubble.openRouterModels): aichat's
     // list of them is old, and those that are gone answer with an error, so
     // they are left out. null: not known (yet, or no network)
@@ -317,11 +319,14 @@ PanelWindow {
     ].concat(menu.roles.map(r => ({ label: r, action: "command", argument: `.role ${r}`,
                                    checked: r === menu.currentRole })))
 
-    // aichat's own sessions (.session; a new one is named in the bubble)
+    // aichat's own sessions (.session); "New session…" opens the bubble with
+    // .session typed, for its name. A private one says so (Bubble.sessionKind())
     readonly property var sessionItems: [
         { label: "‹ Back", action: "page", argument: "settings" },
+        { label: "New session…", action: "type", argument: ".session " },
         { label: "None", action: "command", argument: ".exit session", checked: !menu.choice.session }
-    ].concat(menu.sessions.map(s => ({ label: s, action: "command", argument: `.session ${s}`,
+    ].concat(menu.sessions.map(s => ({ label: menu.sessionKinds[s] === "private" ? `${s} · private` : s,
+                                      action: "command", argument: `.session ${s}`,
                                       checked: s === menu.choice.session })))
 
     // Geometry: the box (as wide as its longest label, up to maxWidth) has a

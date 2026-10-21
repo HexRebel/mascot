@@ -479,8 +479,9 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
 
     bool delivered = chat_broadcast(line, len);
 
-    // Keep the mascot still while someone is talking to it (or picking from its menu)
-    if (delivered) chat_hold(mascot);
+    // Keep the mascot still while someone is talking to it (or picking from its
+    // menu); asleep, it sleeps on under its menu, and sits up only for the bubble
+    if (delivered && !(kind == chat_menu && mascot->asleep)) chat_hold(mascot);
     return delivered;
 }
 

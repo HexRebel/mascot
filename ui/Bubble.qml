@@ -768,7 +768,8 @@ PanelWindow {
             // has already is open
             run(["--list-sessions"], false, "", (list, listed) => {
                 const known = listed && list.split("\n").map(l => l.trim()).includes(c.session);
-                bubble.sessionKinds[c.session] = !known && local ? "private" : "open";
+                // A new object, so the menu's binding sees it
+                bubble.sessionKinds = Object.assign({}, bubble.sessionKinds, { [c.session]: !known && local ? "private" : "open" });
                 sessionKindsView.setText(JSON.stringify(bubble.sessionKinds, null, 1) + "\n");
                 done(true);
             }, c, command);

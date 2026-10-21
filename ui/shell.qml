@@ -128,6 +128,7 @@ ShellRoot {
 
         theme: bubble.colors
         usedModels: bubble.usedModels
+        sessionKinds: bubble.sessionKinds
         openRouterModels: bubble.openRouterModels
         onOpenRouterRequested: bubble.askOpenRouter(null)
         onListRequested: root.send({ event: "list" })

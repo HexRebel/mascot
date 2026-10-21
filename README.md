@@ -251,8 +251,8 @@ You can get all available behaviors by using `mascot prototypes info {prototype_
 A right click on a mascot opens a small menu next to it (with the chat bubble enabled):
 **Settings** (**Change mascot**, like `.mascot`; the mascot's **Model**, **Role** and **Session** to
 pick from, as `.model`, `.role` and `.session`, the one in use ticked, a model not listed with
-**Other model…** (see *Using it*), a new session named with
-`.session <name>` in the bubble; and **Tools** and **Info**, the bubble with `.tools` or `.info`), **Sleep** or **Wake
+**Other model…** (see *Using it*), a new session with **New session…** (the bubble with `.session`
+typed, for its name), a private one marked so; and **Tools** and **Info**, the bubble with `.tools` or `.info`), **Sleep** or **Wake
 up** (just this mascot, like a middle click), **Quiet** (all of them sleep for **10 min**, **30 min**
 or **1 hour**, like `mascot sleep --minutes 30`, or **Set time…**, the bubble with `.quiet` typed for
 a time of your own; **Wake everyone** while they sleep), **Todo list** and **Reminders** (the bubble with
@@ -274,7 +274,8 @@ behaviors its prototype has: `Asleep`, `Sleep`, `LieDown`, `SitDown`. Shimeji-ee
 ends by getting up again; to choose another pose, add a behavior `Asleep` with `frequency` 0 that
 points to it. A sleeping mascot does not disturb: it makes no remarks (`CHAT_REMARKS`), and
 reminders wait until one wakes up. A middle click on a mascot puts just that one to sleep, or wakes
-it up. `mascot sleep --minutes 30` (or asking a mascot, with `sleep` in `CHAT_TOOLS`) lets them
+it up. A sleeping mascot sleeps on while its right-click menu is open, and sits up while you talk to
+it in the bubble; waking the last sleeping one ends a `--minutes` sleep for all. `mascot sleep --minutes 30` (or asking a mascot, with `sleep` in `CHAT_TOOLS`) lets them
 sleep for a while instead: a plain `mascot wake` does not end that, so hypridle's does not either,
 but `mascot wake --all` and a middle click do. Neither command starts Mascot, so both are safe to
 run when it is not running, e.g. from hypridle:
