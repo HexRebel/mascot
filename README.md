@@ -186,11 +186,25 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   says which; `--talk <action>` picks another (`mascot prototypes info <name>` lists them; take one
   that looks right on the floor), `--talk none` none, and the mascot just sits.
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
-  `LieDown` or `SitDown`. Some packs' `Sleep` is something else (the Shiba Inu rolls on its back);
-  `--sleep <action>` picks the action it sleeps with instead, e.g. `--sleep SitAndDangleLegs`.
+  `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
+  then the import picks a pose that lies still instead (the first part of that `Sleep`, or an action
+  named like sleeping or lying) and says which, or says it found none. `--sleep <action>` picks the
+  action it sleeps with yourself, e.g. `--sleep SitAndDangleLegs`.
 - If you already have a mascot of that name, it is not imported: `-f` replaces it, `--name` keeps
   both. A mascot with the same name in another letter case (*Red* and *red*) is never replaced; give
   the new one another name. `--name` works for `.wlshm` files too.
+
+To change what an installed mascot talks or sleeps with later, without importing it again:
+
+```
+mascot prototypes set "Red Shiba" --sleep SitAndDangleLegs
+mascot prototypes set Capoo --talk auto --sleep auto
+```
+
+An action's name (`mascot prototypes info <name>` lists them), `auto` to pick one as the import
+does, or `none` (no `Talk`; for sleep, the mascot's own `Sleep`). It is changed in the mascot's own
+directory and reloaded straight away. A bundled mascot is changed in the installed copy, which the
+next `make install` replaces.
 
 Packs made for Windows sometimes name their images in another letter case than their actions do
 (`swag1.png` for `Swag1.png`); that is matched.

@@ -846,6 +846,138 @@ def guess_talk(actions: list[str]) -> str | None:
     return None
 
 
+# What a sleeping pose must not have: a part that gets up or walks off (Shimeji-ee's
+# Sleep often ends sitting or standing, or rolls along the floor as a Move)
+GETS_UP = re.compile(r"stand|sit|stretch|walk|run|dash|jump|wake|getup|climb|fall|chase", re.I)
+SLEEP_HINTS = ("sleep", "nap", "doze", "sprawl", "lie", "lay", "rest")
+
+
+def action_parts(actions: dict, name: str, depth: int = 0) -> list[tuple[str, str]]:
+    """The (name, type) of what an action plays, its sequences flattened"""
+    action = actions.get(name)
+    if not action or depth > 8:
+        return [(name, "")]
+    if action.get("type") != "Sequence":
+        return [(name, action.get("type", ""))]
+    parts = []
+    for item in action.get("content", []):
+        if item.get("type") == "ActionReference":
+            parts += action_parts(actions, item.get("action_name", ""), depth + 1)
+    return parts
+
+
+def stays_asleep(actions: dict, name: str) -> bool:
+    parts = action_parts(actions, name)
+    return bool(parts) and not any(GETS_UP.search(n) or t == "Move" for n, t in parts)
+
+
+def guess_sleep(actions: dict, usable: list[str], sleep: str | None) -> str | None:
+    """A pose to sleep in when the Sleep action (sleep) gets up or moves: its
+    first part if that lies still, else an action named like sleeping that
+    does, the plainest first"""
+    if sleep:
+        first = action_parts(actions, sleep)[0][0]
+        if first in usable and stays_asleep(actions, first):
+            return first
+    for hint in SLEEP_HINTS:
+        found = [a for a in usable if hint in a.lower() and stays_asleep(actions, a)]
+        if found:
+            return sorted(found, key=lambda a: (actions[a].get("type") == "Sequence", a.lower().endswith("action"), len(a)))[0]
+    return None
+
+
+def hidden_behavior(name: str, action: str) -> dict:
+    """A behavior never picked at random (frequency 0): the daemon switches to Talk
+    while a reply streams, and repeats Asleep while the mascot sleeps"""
+    return {"name": name, "action": action, "next_behavior_list": [], "next_behavior_list_count": 0,
+            "hidden": True, "condition": None, "is_conditioner": False,
+            "next_behavior_list_add": True, "frequency": 0}
+
+
+def set_talk_sleep(behaviors: dict, definitions: list, assets: set, talk: str | None, sleep: str | None,
+                   guess: bool) -> list[str]:
+    """Gives behaviors a Talk and an Asleep behavior: talk/sleep name an action,
+    "none" removes it, "auto" picks one (guess_talk(), guess_sleep()); with
+    guess, a missing one is picked too. Returns what it did, one line each"""
+    referenced = set()
+
+    def collect(node):
+        if isinstance(node, dict):
+            if node.get("type") == "Frame":
+                referenced.update(i for i in (node.get("image"), node.get("image_right")) if i)
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(definitions)
+    by_name = {a["name"]: a for a in definitions}
+    # Never one the overlay drops (an image missing, see broken_actions())
+    broken, _ = broken_actions(by_name, referenced - assets)
+    # Inlined actions are anonymous parts of other actions, not something to pick
+    actions = [a["name"] for a in definitions if not a["name"].startswith("___") and a["name"] not in broken]
+    own = behaviors.setdefault("definitions", [])
+    defined = {d.get("name"): d for d in own}
+    changes = []
+
+    def named(action):
+        found = next((a for a in actions if a.lower() == action.lower()), None)
+        if not found:
+            raise ValueError(f"no action called '{action}'. Actions: {', '.join(actions)}")
+        return found
+
+    def put(behavior, action):
+        own[:] = [d for d in own if d.get("name") != behavior]
+        if action:
+            own.append(hidden_behavior(behavior, action))
+
+    if talk and talk.lower() == "none":
+        put("Talk", None)
+        changes.append("talks with nothing (it sits)")
+    elif talk and talk.lower() != "auto":
+        put("Talk", named(talk))
+        changes.append(f"talks with {named(talk)}")
+    elif talk or (guess and "Talk" not in defined):
+        match = guess_talk(actions)
+        put("Talk", match)
+        changes.append(f"talks with {match} (picked; --talk <action> for another, --talk none for none)" if match
+                       else "no action to talk with (it sits); --talk <action> to pick one")
+    elif guess:
+        changes.append("keeps its own Talk")
+
+    own_sleep = defined["Sleep"].get("action") if "Sleep" in defined else None
+    if sleep and sleep.lower() == "none":
+        put("Asleep", None)
+        changes.append("sleeps with its own Sleep" if own_sleep else "has no pose of its own to sleep in")
+    elif sleep and sleep.lower() != "auto":
+        put("Asleep", named(sleep))
+        changes.append(f"sleeps with {named(sleep)}")
+    elif sleep or (guess and "Asleep" not in defined):
+        lie_down = defined["LieDown"].get("action") if "LieDown" in defined else None
+        if own_sleep and stays_asleep(by_name, own_sleep):
+            put("Asleep", None)
+            changes.append("sleeps with its own Sleep")
+        elif not own_sleep and lie_down and stays_asleep(by_name, lie_down):
+            put("Asleep", None)
+            changes.append("lies down to sleep")
+        else:
+            match = guess_sleep(by_name, actions, own_sleep)
+            put("Asleep", match)
+            why = "its own Sleep gets up or moves" if own_sleep else "it has no Sleep"
+            if match:
+                changes.append(f"sleeps with {match} (picked, as {why}; --sleep <action> for another)")
+            elif own_sleep:
+                changes.append(f"sleeps with its own Sleep, which gets up or moves; --sleep <action> to pick another")
+            elif "LieDown" in defined:
+                changes.append("lies down to sleep")
+            else:
+                changes.append("has nothing to sleep with, so it sits (--sleep <action> to pick one)")
+    elif guess:
+        changes.append(f"keeps its own Asleep ({defined['Asleep'].get('action')})")
+    return changes
+
+
 def wlshm_header(name: str, version: str) -> bytes:
     """A .wlshm's 512 bytes before its tar: WLPK, then the name and version, each a length byte and the text"""
     header = b"WLPK"
@@ -864,9 +996,9 @@ def wlshm_manifest(path: str) -> dict:
 
 def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | None = None, name: str | None = None):
     """Copy of a .wlshm with --no-climb/--talk/--sleep/--name applied, as an
-    unlinked temporary file. Without --talk, a Talk behavior is picked (see
-    guess_talk()), unless it has one; --talk none adds none. --sleep adds an
-    Asleep behavior, which the daemon prefers to Sleep.
+    unlinked temporary file. Without --talk/--sleep, a Talk and (when its own
+    Sleep gets up or moves) an Asleep behavior are picked, unless it has them;
+    "none" adds none (see set_talk_sleep()). The daemon prefers Asleep to Sleep.
 
     The daemon unpacks whatever fd it is given, so the original file is never touched.
     Returns the file, its manifest and what it does, one line each.
@@ -883,80 +1015,18 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
         if needed not in names:
             raise ValueError(f"{needed} not found")
     behaviors = json.load(source.extractfile(behaviors_name))
-    changes = []
     if name:
         manifest["name"] = f"Shimeji.{name}"
         manifest["display_name"] = name
         header = wlshm_header(manifest["name"], manifest.get("version", "0.0.1"))
 
-    # Never one the overlay drops (an image missing, see broken_actions())
     definitions = json.load(source.extractfile(actions_name))
     assets = {n.removeprefix(manifest.get("assets", "assets") + "/") for n in names}
-    referenced = set()
-
-    def collect(node):
-        if isinstance(node, dict):
-            if node.get("type") == "Frame":
-                referenced.update(i for i in (node.get("image"), node.get("image_right")) if i)
-            for value in node.values():
-                collect(value)
-        elif isinstance(node, list):
-            for value in node:
-                collect(value)
-
-    collect(definitions)
-    broken, _ = broken_actions({a["name"]: a for a in definitions}, referenced - assets)
-    # Inlined actions are anonymous parts of other actions, not something to pick
-    actions = [a["name"] for a in definitions if not a["name"].startswith("___") and a["name"] not in broken]
-    has_talk = any(d.get("name") == "Talk" for d in behaviors.get("definitions", []))
-    match = None
-    if talk and talk.lower() != "none":
-        match = next((a for a in actions if a.lower() == talk.lower()), None)
-        if not match:
-            raise ValueError(f"no action called '{talk}'. Actions: {', '.join(actions)}")
-    elif not talk and has_talk:
-        changes.append("keeps its own Talk")
-    elif not talk:
-        match = guess_talk(actions)
-        if not match:
-            changes.append("no action to talk with (it sits); --talk <action> to pick one")
-
-    if match:
-        definitions = behaviors.setdefault("definitions", [])
-        definitions[:] = [d for d in definitions if d.get("name") != "Talk"]
-        # Never picked at random (frequency 0); the daemon switches to it while a reply streams
-        definitions.append({"name": "Talk", "action": match, "next_behavior_list": [], "next_behavior_list_count": 0,
-                            "hidden": True, "condition": None, "is_conditioner": False,
-                            "next_behavior_list_add": True, "frequency": 0})
-        picked = "" if talk else " (picked; --talk <action> for another, --talk none for none)"
-        changes.insert(0, f"talks with {match}{picked}")
-
-    if sleep:
-        found = next((a for a in actions if a.lower() == sleep.lower()), None)
-        if not found:
-            raise ValueError(f"no action called '{sleep}'. Actions: {', '.join(actions)}")
-        definitions = behaviors.setdefault("definitions", [])
-        definitions[:] = [d for d in definitions if d.get("name") != "Asleep"]
-        # Like Talk: never picked at random; repeated while the mascot is asleep
-        definitions.append({"name": "Asleep", "action": found, "next_behavior_list": [], "next_behavior_list_count": 0,
-                            "hidden": True, "condition": None, "is_conditioner": False,
-                            "next_behavior_list_add": True, "frequency": 0})
-        changes.append(f"sleeps with {found}")
+    changes = set_talk_sleep(behaviors, definitions, assets, talk, sleep, guess=True)
 
     if no_climb:
         disabled = strip_climbing(behaviors)
         changes.append(f"climbing removed ({len(disabled)} behaviors)" if disabled else "no climbing to remove")
-
-    # What it sleeps with (mascot sleep, a middle click), see mascot_sleep() in mascotd
-    defined = {d.get("name") for d in behaviors.get("definitions", [])}
-    if "Asleep" not in defined:
-        if "Sleep" in defined:
-            changes.append("sleeps with its own Sleep (if that does not look like sleeping, import it again "
-                           "with --sleep <action>)")
-        elif "LieDown" in defined:
-            changes.append("lies down to sleep")
-        else:
-            changes.append("has nothing to sleep with, so it sits (--sleep <action> to pick one)")
 
     behaviors_data = json.dumps(behaviors).encode("utf-8")
     manifest_data = json.dumps(manifest).encode("utf-8")
@@ -975,6 +1045,75 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
     source.close()
     out.seek(0)
     return out, manifest, changes
+
+def prototype_dir(arguments: argparse.Namespace, path: str) -> str | None:
+    """The directory of an installed prototype, which the daemon names relative
+    to where it loaded it from: PROTOTYPES_LOCATION (<config root>/shimejis by
+    default), or the bundled ones next to bin/ (see bundled_shimeji())"""
+    if os.path.isabs(path):
+        return path
+    root = os.path.expanduser(arguments.config_root or "~/.local/share/mascot")
+    stores = [os.path.join(root, "shimejis")]
+    try:
+        with open(arguments.config or os.path.join(root, "mascotd.conf")) as f:
+            for line in f:
+                key, _, value = line.partition("=")
+                if key.strip() == "prototypes_location" and value.strip():
+                    stores.insert(0, os.path.expanduser(value.strip()))
+    except OSError:
+        pass
+    here = os.path.dirname(os.path.realpath(sys.argv[0]))
+    stores += [os.path.join(here, "..", "share", "mascot", "prototypes"), os.path.join(here, "..", "prototypes")]
+    for store in stores:
+        candidate = os.path.normpath(os.path.join(store, path))
+        if os.path.isfile(os.path.join(candidate, "manifest.json")):
+            return candidate
+    return None
+
+
+def set_prototype(arguments: argparse.Namespace, client: Client):
+    """mascot prototypes set: changes the Talk and Asleep behaviors of an
+    installed mascot in its own directory, and reloads it"""
+    if not arguments.talk and not arguments.sleep:
+        print("Say what to change: --talk <action> and/or --sleep <action> ('auto' picks one)")
+        exit(1)
+    # By its exact name: prototype_find() would take the closest one
+    wanted = arguments.name.lower().removeprefix("shimeji.")
+    found = [p for p in prototypes.values()
+             if wanted in (p.display_name.lower(), p.name.lower().removeprefix("shimeji."))]
+    if not found:
+        print(f"No mascot called \"{arguments.name}\". Mascots: {', '.join(p.display_name for p in prototypes.values())}")
+        exit(1)
+    prototype = found[0]
+    path = prototype_dir(arguments, prototype.path)
+    if not path:
+        print(f"Cannot find where {prototype.display_name} is kept ({prototype.path})")
+        exit(1)
+    try:
+        with open(os.path.join(path, "manifest.json")) as f:
+            manifest = json.load(f)
+        behaviors_path = os.path.join(path, manifest.get("behaviors", "behaviors.json"))
+        with open(behaviors_path) as f:
+            behaviors = json.load(f)
+        with open(os.path.join(path, manifest.get("actions", "actions.json"))) as f:
+            definitions = json.load(f)
+        assets_dir = os.path.join(path, manifest.get("assets", "assets"))
+        assets = {os.path.relpath(os.path.join(root, n), assets_dir) for root, _, files in os.walk(assets_dir) for n in files}
+        changes = set_talk_sleep(behaviors, definitions, assets, arguments.talk, arguments.sleep, guess=False)
+        # Written whole first, so a failure never leaves half a file
+        with tempfile.NamedTemporaryFile("w", dir=path, delete=False, suffix=".tmp") as f:
+            json.dump(behaviors, f, indent=4, ensure_ascii=False)
+        os.replace(f.name, behaviors_path)
+    except ValueError as e:
+        print(f"Not changed: {e}")
+        exit(1)
+    except OSError as e:
+        print(f"Cannot change {prototype.display_name} in {path}: {e.strerror}")
+        exit(1)
+    # By the path the daemon knows it by
+    client.queue_packet(ReloadPrototype(prototype.path))
+    print(f"{prototype.display_name}: " + "; ".join(changes))
+
 
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
     match arguments.action:
@@ -1051,6 +1190,9 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
         case "reload-all":
             packet = ReloadPrototype("")
             client.queue_packet(packet)
+
+        case "set":
+            set_prototype(arguments, client)
 
         case "export":
             is_dir = os.path.isdir(arguments.output[0])
@@ -1854,6 +1996,11 @@ if __name__ == "__main__":
     prototype_reloader.add_argument("path", action="append", help="Path(s) of the prototype to reload")
 
     prototype_reload_all = prototype_subparsers.add_parser("reload-all", help="Reload all prototypes")
+
+    prototype_setter = prototype_subparsers.add_parser("set", help="Change what an installed mascot talks and sleeps with")
+    prototype_setter.add_argument("name", help="The mascot, by its name (e.g. \"Red Shiba\")")
+    prototype_setter.add_argument("--talk", metavar="ACTION", help="Action it plays while the chat bubble answers; 'auto' to pick one, 'none' for none")
+    prototype_setter.add_argument("--sleep", metavar="ACTION", help="Action it plays while asleep; 'auto' to pick one (its own Sleep if that lies still), 'none' for its own Sleep")
 
     prototype_exporter = prototype_subparsers.add_parser("export", help="Export a prototype")
     prototype_exporter.add_argument("-i", "--name", action="append", help="Name of the prototype to export. Can be specified multiple times.")
