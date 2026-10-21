@@ -20,7 +20,7 @@ PanelWindow {
     property QtObject theme: null
     // The page shown: "main", "settings" (the mascot's chat: model, role,
     // session, tools), "quiet" (how long all mascots sleep), "swap" ("Change
-    // mascot"), "models", "roles" or "sessions"
+    // mascot"), "models", "roles", "sessions" or "deletesessions"
     property string page: "main"
     // The mascot's model and role in the bubble, see Bubble.choiceOf()
     property var choice: ({ model: "", role: "", noRole: false, session: "" })
@@ -256,7 +256,8 @@ PanelWindow {
         swap: swapItems,
         models: modelItems,
         roles: roleItems,
-        sessions: sessionItems
+        sessions: sessionItems,
+        deletesessions: deleteSessionItems
     })[menu.page] ?? mainItems
 
     readonly property var mainItems: {
@@ -327,7 +328,12 @@ PanelWindow {
         { label: "None", action: "command", argument: ".exit session", checked: !menu.choice.session }
     ].concat(menu.sessions.map(s => ({ label: menu.sessionKinds[s] === "private" ? `${s} · private` : s,
                                       action: "command", argument: `.session ${s}`,
-                                      checked: s === menu.choice.session })))
+                                      checked: s === menu.choice.session })),
+             menu.sessions.length ? [{ label: "Delete session ›", action: "page", argument: "deletesessions" }] : [])
+
+    // Picking one opens the bubble with .delete session typed: Enter deletes it
+    readonly property var deleteSessionItems: [{ label: "‹ Back", action: "page", argument: "sessions" }]
+        .concat(menu.sessions.map(s => ({ label: s, action: "type", argument: `.delete session ${s}` })))
 
     // Geometry: the box (as wide as its longest label, up to maxWidth) has a
     // corner just past the pointer, so the pointer starts inside it; a long
@@ -354,7 +360,7 @@ PanelWindow {
 
     readonly property int menuWidth: widthOf(items)
     readonly property int menuHeight: heightOf(items)
-    readonly property var pages: [mainItems, settingsItems, quietItems, swapItems, modelItems, roleItems, sessionItems]
+    readonly property var pages: [mainItems, settingsItems, quietItems, swapItems, modelItems, roleItems, sessionItems, deleteSessionItems]
     readonly property int windowWidth: Math.max(...pages.map(p => widthOf(p)))
     readonly property int windowHeight: Math.max(...pages.map(p => heightOf(p)))
 

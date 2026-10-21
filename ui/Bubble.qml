@@ -443,6 +443,7 @@ PanelWindow {
         ".model <name>          switch model (e.g. openrouter:…)",
         ".role <name>           switch role (instead of the default)",
         ".session <name>        start/continue a session with memory",
+        ".delete session <name> delete a session for good",
         ".exit model|session    go back to the default",
         ".exit role             leave the role (also the default one)",
         ".mascots               list the mascots you have",
@@ -736,6 +737,78 @@ PanelWindow {
         }
     }
 
+    // A private session goes on only with a local model: when it is chosen
+    // with another one, the default model if that is local, else the local
+    // model used last, else aichat's first
+    function localForPrivate(c: QtObject): void {
+        const command = bubble.event?.command || "aichat";
+        const isLocal = (model, done) => lookup((model ? ["-m", model] : []).concat(roleFlags(), "-s", "mascot-probe"), c, command,
+                                                (info, ok) => done(ok && /^model:?\s+ollama:/m.test(info)));
+        const use = model => {
+            c.model = model;
+            c.entries.append({ kind: "system", body: `model: ${model || defaultName("model")} - ${c.session} is a private `
+                + "session, so it goes on with a local model" });
+        };
+        isLocal(c.model, local => {
+            if (local)
+                return;
+            isLocal("", defaultLocal => {
+                if (defaultLocal) {
+                    use("");
+                    return;
+                }
+                const used = bubble.usedModels.find(m => m.startsWith("ollama:"));
+                if (used) {
+                    use(used);
+                    return;
+                }
+                run(["--list-models"], false, "", (list, ok) => {
+                    const first = ok ? list.split("\n").map(l => l.trim()).find(m => m.startsWith("ollama:")) : null;
+                    if (first)
+                        use(first);
+                    else
+                        c.entries.append({ kind: "system", body: `${c.session} is a private session, but aichat has no `
+                            + "local (ollama:) model to go on with it" });
+                }, c, command);
+            });
+        });
+    }
+
+    // .delete session <name>: deletes one of aichat's sessions (it has no
+    // command for it): its file in aichat's sessions_dir, after the menu's
+    // "Delete session ›" typed it for Enter to confirm
+    function deleteSession(name: string): void {
+        const c = bubble.current;
+        const command = bubble.event?.command || "aichat";
+        const say = text => c.entries.append({ kind: "system", body: text });
+        if (!name || name.includes("/") || name.startsWith(".")) {
+            say(`no session called ${name}`);
+            return;
+        }
+        // Not the bubble's memory dir (see run()), aichat's own
+        run(["--info"], false, "", (info, ok) => {
+            const dir = ok ? (info.match(/^sessions_dir:?\s+(\S.*)$/m) ?? [])[1] : null;
+            if (!dir) {
+                say("cannot tell where aichat keeps its sessions");
+                return;
+            }
+            run(["--", `${dir.trim()}/${name}.yaml`], false, "", (out, removed) => {
+                if (!removed) {
+                    say(`no session called ${name}`);
+                    return;
+                }
+                const kinds = Object.assign({}, bubble.sessionKinds);
+                delete kinds[name];
+                bubble.sessionKinds = kinds;
+                sessionKindsView.setText(JSON.stringify(kinds, null, 1) + "\n");
+                for (const id in bubble.conversations)
+                    if (bubble.conversations[id].session === name)
+                        bubble.conversations[id].session = "";
+                say(`deleted session ${name}`);
+            }, c, "rm");
+        }, c, command, { AICHAT_SESSIONS_DIR: null });
+    }
+
     // For .tools: whether the local tools are there in this .session
     function sessionNote(): string {
         const session = chosen().session;
@@ -951,8 +1024,16 @@ PanelWindow {
                         c.noRole = false;
                 }
                 say(`${key}: ${c[key] || defaultName(key)}`);
+                if (key === "session" && arg && bubble.sessionKinds[arg] === "private")
+                    localForPrivate(c);
                 return;
             }
+        case ".delete":
+            if (rest[0] !== "session" || rest.length < 2)
+                say("use .delete session <name>");
+            else
+                deleteSession(rest.slice(1).join(" "));
+            return;
         case ".exit":
             if (!["model", "role", "session"].includes(arg)) {
                 say("use .exit model, .exit role or .exit session");

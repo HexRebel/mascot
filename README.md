@@ -252,7 +252,8 @@ A right click on a mascot opens a small menu next to it (with the chat bubble en
 **Settings** (**Change mascot**, like `.mascot`; the mascot's **Model**, **Role** and **Session** to
 pick from, as `.model`, `.role` and `.session`, the one in use ticked, a model not listed with
 **Other model…** (see *Using it*), a new session with **New session…** (the bubble with `.session`
-typed, for its name), a private one marked so; and **Tools** and **Info**, the bubble with `.tools` or `.info`), **Sleep** or **Wake
+typed, for its name), a private one marked so, and **Delete session ›** (the bubble with
+`.delete session <name>` typed: Enter deletes it); and **Tools** and **Info**, the bubble with `.tools` or `.info`), **Sleep** or **Wake
 up** (just this mascot, like a middle click), **Quiet** (all of them sleep for **10 min**, **30 min**
 or **1 hour**, like `mascot sleep --minutes 30`, or **Set time…**, the bubble with `.quiet` typed for
 a time of your own; **Wake everyone** while they sleep), **Todo list** and **Reminders** (the bubble with
@@ -399,6 +400,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
 | `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot); started with a local model it is private (see *Tools*) |
+| `.delete session <name>` | Delete one of aichat's sessions for good (its file in aichat's `sessions_dir`) |
 | `.exit model\|session` | Go back to the default |
 | `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
@@ -551,7 +553,8 @@ The file, todo, reminder and shell tools keep to what is yours to share:
   its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).
 - In a `.session` (it outlives Mascot) only when it is private: a session whose first message went to
   a local model is private, has these tools, and only local models may go on with it - the bubble
-  refuses to send a model online what it read. A session started with another model, or one Mascot
+  refuses to send a model online what it read, and choosing one switches to a local model (the
+  default if it is local, else the local one used last). A session started with another model, or one Mascot
   did not start (made in a terminal), has none of them. Mascot keeps which is which in
   `~/.local/share/mascot/sessions`; aichat itself does not know, so do not open a private session in a
   terminal with a model online. Sessions are files with all that was said; keep them out of git
