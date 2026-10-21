@@ -37,33 +37,10 @@ PanelWindow {
     // The models that have answered in the bubble (Bubble.usedModels), also
     // ones aichat does not list
     property var usedModels: []
-    // The models OpenRouter has now (ids), asked for once (no key needed):
-    // aichat's list of them is old, and those that are gone answer with an
-    // error, so they are left out. null: not known (yet, or no network)
+    // The models OpenRouter has now, by id (Bubble.openRouterModels): aichat's
+    // list of them is old, and those that are gone answer with an error, so
+    // they are left out. null: not known (yet, or no network)
     property var openRouterModels: null
-    property bool askingOpenRouter: false
-
-    function askOpenRouter(): void {
-        if (menu.openRouterModels || menu.askingOpenRouter)
-            return;
-        menu.askingOpenRouter = true;
-        const request = new XMLHttpRequest();
-        request.onreadystatechange = () => {
-            if (request.readyState !== XMLHttpRequest.DONE)
-                return;
-            menu.askingOpenRouter = false;
-            try {
-                if (request.status === 200) {
-                    const ids = {};
-                    for (const model of JSON.parse(request.responseText).data)
-                        ids[model.id] = true;
-                    menu.openRouterModels = ids;
-                }
-            } catch (e) {}
-        };
-        request.open("GET", "https://openrouter.ai/api/v1/models");
-        request.send();
-    }
 
     // aichat's models and the ones used, without those OpenRouter no longer has
     readonly property var shownModels: menu.models.concat(menu.usedModels.filter(m => !menu.models.includes(m)))
@@ -78,6 +55,8 @@ PanelWindow {
     signal listRequested()
     // `mascot menu`: asks the daemon for the menu at a mascot (-1: the first)
     signal menuRequested(int mascot)
+    // OpenRouter's models, see openRouterModels
+    signal openRouterRequested()
 
     // Opened from a key: keyboard instead of pointer, see keyboard
     property bool fromKey: false
@@ -101,7 +80,7 @@ PanelWindow {
         menu.page = "main";
         menu.waiting = true;
         menu.listRequested();
-        menu.askOpenRouter();
+        menu.openRouterRequested();
         const command = (e.command || "aichat") + " %s </dev/null";
         modelList.command = ["sh", "-c", command.replace("%s", "--list-models")];
         roleList.command = ["sh", "-c", command.replace("%s", "--list-roles")];

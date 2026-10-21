@@ -394,6 +394,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.help` | List the commands |
 | `.info` | Show aichat's settings |
 | `.models`, `.roles`, `.sessions` | List them |
+| `.models <search>` | Find models on OpenRouter, newest first, with price, context and whether they can use tools, e.g. `.models gemini flash` |
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
 | `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot) |
@@ -420,8 +421,8 @@ reset when `qs` restarts; each mascot can have its own.
 models over time (they answer with *No endpoints found*). The menu's **Model** page therefore asks
 OpenRouter which models it has now (no key needed) and leaves out the ones that are gone. A model that
 is not listed can be used anyway: **Other model…** opens the bubble with `.model openrouter:` typed,
-for a name from [openrouter.ai/models](https://openrouter.ai/models) (e.g.
-`anthropic/claude-haiku-5.5`). Once it has answered, it is on the Model page from then on (the last
+for a name found with `.models <search>` in the bubble (e.g. `.models claude haiku`) or on
+[openrouter.ai/models](https://openrouter.ai/models). Once it has answered, it is on the Model page from then on (the last
 ten are kept in `~/.local/share/mascot/models`). To choose the list yourself, give the client a
 `models:` list in aichat's config; aichat then shows only those:
 

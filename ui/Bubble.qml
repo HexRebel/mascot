@@ -439,6 +439,7 @@ PanelWindow {
     readonly property string helpText: [
         ".info                  show aichat's settings",
         ".models / .roles / .sessions   list them",
+        ".models <search>       find models on OpenRouter, e.g. .models gemini",
         ".model <name>          switch model (e.g. openrouter:…)",
         ".role <name>           switch role (instead of the default)",
         ".session <name>        start/continue a session with memory",
@@ -820,7 +821,10 @@ PanelWindow {
             run(flags().concat("--info"));
             return;
         case ".models":
-            run(["--list-models"]);
+            if (arg)
+                searchOpenRouter(arg);
+            else
+                run(["--list-models"]);
             return;
         case ".roles":
             run(["--list-roles"]);
@@ -1049,6 +1053,85 @@ PanelWindow {
         path: `${bubble.dataDir}/models`
         printErrors: false
         onLoaded: bubble.usedModels = this.text().split("\n").map(l => l.trim()).filter(l => l)
+    }
+
+    // The models OpenRouter has now (its public list, no key needed), asked for
+    // once: openRouterList has them newest first, openRouterModels by id for
+    // the menu, which leaves out the ones that are gone. null: not known (yet,
+    // or no network)
+    property var openRouterList: null
+    property var openRouterModels: null
+    property var openRouterWaiting: [] // done(ok) for each, while asking
+    property bool askingOpenRouter: false
+
+    function askOpenRouter(done: var): void {
+        if (bubble.openRouterList) {
+            if (done)
+                done(true);
+            return;
+        }
+        if (done)
+            bubble.openRouterWaiting.push(done);
+        if (bubble.askingOpenRouter)
+            return;
+        bubble.askingOpenRouter = true;
+        const request = new XMLHttpRequest();
+        request.onreadystatechange = () => {
+            if (request.readyState !== XMLHttpRequest.DONE)
+                return;
+            bubble.askingOpenRouter = false;
+            try {
+                if (request.status === 200) {
+                    const list = JSON.parse(request.responseText).data;
+                    list.sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
+                    const ids = {};
+                    for (const model of list)
+                        ids[model.id] = true;
+                    bubble.openRouterList = list;
+                    bubble.openRouterModels = ids;
+                }
+            } catch (e) {}
+            const waiting = bubble.openRouterWaiting;
+            bubble.openRouterWaiting = [];
+            for (const each of waiting)
+                each(!!bubble.openRouterList);
+        };
+        request.open("GET", "https://openrouter.ai/api/v1/models");
+        request.send();
+    }
+
+    // .models <search>: OpenRouter's models whose id or name has every word,
+    // newest first, with the price of a million tokens in, the context and
+    // whether it can use Mascot's tools; not the :batch ones, which are not
+    // for chatting
+    function searchOpenRouter(search: string): void {
+        const c = bubble.current;
+        const words = search.toLowerCase().split(/\s+/);
+        bubble.askOpenRouter(ok => {
+            const say = text => c.entries.append({ kind: "system", body: text });
+            if (!ok) {
+                say("cannot reach OpenRouter (openrouter.ai/models lists them too)");
+                return;
+            }
+            const found = bubble.openRouterList.filter(m => !m.id.endsWith(":batch")
+                && words.every(w => `${m.id} ${m.name ?? ""}`.toLowerCase().includes(w)));
+            if (!found.length) {
+                say(`OpenRouter has no model with "${search}"`);
+                return;
+            }
+            const size = n => !n ? "?" : n >= 1e6 ? `${Math.round(n / 1e5) / 10}M` : `${Math.round(n / 1000)}k`;
+            const price = m => {
+                const p = parseFloat(m.pricing?.prompt ?? "");
+                return isNaN(p) ? "?" : p === 0 ? "free" : `$${(p * 1e6).toFixed(2)}`;
+            };
+            const shown = found.slice(0, 15);
+            // The id on a line of its own, as the bubble is narrow
+            const lines = shown.map(m => `${m.id}\n   ${price(m)}/M in · ${size(m.context_length)} context`
+                + ((m.supported_parameters ?? []).includes("tools") ? " · tools" : ""));
+            c.entries.append({ kind: "listing", body: lines.join("\n") });
+            say((found.length > shown.length ? `the newest ${shown.length} of ${found.length}; ` : "")
+                + "use one with .model openrouter:<model> (with tools it can tell the time and weather)");
+        });
     }
 
     // aichat's error, with what to do about the ones that need it
