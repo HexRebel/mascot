@@ -1046,12 +1046,13 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
     out.seek(0)
     return out, manifest, changes
 
-def prototype_dir(arguments: argparse.Namespace, path: str) -> str | None:
+def prototype_dir(arguments: argparse.Namespace, path: str) -> tuple[str | None, bool]:
     """The directory of an installed prototype, which the daemon names relative
     to where it loaded it from: PROTOTYPES_LOCATION (<config root>/shimejis by
-    default), or the bundled ones next to bin/ (see bundled_shimeji())"""
+    default), or the bundled ones next to bin/ (see bundled_shimeji()). And
+    whether it is in PROTOTYPES_LOCATION, the only place the daemon reloads from"""
     if os.path.isabs(path):
-        return path
+        return path, True
     root = os.path.expanduser(arguments.config_root or "~/.local/share/mascot")
     stores = [os.path.join(root, "shimejis")]
     try:
@@ -1064,11 +1065,11 @@ def prototype_dir(arguments: argparse.Namespace, path: str) -> str | None:
         pass
     here = os.path.dirname(os.path.realpath(sys.argv[0]))
     stores += [os.path.join(here, "..", "share", "mascot", "prototypes"), os.path.join(here, "..", "prototypes")]
-    for store in stores:
+    for i, store in enumerate(stores):
         candidate = os.path.normpath(os.path.join(store, path))
         if os.path.isfile(os.path.join(candidate, "manifest.json")):
-            return candidate
-    return None
+            return candidate, i < len(stores) - 2
+    return None, False
 
 
 def set_prototype(arguments: argparse.Namespace, client: Client):
@@ -1085,7 +1086,7 @@ def set_prototype(arguments: argparse.Namespace, client: Client):
         print(f"No mascot called \"{arguments.name}\". Mascots: {', '.join(p.display_name for p in prototypes.values())}")
         exit(1)
     prototype = found[0]
-    path = prototype_dir(arguments, prototype.path)
+    path, reloadable = prototype_dir(arguments, prototype.path)
     if not path:
         print(f"Cannot find where {prototype.display_name} is kept ({prototype.path})")
         exit(1)
@@ -1110,9 +1111,13 @@ def set_prototype(arguments: argparse.Namespace, client: Client):
     except OSError as e:
         print(f"Cannot change {prototype.display_name} in {path}: {e.strerror}")
         exit(1)
-    # By the path the daemon knows it by
-    client.queue_packet(ReloadPrototype(prototype.path))
     print(f"{prototype.display_name}: " + "; ".join(changes))
+    if reloadable:
+        # By the path the daemon knows it by
+        client.queue_packet(ReloadPrototype(prototype.path))
+    else:
+        print(f"It is a bundled mascot: this takes effect when Mascot starts next, and the next install of "
+              f"Mascot replaces it ({path})")
 
 
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):

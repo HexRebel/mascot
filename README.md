@@ -203,8 +203,8 @@ mascot prototypes set Capoo --talk auto --sleep auto
 
 An action's name (`mascot prototypes info <name>` lists them), `auto` to pick one as the import
 does, or `none` (no `Talk`; for sleep, the mascot's own `Sleep`). It is changed in the mascot's own
-directory and reloaded straight away. A bundled mascot is changed in the installed copy, which the
-next `make install` replaces.
+directory and reloaded straight away. A bundled mascot is changed in the installed copy, which takes
+effect when Mascot starts next and which the next `make install` replaces.
 
 Packs made for Windows sometimes name their images in another letter case than their actions do
 (`swag1.png` for `Swag1.png`); that is matched.
