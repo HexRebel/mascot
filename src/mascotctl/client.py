@@ -849,18 +849,23 @@ def guess_talk(actions: list[str]) -> str | None:
 
 
 # What a sleeping pose must not have: a part that gets up or walks off (Shimeji-ee's
-# Sleep often ends sitting or standing, or rolls along the floor as a Move)
+# Sleep often ends sitting or standing, or moves along the floor)
 GETS_UP = re.compile(r"stand|sit|stretch|walk|run|dash|jump|wake|getup|climb|fall|chase", re.I)
 SLEEP_HINTS = ("sleep", "nap", "doze", "sprawl", "lie", "lay", "rest")
 
 
 def action_parts(actions: dict, name: str, depth: int = 0) -> list[tuple[str, str]]:
-    """The (name, type) of what an action plays, its sequences flattened"""
+    """The (name, type) of what an action plays, its sequences flattened; a
+    Move whose frames have no velocity stays put, so it is not one"""
     action = actions.get(name)
     if not action or depth > 8:
         return [(name, "")]
     if action.get("type") != "Sequence":
-        return [(name, action.get("type", ""))]
+        kind = action.get("type", "")
+        if kind == "Move" and not any(f.get("velocity_x") or f.get("velocity_y")
+                                      for item in action.get("content", []) for f in item.get("frames", [])):
+            kind = "Stay"
+        return [(name, kind)]
     parts = []
     for item in action.get("content", []):
         if item.get("type") == "ActionReference":
