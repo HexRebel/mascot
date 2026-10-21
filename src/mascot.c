@@ -969,9 +969,12 @@ bool mascot_sleep(struct mascot *mascot, bool asleep) {
   if (!asleep) {
     const struct mascot_behavior *was = mascot->sleep_behavior;
     mascot->sleep_behavior = NULL;
-    // Wake up now rather than when the nap ends; a held mascot keeps sitting
-    if (was && mascot->current_behavior == was && !mascot->chat_behavior &&
-        !mascot->dragged)
+    // Wake up now rather than when the nap ends, also from the sit a chat
+    // hold left it in (e.g. the menu's "Wake up"); a held mascot keeps sitting
+    if (was && !mascot->chat_behavior && !mascot->dragged &&
+        (mascot->current_behavior == was ||
+         mascot->current_behavior ==
+             mascot_prototype_behavior_by_name(mascot->prototype, "SitDown")))
       mascot_behavior_next(mascot, 0);
     pthread_mutex_unlock(&mascot->tick_lock);
     return true;

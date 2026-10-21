@@ -165,7 +165,7 @@ static void chat_send_to(int fd, const char* line, size_t len);
 static void chat_open(const char* line);
 static void chat_open_menu(const char* line);
 static bool chat_remark(const char* line);
-static void chat_sleep_all(bool sleep, bool only_new);
+static bool chat_sleep_all(bool sleep, bool only_new);
 static void chat_wake_all(void);
 static struct mascot* chat_line_mascot(const char* line);
 
@@ -754,12 +754,14 @@ static bool chat_remark(const char* line)
 }
 
 // Puts every mascot (only_new: those that appeared since the last call) to sleep
-// or wakes it up. Not the others again, so one woken with a middle click stays awake
-static void chat_sleep_all(bool sleep, bool only_new)
+// or wakes it up. Not the others again, so one woken with a middle click stays
+// awake. Returns whether any mascot is asleep now
+static bool chat_sleep_all(bool sleep, bool only_new)
 {
     struct protocol_server_state* state = protocol_get_server_state();
     uint32_t ids[256];
     size_t count = 0;
+    bool any_asleep = false;
     int64_t newest = newest_mascot_id;
 
     // Only the ids: mascot_sleep() takes the mascot's tick lock, not under these
@@ -776,7 +778,12 @@ static void chat_sleep_all(bool sleep, bool only_new)
             struct mascot* mascot = list_get(mascots, j);
             if (!mascot) continue;
             if (mascot->id > newest_mascot_id) newest_mascot_id = mascot->id;
-            if ((!only_new || mascot->id > newest) && mascot->asleep != sleep) ids[count++] = mascot->id;
+            if ((!only_new || mascot->id > newest) && mascot->asleep != sleep) {
+                ids[count++] = mascot->id;
+                any_asleep |= sleep;
+            } else {
+                any_asleep |= mascot->asleep;
+            }
         }
         pthread_mutex_unlock(mutex);
     }
@@ -786,6 +793,7 @@ static void chat_sleep_all(bool sleep, bool only_new)
         struct mascot* mascot = chat_find_mascot(ids[i]);
         if (mascot) mascot_sleep(mascot, sleep);
     }
+    return any_asleep;
 }
 
 static void chat_wake_all(void)
@@ -801,8 +809,15 @@ void chat_tick(void)
         sleep_until = 0;
         if (!sleep_held) chat_wake_all();
     }
-    // New (summoned, swapped) mascots fall asleep too
-    if (asleep) chat_sleep_all(true, true);
+    // New (summoned, swapped) mascots fall asleep too. Once every mascot has
+    // been woken one by one (the menu's "Wake up", a middle click), the quiet
+    // is over, so it is not shown as still on, and new ones stay awake
+    if (asleep && !chat_sleep_all(true, true)) {
+        asleep = false;
+        sleep_held = false;
+        sleep_until = 0;
+        INFO("Every mascot is awake, the quiet is over");
+    }
 
     static time_t next_remark = 0;
     int32_t minutes = config_get_chat_remarks();
