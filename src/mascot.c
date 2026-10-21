@@ -1095,10 +1095,6 @@ void mascot_unlink(struct mascot *mascot) {
 
   protocol_server_mascot_destroyed(mascot);
 
-  if (mascot->prototype) {
-    mascot_prototype_unlink((struct mascot_prototype *)mascot->prototype);
-  }
-
   if (mascot->subsurface) {
     environment_destroy_subsurface(mascot->subsurface);
   }
@@ -1106,6 +1102,13 @@ void mascot_unlink(struct mascot *mascot) {
   mascot_announce_affordance(mascot, NULL);
 
   mascot_detach_affordance_manager(mascot);
+
+  // Last: the above still use the prototype, and this frees it when the
+  // mascot was the last to hold it (a prototype reloaded meanwhile)
+  if (mascot->prototype) {
+    mascot_prototype_unlink((struct mascot_prototype *)mascot->prototype);
+    mascot->prototype = NULL;
+  }
 
   free(mascot->action_data);
 

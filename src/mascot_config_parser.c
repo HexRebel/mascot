@@ -240,8 +240,9 @@ bool mascot_prototype_store_remove(mascot_prototype_store* store, const struct m
         if (store->prototypes[i] == prototype) {
             store->prototypes[i] = NULL;
             store->count--;
-            mascot_prototype_unlink(prototype);
+            // Before unlinking, which frees it when nothing else holds it
             ((struct mascot_prototype*)prototype)->prototype_store = NULL;
+            mascot_prototype_unlink(prototype);
             return true;
         }
     }
@@ -1296,7 +1297,7 @@ struct mascot_animation* parse_animation(struct mascot_prototype* prototype, str
 
                 if (i >= hsize) {
                     hsize *= 2;
-                    animation_obj->hotspots = realloc(animation_obj->frames, hsize * sizeof(struct mascot_hotspot*));
+                    animation_obj->hotspots = realloc(animation_obj->hotspots, hsize * sizeof(struct mascot_hotspot*));
                 }
 
                 struct json_object_s* hotspot_obj = (struct json_object_s*)hotspot->value->payload;
