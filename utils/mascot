@@ -1,34 +1,36 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from xml.etree import ElementTree
-import os
-import socket
-import sys
 import tarfile
-import xml.etree.ElementTree as ET
-from dataclasses import dataclass
-import random
-import xml
-import tempfile
-import json
-from typing import Dict, Optional
 import time
-import pathlib
-import subprocess
-import struct
-import argparse
-import logging
-import zipfile
-from dataclasses import dataclass, field
-import stat
-import shutil
-from typing import Callable, Any
-import enum
-import errno
 import io
+import tempfile
+import argparse
+import html
+import base64
+from xml.etree import ElementTree
+import json
+import errno
+from dataclasses import dataclass
+import shutil
+import xml.etree.ElementTree as ET
+import enum
+from typing import Dict, Optional
+from dataclasses import dataclass, field
+import random
+import os
+import stat
+import logging
+import socket
+import pathlib
+import sys
+import struct
 from PIL import Image
+from typing import Callable, Any
+import subprocess
 import re
+import xml
+import zipfile
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -3593,7 +3595,8 @@ def set_talk_sleep(behaviors: dict, definitions: list, assets: set, talk: str | 
         match = guess_talk(actions)
         put("Talk", match)
         changes.append(f"talks with {match} (picked; --talk <action> for another, --talk none for none)" if match
-                       else "no action to talk with (it sits); --talk <action> to pick one")
+                       else "no action to talk with (it sits); --talk <action> to pick one "
+                            "('mascot prototypes poses <name>' shows them)")
     elif guess:
         changes.append("keeps its own Talk")
 
@@ -3619,7 +3622,8 @@ def set_talk_sleep(behaviors: dict, definitions: list, assets: set, talk: str | 
             if match:
                 changes.append(f"sleeps with {match} (picked, as {why}; --sleep <action> for another)")
             elif own_sleep:
-                changes.append(f"sleeps with its own Sleep, which gets up or moves; --sleep <action> to pick another")
+                changes.append(f"sleeps with its own Sleep, which gets up or moves; --sleep <action> to pick another "
+                               "('mascot prototypes poses <name>' shows them)")
             elif "LieDown" in defined:
                 changes.append("lies down to sleep")
             else:
@@ -3723,21 +3727,198 @@ def prototype_dir(arguments: argparse.Namespace, path: str) -> tuple[str | None,
     return None, False
 
 
+# The page `mascot prototypes poses` writes: each action as a moving picture,
+# The page `mascot prototypes poses` writes: each action as a moving picture,
+# what the mascot talks and sleeps with marked, and the command to change it
+# what the mascot talks and sleeps with marked, and the command to change it
+POSES_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ poses</title>
+<style>
+:root { --bg: #f6f4f1; --card: #fff; --text: #222; --muted: #6b6560; --line: #e2ddd6; --accent: #b4562d; --good: #2f7d4f; --stage: #ece7e0; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1b1917; --card: #262320; --text: #ece7e0; --muted: #a39b92; --line: #3a3530; --accent: #e08a5f; --good: #6cc08f; --stage: #312d29; } }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+header { max-width: 1100px; margin: 0 auto 20px; }
+h1 { margin: 0 0 6px; font-size: 24px; }
+p { margin: 0 0 10px; color: var(--muted); max-width: 70ch; }
+code { font-family: ui-monospace, monospace; font-size: 13px; }
+input { width: 100%; max-width: 360px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+main { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.card.used { border-color: var(--accent); }
+.stage { position: relative; height: __H__px; background: var(--stage); border-radius: 8px; overflow: hidden; }
+.stage img { position: absolute; image-rendering: auto; }
+.name { font-weight: 600; word-break: break-word; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; min-height: 20px; }
+.tag { font-size: 12px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.tag.use { border-color: var(--accent); color: var(--accent); }
+.tag.still { border-color: var(--good); color: var(--good); }
+.buttons { display: flex; gap: 6px; }
+button { flex: 1; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+.done { color: var(--good); }
+</style></head><body>
+<header>
+<h1>__TITLE__</h1>
+<p>Each of its actions, moving as the mascot plays it. <b>Talk</b> plays while the chat bubble answers, best one that sits still;
+<b>Sleep</b> repeats while it is asleep, best one marked <i>lies still</i>. The buttons copy the command that makes it so:</p>
+<p><code>mascot prototypes set "__NAME__" --talk &lt;action&gt;</code> &nbsp;or&nbsp; <code>--sleep &lt;action&gt;</code></p>
+<input id="search" type="search" placeholder="Find an action…" autocomplete="off">
+</header>
+<main id="cards"></main>
+<script>
+const data = __DATA__;
+const cards = document.getElementById("cards");
+function copy(text, button) {
+  const done = () => { const old = button.textContent; button.textContent = "Copied"; button.classList.add("done");
+    setTimeout(() => { button.textContent = old; button.classList.remove("done"); }, 1400); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => prompt("Copy:", text));
+  else prompt("Copy:", text);
+}
+for (const action of data.actions) {
+  const card = document.createElement("section");
+  card.className = "card" + (action.uses.length ? " used" : "");
+  card.dataset.name = action.name.toLowerCase();
+  const stage = document.createElement("div");
+  stage.className = "stage";
+  const img = document.createElement("img");
+  stage.append(img);
+  let i = 0;
+  const show = () => {
+    const [image, ax, ay, ticks] = action.frames[i];
+    img.src = data.images[image];
+    img.style.left = (data.x - ax) + "px";
+    img.style.top = (data.y - ay) + "px";
+    i = (i + 1) % action.frames.length;
+    if (action.frames.length > 1) setTimeout(show, Math.max(1, ticks) * 40);
+  };
+  show();
+  const name = document.createElement("div");
+  name.className = "name";
+  name.textContent = action.name;
+  const tags = document.createElement("div");
+  tags.className = "tags";
+  for (const use of action.uses) tags.insertAdjacentHTML("beforeend", `<span class="tag use"></span>`), tags.lastChild.textContent = use;
+  if (action.still) tags.insertAdjacentHTML("beforeend", `<span class="tag still">lies still</span>`);
+  const buttons = document.createElement("div");
+  buttons.className = "buttons";
+  for (const what of ["talk", "sleep"]) {
+    const button = document.createElement("button");
+    button.textContent = "Use for " + what;
+    button.title = `mascot prototypes set "${data.name}" --${what} ${action.name}`;
+    button.onclick = () => copy(button.title, button);
+    buttons.append(button);
+  }
+  card.append(stage, name, tags, buttons);
+  cards.append(card);
+}
+document.getElementById("search").oninput = event => {
+  const words = event.target.value.toLowerCase().split(/\\s+/).filter(w => w);
+  for (const card of cards.children) card.hidden = !words.every(w => card.dataset.name.includes(w));
+};
+</script></body></html>
+"""
+
+
+def show_poses(arguments: argparse.Namespace):
+    """mascot prototypes poses: writes a page with the mascot's actions as
+    moving pictures (its images are QOI, which browsers cannot show, so they
+    go in as PNG) and opens it"""
+    prototype = prototype_named(arguments.name)
+    path, _ = prototype_dir(arguments, prototype.path)
+    if not path:
+        print(f"Cannot find where {prototype.display_name} is kept ({prototype.path})")
+        exit(1)
+    with open(os.path.join(path, "manifest.json")) as f:
+        manifest = json.load(f)
+    with open(os.path.join(path, manifest.get("actions", "actions.json"))) as f:
+        definitions = json.load(f)
+    with open(os.path.join(path, manifest.get("behaviors", "behaviors.json"))) as f:
+        behaviors = {d.get("name"): d.get("action") for d in json.load(f).get("definitions", [])}
+    assets_dir = os.path.join(path, manifest.get("assets", "assets"))
+    by_name = {a["name"]: a for a in definitions}
+
+    def frames_of(name, depth=0):
+        action = by_name.get(name)
+        if not action or depth > 8:
+            return []
+        if action.get("type") == "Sequence":
+            return [f for item in action.get("content", []) if item.get("type") == "ActionReference"
+                    for f in frames_of(item.get("action_name", ""), depth + 1)]
+        animation = next((item for item in action.get("content", []) if item.get("type") == "Animation"), None)
+        return [(f["image"], f.get("image_anchor_x", 0), f.get("image_anchor_y", 0), f.get("duration", 1))
+                for f in (animation or {}).get("frames", []) if f.get("image")]
+
+    # What it plays now: Talk, and the first of these it sleeps with (see mascot_sleep() in mascotd)
+    # What it plays now: Talk, and the first of these it sleeps with (see mascot_sleep() in mascotd)
+    uses = {}
+    if behaviors.get("Talk"):
+        uses.setdefault(behaviors["Talk"], []).append("Talk")
+    sleeping = next((b for b in ("Asleep", "Sleep", "LieDown", "SitDown") if behaviors.get(b)), None)
+    if sleeping:
+        uses.setdefault(behaviors[sleeping], []).append("Sleep")
+
+    images, actions = {}, []
+    for name in sorted(by_name, key=str.lower):
+        if name.startswith("___"):
+            continue
+        frames = frames_of(name)
+        for image in {f[0] for f in frames} - images.keys():
+            try:
+                with Image.open(os.path.join(assets_dir, image)) as picture:
+                    out = io.BytesIO()
+                    picture.save(out, "PNG")
+                images[image] = "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+            except OSError:
+                images[image] = None  # missing or unreadable: the daemon drops such an action too
+        frames = [f for f in frames if images.get(f[0])]
+        if frames:
+            actions.append({"name": name, "frames": frames, "uses": uses.get(name, []),
+                            # As guess_sleep() would pick: named like sleeping or lying, and lies still
+                            # As guess_sleep() would pick: named like sleeping or lying, and lies still
+                            "still": any(h in name.lower() for h in SLEEP_HINTS) and stays_asleep(by_name, name)})
+    if not actions:
+        print(f"{prototype.display_name} has no actions with pictures")
+        exit(1)
+    # In use first; each picture with its anchor on one spot, its feet on the floor
+    # In use first; each picture with its anchor on one spot, its feet on the floor
+    actions.sort(key=lambda a: not a["uses"])
+    left = max(f[1] for a in actions for f in a["frames"])
+    top = max(f[2] for a in actions for f in a["frames"])
+    data = {"name": prototype.display_name, "images": {k: v for k, v in images.items() if v}, "actions": actions,
+            "x": max(left, 90) + 10, "y": top + 6}
+    page = (POSES_PAGE.replace("__TITLE__", html.escape(prototype.display_name))
+            .replace("__NAME__", html.escape(prototype.display_name)).replace("__H__", str(top + 16))
+            .replace("__DATA__", json.dumps(data).replace("</", "<\\/")))
+    out_dir = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    out_path = os.path.join(out_dir, "mascot-poses-" + re.sub(r"[^A-Za-z0-9_-]+", "-", prototype.display_name) + ".html")
+    with open(out_path, "w") as f:
+        f.write(page)
+    print(f"{prototype.display_name}: {len(actions)} actions in {out_path}")
+    if not arguments.no_open:
+        subprocess.Popen(["xdg-open", out_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def prototype_named(name: str):
+    """The installed prototype by its exact name (any letter case):
+    prototype_find() would take the closest one, maybe another mascot"""
+    wanted = name.lower().removeprefix("shimeji.")
+    found = [p for p in prototypes.values()
+             if wanted in (p.display_name.lower(), p.name.lower().removeprefix("shimeji."))]
+    if not found:
+        print(f"No mascot called \"{name}\". Mascots: {', '.join(p.display_name for p in prototypes.values())}")
+        exit(1)
+    return found[0]
+
+
 def set_prototype(arguments: argparse.Namespace, client: Client):
     """mascot prototypes set: changes the Talk and Asleep behaviors of an
     installed mascot in its own directory, and reloads it"""
     if not arguments.talk and not arguments.sleep:
         print("Say what to change: --talk <action> and/or --sleep <action> ('auto' picks one)")
         exit(1)
-    # By its exact name: prototype_find() would take the closest one
-    # By its exact name: prototype_find() would take the closest one
-    wanted = arguments.name.lower().removeprefix("shimeji.")
-    found = [p for p in prototypes.values()
-             if wanted in (p.display_name.lower(), p.name.lower().removeprefix("shimeji."))]
-    if not found:
-        print(f"No mascot called \"{arguments.name}\". Mascots: {', '.join(p.display_name for p in prototypes.values())}")
-        exit(1)
-    prototype = found[0]
+    prototype = prototype_named(arguments.name)
     path, reloadable = prototype_dir(arguments, prototype.path)
     if not path:
         print(f"Cannot find where {prototype.display_name} is kept ({prototype.path})")
@@ -3852,6 +4033,9 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
 
         case "set":
             set_prototype(arguments, client)
+
+        case "poses":
+            show_poses(arguments)
 
         case "export":
             is_dir = os.path.isdir(arguments.output[0])
@@ -4675,6 +4859,10 @@ if __name__ == "__main__":
     prototype_reloader.add_argument("path", action="append", help="Path(s) of the prototype to reload")
 
     prototype_reload_all = prototype_subparsers.add_parser("reload-all", help="Reload all prototypes")
+
+    prototype_poses = prototype_subparsers.add_parser("poses", help="Show a mascot's actions as moving pictures in the browser, to pick what it talks and sleeps with")
+    prototype_poses.add_argument("name", help="The mascot, by its name (e.g. \"Red Shiba\")")
+    prototype_poses.add_argument("--no-open", action="store_true", help="Only write the page and say where")
 
     prototype_setter = prototype_subparsers.add_parser("set", help="Change what an installed mascot talks and sleeps with")
     prototype_setter.add_argument("name", help="The mascot, by its name (e.g. \"Red Shiba\")")

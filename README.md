@@ -194,6 +194,11 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   both. A mascot with the same name in another letter case (*Red* and *red*) is never replaced; give
   the new one another name. `--name` works for `.wlshm` files too.
 
+To see what a mascot's actions look like, `mascot prototypes poses "Red Shiba"` opens a page in
+the browser with each of them moving as the mascot plays it, what it talks and sleeps with now
+marked, and buttons that copy the command to change it (the page is written to
+`$XDG_RUNTIME_DIR`; `--no-open` only says where).
+
 To change what an installed mascot talks or sleeps with later, without importing it again:
 
 ```
