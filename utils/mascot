@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import json
-import subprocess
-import argparse
-import xml
-import stat
-import tempfile
-import zipfile
-import re
-import errno
-import struct
-import sys
-from dataclasses import dataclass, field
-from dataclasses import dataclass
-from xml.etree import ElementTree
-import socket
-import os
-import enum
-import pathlib
-from PIL import Image
-from typing import Callable, Any
-import xml.etree.ElementTree as ET
-import random
 import logging
 import time
 from typing import Dict, Optional
-import io
+import os
+import pathlib
+import zipfile
+import json
+from dataclasses import dataclass, field
+from xml.etree import ElementTree
+import random
+import argparse
 import tarfile
+import io
+import xml
+import struct
+from dataclasses import dataclass
+import tempfile
+import enum
+import xml.etree.ElementTree as ET
+from PIL import Image
+import subprocess
+import errno
+import stat
+import sys
+import re
+from typing import Callable, Any
 import shutil
+import socket
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -4205,6 +4205,48 @@ def environment_handler(arguments: argparse.Namespace, client: Client, parser):
             exit(1)
 
 
+# What mascotd accepts for each key (see config_set_by_key() in config.c,
+# What mascotd accepts for each key (see config_set_by_key() in config.c,
+# which takes e.g. an unknown policy or "maybe" for false without a word)
+# which takes e.g. an unknown policy or "maybe" for false without a word)
+CONFIG_BOOLEANS = {"BREEDING", "DRAGGING", "WINDOW_INTERACTIONS", "WINDOW_THROWING", "CURSOR_POSITION",
+                   "ALLOW_THROWING_MULTIHEAD", "ALLOW_DRAGGING_MULTIHEAD", "UNIFIED_OUTPUTS", "DISMISS_ANIMATIONS",
+                   "AFFORDANCES", "TABLETS_ENABLED", "CHAT_ENABLED", "BUBBLE_ENABLED"}
+CONFIG_CHOICES = {
+    "WINDOW_THROW_POLICY": ["none", "stop_at_borders", "bounce_at_borders", "looping", "close", "minimize",
+                            "keep_offscreen"],
+    "WLR_SHELL_LAYER": ["background", "bottom", "top", "overlay"],
+}
+CONFIG_CHAT_TOOLS = ["time", "weather", "files", "todo", "reminders", "shell", "sleep"]
+
+def config_value_problem(key, value):
+    """None if mascotd would take value for key, else why not"""
+    if "\n" in value or "\r" in value:
+        return "the value cannot span lines"
+    if key in CONFIG_BOOLEANS:
+        if value.lower() not in ["true", "yes", "on", "1", "false", "no", "off", "0"]:
+            return "use true or false"
+    elif key in CONFIG_CHOICES:
+        if value.lower() not in CONFIG_CHOICES[key]:
+            return "use one of " + ", ".join(CONFIG_CHOICES[key])
+    elif key in ("POINTER_LEFT_BUTTON", "POINTER_RIGHT_BUTTON", "POINTER_MIDDLE_BUTTON") or key.startswith("ON_TOOL_"):
+        if not re.fullmatch(r"-1|[0-4]", value):
+            return "use a button value from 0 to 4, or -1 for the default"
+    elif key in ("MASCOT_LIMIT", "INTERPOLATION_FRAMERATE", "CHAT_REMARKS", "CHAT_MEMORY"):
+        if not re.fullmatch(r"-?\d+", value) or (key.startswith("CHAT_") and int(value) < 0):
+            return "use a whole number" + (" of 0 or more" if key.startswith("CHAT_") else "")
+    elif key in ("OPACITY", "MASCOT_SCALE"):
+        try:
+            float(value)
+        except ValueError:
+            return "use a number, e.g. " + ("0.8" if key == "OPACITY" else "1.5")
+    elif key == "CHAT_TOOLS":
+        unknown = [t.strip() for t in value.split(",") if t.strip() and t.strip().lower() not in CONFIG_CHAT_TOOLS]
+        if unknown:
+            return f"unknown tool {', '.join(unknown)} - use " + ", ".join(CONFIG_CHAT_TOOLS)
+    return None
+
+
 def config_handler(arguments: argparse.Namespace, client: Client, parser):
     name_cast = {
         "BREEDING": "Multiplication",
@@ -4276,7 +4318,11 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
                 for key in name_cast:
                     print(f"  - {key}")
                 exit(1)
-            packet = SetConfigKey(arguments.key, arguments.value)
+            problem = config_value_problem(arguments.key, arguments.value.strip())
+            if problem:
+                print(f"Not set: {problem}")
+                exit(1)
+            packet = SetConfigKey(arguments.key, arguments.value.strip())
             client.queue_packet(packet)
             client.dispatch_events(until=lambda: time.time() - starttime > 5)
             print("Timeout.")
@@ -4350,19 +4396,19 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         print(f"Config file not found at {config_file_loc}! Please start mascot at least once before editing it.")
         exit(1)
 
-    def parse_boolean(value):
-        if value.lower() in ["true", "yes", "on", "1"]:
-            return True
-        elif value.lower() in ["false", "no", "off", "0"]:
-            return False
-        return True
-
-    config = {}
+    # Lines without a key (comments, blank ones) and keys this does not know
+    # Lines without a key (comments, blank ones) and keys this does not know
+    # are kept as they are when a key is set
+    # are kept as they are when a key is set
     with open(config_file_loc, "r") as f:
-        for line in f.readlines():
-            key, value = line.strip().split("=", 1)
-            if key in backmap:
-                config[backmap[key]] = value.strip()
+        lines = f.read().splitlines()
+    config = {}
+    for line in lines:
+        if line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() in backmap:
+            config[backmap[key.strip()]] = value.strip()
 
 
     match arguments.subcommand:
@@ -4379,10 +4425,21 @@ def local_config_handler(arguments: argparse.Namespace, parser):
                 for key in name_cast:
                     print(f"  - {key}")
                 exit(1)
-            config[arguments.key] = arguments.value
+            value = arguments.value.strip()
+            problem = config_value_problem(arguments.key, value)
+            if problem:
+                print(f"Not set: {problem}")
+                exit(1)
+            line = f"{name_cast[arguments.key]}={value}"
+            at = next((i for i, l in enumerate(lines) if not l.startswith("#") and "=" in l
+                       and l.split("=", 1)[0].strip() == name_cast[arguments.key]), None)
+            if at is None:
+                lines.append(line)
+            else:
+                lines[at] = line
             with open(config_file_loc, "w") as f:
-                for key, value in config.items():
-                    f.write(f"{name_cast[key]}={value}\n")
+                f.write("\n".join(lines) + "\n")
+            print(f"{arguments.key} = {value} (mascot is not running; it takes effect when it starts)")
         case "list":
             print("Config:")
             for key, value in config.items():
