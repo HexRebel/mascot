@@ -261,8 +261,8 @@ move the pointer off it.
 
 **`mascot menu`** opens the menu at the mascot you last talked to (or the first one) and closes it
 again; bind it to a key like `mascot chat`, e.g. in Hyprland `bind = SUPER SHIFT, N, exec, mascot
-menu`. Opened this way, it takes the keyboard until it closes: **↑/↓** (or **Ctrl+K/Ctrl+J**) move,
-**Enter** or **→** picks or opens a page, **←** or **Backspace** goes back, **Esc** (or the key
+menu`. Opened this way, it takes the keyboard until it closes: **↑/↓** (or **k/j**) move, **Enter**
+or **→** (**l**) picks or opens a page, **←** (**h**) or **Backspace** goes back, **Esc** (or the key
 again) closes it. What it opens in the bubble keeps the keyboard too.
 
 ## Putting mascots to sleep

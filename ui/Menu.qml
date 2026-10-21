@@ -152,9 +152,10 @@ PanelWindow {
     }
 
     // The keyboard's way around: up and down, into a page or pick (Enter,
-    // Right), back (Left, Backspace), close (Esc)
+    // Right), back (Left, Backspace), close (Esc); also vim's j, k, l and h
+    // (with or without Ctrl), as nothing is typed here
     function key(event: var): void {
-        const k = event.key, ctrl = event.modifiers & Qt.ControlModifier;
+        const k = event.key;
         const count = menu.items.length;
         // Past what cannot be picked (the "Mascot" heading, "…")
         const step = by => {
@@ -166,17 +167,17 @@ PanelWindow {
             }
             return menu.selected;
         };
-        if (k === Qt.Key_Down || k === Qt.Key_Tab || (ctrl && k === Qt.Key_J))
+        if (k === Qt.Key_Down || k === Qt.Key_Tab || k === Qt.Key_J)
             menu.selected = step(1);
-        else if (k === Qt.Key_Up || k === Qt.Key_Backtab || (ctrl && k === Qt.Key_K))
+        else if (k === Qt.Key_Up || k === Qt.Key_Backtab || k === Qt.Key_K)
             menu.selected = step(-1);
         else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)
             menu.choose(menu.items[menu.selected] ?? {});
-        else if (k === Qt.Key_Right) {
+        else if (k === Qt.Key_Right || k === Qt.Key_L) {
             const item = menu.items[menu.selected];
             if (item?.action === "page" && item !== menu.items[0])
                 menu.choose(item); // into a page, not back
-        } else if (k === Qt.Key_Left || k === Qt.Key_Backspace) {
+        } else if (k === Qt.Key_Left || k === Qt.Key_H || k === Qt.Key_Backspace) {
             if (menu.page !== "main")
                 menu.choose(menu.items[0]); // ‹ Back
         } else if (k === Qt.Key_Escape)
