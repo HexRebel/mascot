@@ -19,7 +19,8 @@ PanelWindow {
     // The bubble's colours (pywal)
     property QtObject theme: null
     // The page shown: "main", "settings" (the mascot's chat: model, role,
-    // session, tools), "swap" ("Change mascot"), "models", "roles" or "sessions"
+    // session, tools), "quiet" (how long all mascots sleep), "swap" ("Change
+    // mascot"), "models", "roles" or "sessions"
     property string page: "main"
     // The mascot's model and role in the bubble, see Bubble.choiceOf()
     property var choice: ({ model: "", role: "", noRole: false, session: "" })
@@ -234,6 +235,7 @@ PanelWindow {
     readonly property var items: ({
         main: mainItems,
         settings: settingsItems,
+        quiet: quietItems,
         swap: swapItems,
         models: modelItems,
         roles: roleItems,
@@ -249,7 +251,7 @@ PanelWindow {
             { label: "Settings ›", action: "page", argument: "settings" },
             e.asleep ? { label: "Wake up", action: "wake" } : { label: "Sleep", action: "sleep" },
             e.all_asleep ? { label: "Wake everyone", action: "wake_all" }
-                : { label: "Quiet for 30 min", action: "nap" },
+                : { label: "Quiet ›", action: "page", argument: "quiet" },
             { label: "Todo list", action: "todo" },
             { label: "Reminders", action: "reminders" },
             { label: "Help", action: "command", argument: ".help" },
@@ -260,11 +262,21 @@ PanelWindow {
     readonly property var settingsItems: [
         { label: "‹ Back", action: "page", argument: "main" },
         { label: "Change mascot ›", action: "page", argument: "swap" },
-        { label: "Model and role", action: "command", argument: ".info" },
         { label: "Model ›", action: "page", argument: "models" },
         { label: "Role ›", action: "page", argument: "roles" },
         { label: "Session ›", action: "page", argument: "sessions" },
-        { label: "Tools", action: "command", argument: ".tools" }
+        { label: "Tools", action: "command", argument: ".tools" },
+        { label: "Info", action: "command", argument: ".info" }
+    ]
+
+    // All mascots sleep for a while (do not disturb); "Set time…" opens the
+    // bubble with .quiet typed, for a time of one's own (e.g. 2h or 19:30)
+    readonly property var quietItems: [
+        { label: "‹ Back", action: "page", argument: "main" },
+        { label: "10 min", action: "nap", argument: "10" },
+        { label: "30 min", action: "nap", argument: "30" },
+        { label: "1 hour", action: "nap", argument: "60" },
+        { label: "Set time…", action: "type", argument: ".quiet " }
     ]
 
     readonly property var swapItems: !menu.event ? []
@@ -319,7 +331,7 @@ PanelWindow {
 
     readonly property int menuWidth: widthOf(items)
     readonly property int menuHeight: heightOf(items)
-    readonly property var pages: [mainItems, settingsItems, swapItems, modelItems, roleItems, sessionItems]
+    readonly property var pages: [mainItems, settingsItems, quietItems, swapItems, modelItems, roleItems, sessionItems]
     readonly property int windowWidth: Math.max(...pages.map(p => widthOf(p)))
     readonly property int windowHeight: Math.max(...pages.map(p => heightOf(p)))
 

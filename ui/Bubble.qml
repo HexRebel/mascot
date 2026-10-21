@@ -193,7 +193,21 @@ PanelWindow {
         bubble.openRequested(mascot);
     }
 
+    // The menu's "Set time…": open the bubble with the start of a dot command
+    // typed (".quiet "), for the rest to be written
+    property string pendingText: ""
+
+    function openTyping(mascot: int, text: string): void {
+        bubble.pendingText = text;
+        bubble.openRequested(mascot);
+    }
+
     function runPending(): void {
+        if (bubble.pendingText) {
+            input.text = bubble.pendingText;
+            input.cursorPosition = input.text.length;
+            bubble.pendingText = "";
+        }
         const command = bubble.pendingCommand;
         bubble.pendingCommand = "";
         if (!command || bubble.busy)
@@ -440,6 +454,8 @@ PanelWindow {
         ".remind <when> <text>  set a reminder, e.g. .remind 10m tea",
         ".reminders             list them",
         ".remind cancel <n|text>  cancel one",
+        ".quiet <when>          all mascots sleep until then, e.g. .quiet 2h",
+        ".quiet now             wake them up again",
         ".copy                  copy the last answer",
         ".clear                 start this conversation over",
         "",
@@ -554,17 +570,21 @@ PanelWindow {
             MASCOT_TODO_FILE: bubble.todoFile,
             MASCOT_REMINDER_FILE: bubble.reminderFile,
             // For sleep_mode, which tells the daemon
-            MASCOT_CHAT_SOCKET: Quickshell.env("MASCOT_CHAT_SOCKET")
-                || `${Quickshell.env("XDG_RUNTIME_DIR")}/mascotd-chat.sock`
+            MASCOT_CHAT_SOCKET: bubble.chatSocket
         };
     }
+
+    // The daemon's chat socket, for sleep_mode (.quiet), which tells the daemon
+    readonly property string chatSocket: Quickshell.env("MASCOT_CHAT_SOCKET")
+        || `${Quickshell.env("XDG_RUNTIME_DIR")}/mascotd-chat.sock`
 
     // Runs one of Mascot's tools itself, not through the model (.todo); its
     // output is written into the conversation
     function runTool(name: string, args: var): void {
         const path = `${bubble.toolsDir}/bin/${name}`.replace(/'/g, "'\\''");
         run([JSON.stringify(args)], false, "system", null, bubble.current, `'${path}'`,
-            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile, MASCOT_REMINDER_FILE: bubble.reminderFile });
+            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile, MASCOT_REMINDER_FILE: bubble.reminderFile,
+              MASCOT_CHAT_SOCKET: bubble.chatSocket });
     }
 
     // aichat --info for these args, asked once per bubble: done(info, ok)
@@ -903,6 +923,12 @@ PanelWindow {
                     runTool("set_reminder", { text: arg }); // it finds the time at the start
                 return;
             }
+        case ".quiet":
+            if (!arg)
+                say("use .quiet <when>, e.g. .quiet 10m, .quiet 2h or .quiet 19:30 (.quiet now wakes them)");
+            else
+                runTool("sleep_mode", { wake_up: arg });
+            return;
         case ".copy":
             for (let i = bubble.entries.count - 1; i >= 0; i--) {
                 const e = bubble.entries.get(i);

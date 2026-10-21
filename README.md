@@ -249,11 +249,12 @@ You can get all available behaviors by using `mascot prototypes info {prototype_
 ## Right click
 
 A right click on a mascot opens a small menu next to it (with the chat bubble enabled):
-**Settings** (**Change mascot**, like `.mascot`; the bubble with `.info` or `.tools`; and the
-mascot's **Model**, **Role** and **Session** to pick from, as `.model`, `.role` and `.session`, the
-one in use ticked; a new session is named with `.session <name>` in the bubble), **Sleep** or **Wake
-up** (just this mascot, like a middle click), **Quiet for 30 min** (all of them, like `mascot sleep
---minutes 30`; **Wake everyone** while they sleep), **Todo list** and **Reminders** (the bubble with
+**Settings** (**Change mascot**, like `.mascot`; the mascot's **Model**, **Role** and **Session** to
+pick from, as `.model`, `.role` and `.session`, the one in use ticked, a new session named with
+`.session <name>` in the bubble; and **Tools** and **Info**, the bubble with `.tools` or `.info`), **Sleep** or **Wake
+up** (just this mascot, like a middle click), **Quiet** (all of them sleep for **10 min**, **30 min**
+or **1 hour**, like `mascot sleep --minutes 30`, or **Set time…**, the bubble with `.quiet` typed for
+a time of your own; **Wake everyone** while they sleep), **Todo list** and **Reminders** (the bubble with
 `.todo` or `.reminders`), **Help** (`.help`) and **Send away** (sending the last one away stops
 Mascot). It takes no keyboard and closes when you pick something or
 move the pointer off it.
@@ -407,6 +408,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.remind <when> <text>` | Set a reminder or timer, e.g. `.remind 10m tea` or `.remind tomorrow 12:00 water the plants` (see *Tools*) |
 | `.reminders` | List the reminders |
 | `.remind cancel <number or text>` | Cancel one |
+| `.quiet <when>` | All mascots sleep until then (no remarks, reminders wait), e.g. `.quiet 2h` or `.quiet 19:30`; `.quiet now` wakes them |
 | `.copy` | Copy the last answer to the clipboard |
 | `.clear` | Start this mascot's conversation over |
 
