@@ -127,6 +127,7 @@ ShellRoot {
         id: menu
 
         theme: bubble.colors
+        usedModels: bubble.usedModels
         onListRequested: root.send({ event: "list" })
         onMenuRequested: mascot => root.send({ event: "menu", mascot: mascot })
         onDismissed: mascot => root.releaseMenu(mascot)

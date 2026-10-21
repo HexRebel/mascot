@@ -34,6 +34,40 @@ PanelWindow {
     property var roles: []
     property var sessions: []
     property bool waiting: false // for the daemon's names
+    // The models that have answered in the bubble (Bubble.usedModels), also
+    // ones aichat does not list
+    property var usedModels: []
+    // The models OpenRouter has now (ids), asked for once (no key needed):
+    // aichat's list of them is old, and those that are gone answer with an
+    // error, so they are left out. null: not known (yet, or no network)
+    property var openRouterModels: null
+    property bool askingOpenRouter: false
+
+    function askOpenRouter(): void {
+        if (menu.openRouterModels || menu.askingOpenRouter)
+            return;
+        menu.askingOpenRouter = true;
+        const request = new XMLHttpRequest();
+        request.onreadystatechange = () => {
+            if (request.readyState !== XMLHttpRequest.DONE)
+                return;
+            menu.askingOpenRouter = false;
+            try {
+                if (request.status === 200) {
+                    const ids = {};
+                    for (const model of JSON.parse(request.responseText).data)
+                        ids[model.id] = true;
+                    menu.openRouterModels = ids;
+                }
+            } catch (e) {}
+        };
+        request.open("GET", "https://openrouter.ai/api/v1/models");
+        request.send();
+    }
+
+    // aichat's models and the ones used, without those OpenRouter no longer has
+    readonly property var shownModels: menu.models.concat(menu.usedModels.filter(m => !menu.models.includes(m)))
+        .filter(m => !m.startsWith("openrouter:") || !menu.openRouterModels || menu.openRouterModels[m.slice(11)])
 
     // What an item asks for, for mascot (argument: the prototype for "swap",
     // the dot command for "command"), see shell.qml
@@ -67,6 +101,7 @@ PanelWindow {
         menu.page = "main";
         menu.waiting = true;
         menu.listRequested();
+        menu.askOpenRouter();
         const command = (e.command || "aichat") + " %s </dev/null";
         modelList.command = ["sh", "-c", command.replace("%s", "--list-models")];
         roleList.command = ["sh", "-c", command.replace("%s", "--list-roles")];
@@ -286,12 +321,15 @@ PanelWindow {
                 .map(n => ({ label: n, action: "swap", argument: n }))
             : [{ label: "…", action: "" }])
 
-    // Picking runs .model/.role in the bubble, as typing it would
+    // Picking runs .model/.role in the bubble, as typing it would; "Other
+    // model…" opens it with .model typed, for one that is not listed
     readonly property var modelItems: [
         { label: "‹ Back", action: "page", argument: "settings" },
         { label: "Default", action: "command", argument: ".exit model", checked: !menu.choice.model }
-    ].concat(menu.models.map(m => ({ label: m, action: "command", argument: `.model ${m}`,
-                                    checked: m === menu.choice.model })))
+    ].concat(menu.shownModels.map(m => ({ label: m, action: "command", argument: `.model ${m}`,
+                                        checked: m === menu.choice.model })),
+             [{ label: "Other model…", action: "type",
+                argument: menu.models.some(m => m.startsWith("openrouter:")) ? ".model openrouter:" : ".model " }])
 
     readonly property string currentRole: menu.choice.role || (menu.choice.noRole ? "" : menu.event?.role ?? "")
     readonly property var roleItems: [

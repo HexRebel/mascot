@@ -250,7 +250,8 @@ You can get all available behaviors by using `mascot prototypes info {prototype_
 
 A right click on a mascot opens a small menu next to it (with the chat bubble enabled):
 **Settings** (**Change mascot**, like `.mascot`; the mascot's **Model**, **Role** and **Session** to
-pick from, as `.model`, `.role` and `.session`, the one in use ticked, a new session named with
+pick from, as `.model`, `.role` and `.session`, the one in use ticked, a model not listed with
+**Other model…** (see *Using it*), a new session named with
 `.session <name>` in the bubble; and **Tools** and **Info**, the bubble with `.tools` or `.info`), **Sleep** or **Wake
 up** (just this mascot, like a middle click), **Quiet** (all of them sleep for **10 min**, **30 min**
 or **1 hour**, like `mascot sleep --minutes 30`, or **Set time…**, the bubble with `.quiet` typed for
@@ -414,6 +415,26 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 
 The model, role and session apply to the mascot whose bubble you typed them in, until changed, and
 reset when `qs` restarts; each mascot can have its own.
+
+**Models from OpenRouter.** aichat's own list of OpenRouter's models is old, and OpenRouter removes
+models over time (they answer with *No endpoints found*). The menu's **Model** page therefore asks
+OpenRouter which models it has now (no key needed) and leaves out the ones that are gone. A model that
+is not listed can be used anyway: **Other model…** opens the bubble with `.model openrouter:` typed,
+for a name from [openrouter.ai/models](https://openrouter.ai/models) (e.g.
+`anthropic/claude-haiku-5.5`). Once it has answered, it is on the Model page from then on (the last
+ten are kept in `~/.local/share/mascot/models`). To choose the list yourself, give the client a
+`models:` list in aichat's config; aichat then shows only those:
+
+```yaml
+clients:
+  - type: openai-compatible
+    name: openrouter
+    api_base: https://openrouter.ai/api/v1
+    models:
+      - name: anthropic/claude-haiku-5.5
+        max_input_tokens: 1000000
+        supports_function_calling: true
+```
 
 The memory is an aichat session per mascot, kept in `$XDG_RUNTIME_DIR/mascot-memory/` and deleted when
 the bubble starts and quits; your own aichat sessions are not touched. The memory is sent with

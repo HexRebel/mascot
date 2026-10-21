@@ -1031,6 +1031,35 @@ PanelWindow {
         onLoaded: bubble.userPrompt = this.text()
     }
 
+    // The models (.model) that have answered, newest first, for the menu: a
+    // model aichat does not list (its list of OpenRouter's is old) is there
+    // the next time. One per line in the data directory
+    property var usedModels: []
+
+    function rememberModel(model: string): void {
+        if (bubble.usedModels[0] === model)
+            return;
+        bubble.usedModels = [model].concat(bubble.usedModels.filter(m => m !== model)).slice(0, 10);
+        usedModelsView.setText(bubble.usedModels.join("\n") + "\n");
+    }
+
+    FileView {
+        id: usedModelsView
+
+        path: `${bubble.dataDir}/models`
+        printErrors: false
+        onLoaded: bubble.usedModels = this.text().split("\n").map(l => l.trim()).filter(l => l)
+    }
+
+    // aichat's error, with what to do about the ones that need it
+    function explained(error: string): string {
+        const gone = error.match(/No endpoints found for ([^".]+)/);
+        if (gone)
+            return `OpenRouter has no model ${gone[1]} (any more) - pick another under Settings › Model, or find one `
+                + `on openrouter.ai/models and use .model openrouter:<name>\n\n${error}`;
+        return error;
+    }
+
     FileView {
         path: Quickshell.shellPath("prompt.md")
         onLoaded: bubble.bundledPrompt = this.text()
@@ -1076,7 +1105,9 @@ PanelWindow {
                 const c = job.conv;
                 if (c?.job === job) { // not stopped
                     if (exitCode !== 0 && !job.done)
-                        c.error = jobErrors.text.trim() || `The command failed (exit ${exitCode})`;
+                        c.error = bubble.explained(jobErrors.text.trim()) || `The command failed (exit ${exitCode})`;
+                    if (exitCode === 0 && c.replying && c.model)
+                        bubble.rememberModel(c.model);
                     if (c.replying && c.streaming >= 0 && c.streaming < c.entries.count)
                         c.memoryChars += c.entries.get(c.streaming).body.length;
                     // What Mascot's tools really changed (they say so on stderr),
