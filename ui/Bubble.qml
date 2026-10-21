@@ -489,25 +489,39 @@ PanelWindow {
     readonly property int memoryLimit: parseInt(Quickshell.env("MASCOT_MEMORY_LIMIT"))
         || (bubble.event?.memory === 0 ? 0 : (bubble.event?.memory ?? 8000) * 3)
 
-    // memoryLimit for this conversation's model: done(characters). Ollama cuts
-    // the start of a conversation that outgrows the context off silently, and
-    // the start is the prompt - the mascot would forget who it is. So with a
-    // local model the memory is at most half its context, leaving room for the
-    // prompt, a file a tool reads and the answer (CHAT_MEMORY may be smaller)
+    // memoryLimit for this conversation's model: done(characters, why). Ollama
+    // cuts the start of a conversation that outgrows the context off silently,
+    // and the start is the prompt - the mascot would forget who it is; a model
+    // online refuses it. So the memory is at most half the model's context,
+    // leaving room for the prompt, a file a tool reads and the answer. It never
+    // grows past CHAT_MEMORY, though, not even for a big model online: the
+    // whole memory goes with every message, and online each token is paid for
     function memoryFor(c: QtObject, command: string, done: var): void {
-        if (!bubble.memoryLimit || Quickshell.env("MASCOT_MEMORY_LIMIT")) {
-            done(bubble.memoryLimit);
+        if (Quickshell.env("MASCOT_MEMORY_LIMIT")) {
+            done(bubble.memoryLimit, "MASCOT_MEMORY_LIMIT");
             return;
         }
+        if (!bubble.memoryLimit) {
+            done(0, "CHAT_MEMORY=0");
+            return;
+        }
+        const cap = tokens => tokens > 0 && tokens / 2 * 3 < bubble.memoryLimit
+            ? done(tokens / 2 * 3, "half the model's context") : done(bubble.memoryLimit, "CHAT_MEMORY");
         // The same probe as withTools(), so aichat is asked once
         const probe = (c.model ? ["-m", c.model] : []).concat(roleFlags(), "-s", "mascot-probe");
         lookup(probe, c, command, (info, ok) => {
-            const local = ok ? info.match(/^model:?\s+ollama:(\S+)/m) : null;
+            const model = ok ? (info.match(/^model:?\s+(\S+)/m) ?? [])[1] ?? "" : "";
+            const local = model.match(/^ollama:(\S+)/);
             if (!local) {
-                done(bubble.memoryLimit); // not local: its context is unknown
+                // OpenRouter says how big its models are; of others it is not known
+                if (!model.startsWith("openrouter:")) {
+                    done(bubble.memoryLimit, "CHAT_MEMORY");
+                    return;
+                }
+                bubble.askOpenRouter(known => cap(known
+                    ? bubble.openRouterList.find(m => m.id === model.slice(11))?.context_length ?? 0 : 0));
                 return;
             }
-            const cap = tokens => done(tokens > 0 ? Math.min(bubble.memoryLimit, tokens / 2 * 3) : bubble.memoryLimit);
             if (local[1] in bubble.contexts) {
                 cap(bubble.contexts[local[1]]);
                 return;
@@ -818,8 +832,18 @@ PanelWindow {
             say(helpText);
             return;
         case ".info":
-            run(flags().concat("--info"));
-            return;
+            {
+                // And how much the mascot remembers before it sums up (memoryFor())
+                const c = bubble.current;
+                const command = bubble.event?.command || "aichat";
+                memoryFor(c, command, (limit, why) => {
+                    run(flags().concat("--info"), false, "system", null, c, command);
+                    c.entries.append({ kind: "system", body: limit
+                        ? `memory: about ${Math.round(limit / 3)} tokens before it is summed up (${why})`
+                        : `memory: never summed up (${why})` });
+                });
+                return;
+            }
         case ".models":
             if (arg)
                 searchOpenRouter(arg);
