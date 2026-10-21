@@ -833,9 +833,20 @@ PanelWindow {
             return;
         case ".info":
             {
-                // And how much the mascot remembers before it sums up (memoryFor())
+                // And how much the mascot remembers before it sums up (memoryFor());
+                // in a .session aichat sums up itself, past its compress_threshold
                 const c = bubble.current;
                 const command = bubble.event?.command || "aichat";
+                if (c.session) {
+                    lookup([], c, command, (info, ok) => {
+                        const threshold = ok ? (info.match(/^compress_threshold:?\s+(\d+)/m) ?? [])[1] : null;
+                        run(flags().concat("--info"), false, "system", null, c, command);
+                        c.entries.append({ kind: "system", body: threshold && threshold !== "0"
+                            ? `memory: aichat's session ${c.session}, summed up by aichat past ${threshold} tokens (compress_threshold)`
+                            : `memory: aichat's session ${c.session}, never summed up (compress_threshold)` });
+                    });
+                    return;
+                }
                 memoryFor(c, command, (limit, why) => {
                     run(flags().concat("--info"), false, "system", null, c, command);
                     c.entries.append({ kind: "system", body: limit
