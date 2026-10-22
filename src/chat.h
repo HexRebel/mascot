@@ -63,7 +63,11 @@ bool chat_announce_menu(struct mascot* mascot, environment_t* env, int32_t point
 void chat_tick(void);
 
 // Releases the chat hold on a mascot the user started dragging and tells
-// clients with {"event":"dragged","mascot":N}, so its bubble can close
+// clients with {"event":"dragged","mascot":N}, so its bubble can hide
 void chat_mascot_dragged(struct mascot* mascot);
+// The button went up after a drag (however it ended): tells clients with
+// {"event":"dropped","mascot":N}, so the bubble closes only now - a surface
+// that unmaps while the button is down makes Hyprland send a false release
+void chat_mascot_dropped(void);
 
 #endif

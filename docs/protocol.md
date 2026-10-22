@@ -868,7 +868,13 @@ at the mascot). Also:
 ### dragged
 
 `{"event":"dragged","mascot":N}`: the user started dragging mascot N. The mascot is no longer
-held; a client showing a conversation for it will usually close it.
+held; a client showing a conversation for it will usually hide it, and close it on `dropped`.
+
+### dropped
+
+`{"event":"dropped","mascot":N}`: the button went up after dragging mascot N, however the drag
+ended. A window that unmaps while the button is still down makes Hyprland send the daemon a
+false release (the drag ends at once), so close windows here rather than on `dragged`.
 
 ### prototypes
 

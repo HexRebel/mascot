@@ -371,9 +371,13 @@ static bool chat_broadcast(const char* line, int len)
     return delivered;
 }
 
+// The mascot being dragged, until the button goes up (chat_mascot_dropped())
+static long dragged_mascot_id = -1;
+
 void chat_mascot_dragged(struct mascot* mascot)
 {
     if (!mascot) return;
+    dragged_mascot_id = mascot->id;
     // Released directly: chat_find_mascot() would take environment_mutex
     // in the middle of a Wayland dispatch
     if (mascot->id == held_mascot_id) {
@@ -384,6 +388,18 @@ void chat_mascot_dragged(struct mascot* mascot)
 
     char line[64];
     int len = snprintf(line, sizeof(line), "{\"event\":\"dragged\",\"mascot\":%u}\n", mascot->id);
+    chat_broadcast(line, len);
+}
+
+void chat_mascot_dropped(void)
+{
+    if (dragged_mascot_id == -1) return;
+    long id = dragged_mascot_id;
+    dragged_mascot_id = -1;
+    if (!client_count) return;
+
+    char line[64];
+    int len = snprintf(line, sizeof(line), "{\"event\":\"dropped\",\"mascot\":%ld}\n", id);
     chat_broadcast(line, len);
 }
 

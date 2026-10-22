@@ -1550,6 +1550,7 @@ static void environment_on_pointer_button(void *data,
             environment_subsurface_get_mascot(env_pointer->grabbed_subsurface),
             true);
       }
+      chat_mascot_dropped();
     }
   }
 }
@@ -1661,6 +1662,8 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
     }
 
   } else {
+    if (pressed_button == mascot_hotspot_button_left)
+      chat_mascot_dropped();
     if (env_pointer->pending_press &&
         pressed_button == mascot_hotspot_button_left) {
       struct mascot *pressed = env_pointer->pending_press;
@@ -1901,6 +1904,7 @@ static void on_tool_removed(void *data, struct zwp_tablet_tool_v2 *tool) {
     env_pointer->dy = (env_pointer->y - env_pointer->dy);
     mascot_drag_ended(env_pointer->grabbed_subsurface->mascot, true);
   }
+  chat_mascot_dropped();
 
   struct wl_pointer_listener *surface_pointer_callbacks =
       wl_surface_get_callbacks(env_pointer->above_surface);

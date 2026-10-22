@@ -381,7 +381,15 @@ PanelWindow {
     property bool fromKey: false
     property bool keepKeyboard: false
 
-    // The mascot was dragged away from under the bubble
+    // The mascot is being dragged away from under the bubble: invisible (but
+    // still mapped, see shell.qml) until it is dropped, then closeFor()
+    property bool hiddenForDrag: false
+
+    function hideFor(mascot: int): void {
+        if (bubble.visible && bubble.event?.mascot === mascot)
+            bubble.hiddenForDrag = true;
+    }
+
     function closeFor(mascot: int): void {
         if (bubble.visible && bubble.event?.mascot === mascot)
             bubble.close();
@@ -413,6 +421,7 @@ PanelWindow {
     // running reply carries on into its conversation
     function dismiss(): void {
         bubble.visible = false;
+        bubble.hiddenForDrag = false;
         coolDown();
         bubble.remarking = false; // after hiding, or OnDemand would take the keyboard first
         bubble.reminding = false;
@@ -1467,6 +1476,7 @@ PanelWindow {
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
+        visible: !bubble.hiddenForDrag
 
         HoverHandler {
             id: remarkHover
@@ -1487,6 +1497,7 @@ PanelWindow {
     Column {
         id: content
 
+        visible: !bubble.hiddenForDrag
         x: bubble.inset + bubble.padding
         y: bubble.inset + bubble.padding + (bubble.below ? bubble.tailHeight : 0)
         width: bubble.bodyWidth - 2 * bubble.padding

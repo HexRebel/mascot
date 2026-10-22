@@ -46,6 +46,10 @@ ShellRoot {
                 bubble.dismiss();
             menu.openFor(event, bubble.choiceOf(event.mascot));
         } else if (event.event === "dragged") {
+            // Only hidden until it is dropped: a window that unmaps while the
+            // button is down makes Hyprland end the drag with a false release
+            bubble.hideFor(event.mascot);
+        } else if (event.event === "dropped") {
             bubble.closeFor(event.mascot);
             if (menu.event?.mascot === event.mascot)
                 menu.close();
