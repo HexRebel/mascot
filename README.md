@@ -364,6 +364,9 @@ so, after 10 minutes).
 - Quickshell (`pacman -S quickshell`)
 - aichat (`pacman -S aichat`), configured with at least one model
 - Optional: pywal (`pacman -S python-pywal`) for colours that follow your theme (see [Colours](#colours))
+- Optional: a Nerd Font (e.g. `pacman -S ttf-nerd-fonts-symbols`) for the bubble's icons, in your
+  theme's colours; without one it shows emoji
+- `curl`, with which the bubble asks Ollama to keep a local model loaded while it is open
 
 ## Starting and stopping
 

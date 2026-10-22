@@ -68,6 +68,7 @@ PanelWindow {
             property var job: null // the running command, see run()
             property bool replying: false // job answers a message, not a dot command
             property string doing: "" // what a tool is doing while it waits, see doingOf()
+            property string doingIcon: "" // its icon's name, see icon()
             property string error: ""
             property string memory: "" // the aichat session that remembers it
             property string persona: "" // the role flags that session started with
@@ -968,6 +969,7 @@ PanelWindow {
         }
         c.replying = reply;
         c.doing = "";
+        c.doingIcon = "";
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -985,45 +987,60 @@ PanelWindow {
         scroller.contentY = Math.max(0, Math.min(scroller.contentY + dy, scroller.contentHeight - scroller.height));
     }
 
+    // A Nerd Font for the icons, if one is installed (they take the text's
+    // pywal colour); without one, emoji
+    readonly property string nerdFont: Qt.fontFamilies().find(f => /^Symbols Nerd Font$/.test(f))
+        ?? Qt.fontFamilies().find(f => /Nerd Font$/.test(f)) ?? ""
+
+    // An icon by name: a Nerd Font (Font Awesome) glyph, else an emoji
+    function icon(name: string): string {
+        const icons = {
+            weather: ["\uf0c2", "☁"], folder: ["\uf07c", "📁"], file: ["\uf15c", "📄"], search: ["\uf002", "🔍"],
+            image: ["\uf03e", "🖼"], todo: ["\uf0ae", "📝"], reminder: ["\uf017", "⏰"], shell: ["\uf120", "⌨"],
+            sleep: ["\uf186", "💤"], check: ["\uf00c", "✓"]
+        };
+        return (icons[name] ?? ["", ""])[bubble.nerdFont ? 0 : 1];
+    }
+
     // What a tool is doing, from its "mascot-doing: {tool, args}" on stderr,
-    // shown by the thinking dots until the answer starts
-    function doingOf(json: string): string {
+    // shown by the thinking dots until the answer starts: [icon, text]
+    function doingOf(json: string): var {
         let d;
         try {
             d = JSON.parse(json);
         } catch (e) {
-            return "";
+            return ["", ""];
         }
         const a = d.args ?? {};
         const file = p => String(p ?? "").replace(/\/+$/, "").split("/").pop() || "your files";
         switch (d.tool) {
         case "get_current_weather":
-            return a.location ? `☁ checking the weather in ${a.location}…` : "☁ checking the weather…";
+            return ["weather", a.location ? `checking the weather in ${a.location}…` : "checking the weather…"];
         case "list_directory":
-            return `📁 looking in ${file(a.path)}…`;
+            return ["folder", `looking in ${file(a.path)}…`];
         case "read_file":
-            return `📄 reading ${file(a.path)}…`;
+            return ["file", `reading ${file(a.path)}…`];
         case "search_file":
-            return `🔍 searching ${file(a.path)}…`;
+            return ["search", `searching ${file(a.path)}…`];
         case "look_at_image":
-            return `🖼 looking at ${file(a.path)}…`;
+            return ["image", `looking at ${file(a.path)}…`];
         case "list_todos":
-            return "📝 checking the todo list…";
+            return ["todo", "checking the todo list…"];
         case "add_todo":
         case "remove_todo":
         case "edit_todo":
-            return "📝 updating the todo list…";
+            return ["todo", "updating the todo list…"];
         case "set_reminder":
-            return "⏰ setting a reminder…";
+            return ["reminder", "setting a reminder…"];
         case "list_reminders":
         case "cancel_reminder":
-            return "⏰ checking the reminders…";
+            return ["reminder", "checking the reminders…"];
         case "last_commands":
-            return "⌨ looking at your last commands…";
+            return ["shell", "looking at your last commands…"];
         case "sleep_mode":
-            return "💤 getting sleepy…";
+            return ["sleep", "getting sleepy…"];
         }
-        return "";
+        return ["", ""];
     }
 
     // The answer without a reasoning model's <think>…</think>
@@ -1463,7 +1480,7 @@ PanelWindow {
                     job.errors += line + "\n";
                     const c = job.conv;
                     if (c?.job === job && line.startsWith("mascot-doing: "))
-                        c.doing = bubble.doingOf(line.slice(14));
+                        [c.doingIcon, c.doing] = bubble.doingOf(line.slice(14));
                 }
             }
 
@@ -1683,6 +1700,15 @@ PanelWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 leftPadding: 4
                                 visible: text !== ""
+                                text: bubble.icon(bubble.current?.doingIcon ?? "")
+                                color: theme.muted
+                                font.pixelSize: 12
+                                font.family: bubble.nerdFont || Qt.application.font.family
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: text !== ""
                                 text: bubble.current?.doing ?? ""
                                 color: theme.muted
                                 font.pixelSize: 12
@@ -1765,7 +1791,8 @@ PanelWindow {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                text: "✓ copied"
+                text: `<font face="${bubble.nerdFont || Qt.application.font.family}">${bubble.icon("check")}</font> copied`
+                textFormat: Text.StyledText
                 color: theme.accent
                 font.pixelSize: 12
                 opacity: 0
