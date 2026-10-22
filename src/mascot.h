@@ -449,7 +449,8 @@ struct mascot {
     bool asleep;
     const struct mascot_behavior* sleep_behavior;
 
-    // Repeated while it stays put (the menu's "Stay"), see mascot_stay()
+    // While it stays put (the menu's "Stay"), its first behavior and fallback
+    // ("SitDown"), see mascot_stay()
     const struct mascot_behavior* stay_behavior;
 
     environment_t* environment; // opaque pointer to the environment
@@ -539,9 +540,10 @@ bool mascot_chat_talk(struct mascot* mascot, bool talking);
 // while held for chat. asleep=false wakes it up right away. Returns false if
 // nothing changed
 bool mascot_sleep(struct mascot* mascot, bool asleep);
-// Keeps the mascot where it is, awake: repeats "SitDown" on the floor, after
-// chat and sleep, wherever it is dropped. stay=false lets it walk again right
-// away. Returns false if nothing changed
+// Keeps the mascot where it is, awake: on the floor, after chat and sleep and
+// wherever it is dropped, it sits down, then picks among its behaviors that keep
+// it on its spot (sitting, lying, looking around...). stay=false lets it walk
+// again right away. Returns false if nothing changed
 bool mascot_stay(struct mascot* mascot, bool stay);
 
 // Callback for position change

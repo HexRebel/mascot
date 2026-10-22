@@ -273,8 +273,9 @@ pick from, as `.model`, `.role` and `.session`, the one in use ticked, a model n
 **Other model…** (see *Using it*), a new session with **New session…** (the bubble with `.session`
 typed, for its name), a private one marked so, and **Delete session ›** (the bubble with
 `.delete session <name>` typed: Enter deletes it); and **Tools** and **Info**, the bubble with `.tools` or `.info`),
-**Stay** (it sits where it is, or wherever you drop it, and still talks and sleeps, until you pick it
-again; ticked meanwhile), **Sleep** or **Wake
+**Stay** (it stays where it is, or wherever you drop it, awake: it sits, and in between does whatever
+its figure can do on the spot, like lying down or looking around; it still talks and sleeps, until
+you pick it again; ticked meanwhile), **Sleep** or **Wake
 up** (just this mascot, like a middle click), **Quiet** (all of them sleep for **10 min**, **30 min**
 or **1 hour**, like `mascot sleep --minutes 30`, or **Set time…**, the bubble with `.quiet` typed for
 a time of your own; **Wake everyone** while they sleep), **Todo list** and **Reminders** (the bubble with

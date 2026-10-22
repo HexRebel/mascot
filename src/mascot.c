@@ -48,6 +48,7 @@ static void mascot_init_(struct mascot *mascot,
 void mascot_build_behavior_pool(struct mascot *mascot,
                                 const struct mascot_behavior *behavior,
                                 bool add);
+static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot);
 
 const struct mascot_behavior *
 mascot_prototype_behavior_by_name(const struct mascot_prototype *prototype,
@@ -650,7 +651,9 @@ enum mascot_tick_result mascot_behavior_next(struct mascot *mascot,
 
   if (mascot->stay_behavior &&
       mascot_get_border_type(mascot) == environment_border_type_floor) {
-    mascot_set_behavior(mascot, mascot->stay_behavior);
+    mascot_set_behavior(mascot, mascot_stay_pick(mascot));
+    INFO("<Mascot:%s:%u> Stays put with \"%s\"", mascot->prototype->name,
+         mascot->id, mascot->current_behavior->name);
     return mascot_tick_ok;
   }
 
@@ -1002,6 +1005,63 @@ bool mascot_sleep(struct mascot *mascot, bool asleep) {
   return true;
 }
 
+// Whether an action keeps the mascot on its spot: only animations without
+// velocity, standing still and looking, and no frame hanging below its anchor
+// (e.g. SitWhileDanglingLegs, made for a ledge, would push its legs through the
+// floor)
+static bool mascot_action_stays_put(const struct mascot_action *action,
+                                    int depth) {
+  if (!action || depth > 8 || action->type == mascot_action_type_move)
+    return false;
+  if (action->embedded_type != mascot_action_embedded_property_none &&
+      action->embedded_type != mascot_action_embedded_property_look)
+    return false;
+  if (action->behavior || action->target_behavior || action->born_mascot ||
+      action->transform_target)
+    return false;
+  for (uint16_t i = 0; i < action->length; i++) {
+    const struct mascot_action_content *content = &action->content[i];
+    if (content->kind == mascot_action_content_type_animation) {
+      const struct mascot_animation *animation = content->value.animation;
+      for (uint16_t f = 0; animation && f < animation->frame_count; f++) {
+        const struct mascot_pose *pose = animation->frames[f];
+        if (pose->velocity_x || pose->velocity_y)
+          return false;
+        // anchor_y is stored negated (see the config parser)
+        if (pose->sprite[0] && -pose->anchor_y + 4 < (int32_t)pose->sprite[0]->height)
+          return false;
+      }
+    } else if (content->kind == mascot_action_content_type_action_reference) {
+      if (!mascot_action_stays_put(content->value.action_reference->action,
+                                   depth + 1))
+        return false;
+    } else if (content->kind == mascot_action_content_type_action) {
+      if (!mascot_action_stays_put(content->value.action, depth + 1))
+        return false;
+    }
+  }
+  return true;
+}
+
+// What a staying mascot does next: any behavior it could pick now that keeps
+// it on its spot (as often as usual) but its sleep (it stays awake), else
+// stay_behavior. Caller holds tick_lock
+static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot) {
+  struct mascot_behavior_reference pool[128];
+  uint16_t count = 0;
+  mascot_build_behavior_pool(mascot, NULL, false);
+  for (uint16_t i = 0; i < mascot->behavior_pool_len && count < 128; i++) {
+    const struct mascot_behavior *behavior = mascot->behavior_pool[i].behavior;
+    if (behavior && strcmp(behavior->name, "Asleep") &&
+        strcmp(behavior->name, "Sleep") &&
+        mascot_action_stays_put(behavior->action, 0))
+      pool[count++] = mascot->behavior_pool[i];
+  }
+  const struct mascot_behavior *picked =
+      select_behavior_from_pool(mascot, pool, count);
+  return picked ? picked : mascot->stay_behavior;
+}
+
 bool mascot_stay(struct mascot *mascot, bool stay) {
   pthread_mutex_lock(&mascot->tick_lock);
   if (!!mascot->stay_behavior == stay) {
@@ -1010,11 +1070,11 @@ bool mascot_stay(struct mascot *mascot, bool stay) {
   }
 
   if (!stay) {
-    const struct mascot_behavior *was = mascot->stay_behavior;
     mascot->stay_behavior = NULL;
-    // Walk now rather than when the sit ends; held or asleep it carries on
+    // Walk now rather than when what it does on its spot ends (still falling,
+    // it lands first); held or asleep it carries on
     if (!mascot->chat_behavior && !mascot->sleep_behavior && !mascot->dragged &&
-        mascot->current_behavior == was)
+        mascot_get_border_type(mascot) == environment_border_type_floor)
       mascot_behavior_next(mascot, 0);
     pthread_mutex_unlock(&mascot->tick_lock);
     return true;
