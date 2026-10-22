@@ -961,6 +961,9 @@ def main():
             args = json.loads(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].strip() else {}
         except json.JSONDecodeError:
             raise ToolError("invalid JSON arguments")
+        # What it is doing, for the bubble to show while it waits
+        print("mascot-doing: " + json.dumps({"tool": name, "args": args}, ensure_ascii=False),
+              file=sys.stderr, flush=True)
         result = TOOLS[name](args if isinstance(args, dict) else {})
     except ToolError as e:
         result = f"error: {e}"  # for the model, which can tell the user

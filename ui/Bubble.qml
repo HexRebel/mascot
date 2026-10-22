@@ -67,6 +67,7 @@ PanelWindow {
             property int streaming: -1 // entry the running command writes into
             property var job: null // the running command, see run()
             property bool replying: false // job answers a message, not a dot command
+            property string doing: "" // what a tool is doing while it waits, see doingOf()
             property string error: ""
             property string memory: "" // the aichat session that remembers it
             property string persona: "" // the role flags that session started with
@@ -966,6 +967,7 @@ PanelWindow {
             c.streaming = -1;
         }
         c.replying = reply;
+        c.doing = "";
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -981,6 +983,47 @@ PanelWindow {
 
     function scrollBy(dy: real): void {
         scroller.contentY = Math.max(0, Math.min(scroller.contentY + dy, scroller.contentHeight - scroller.height));
+    }
+
+    // What a tool is doing, from its "mascot-doing: {tool, args}" on stderr,
+    // shown by the thinking dots until the answer starts
+    function doingOf(json: string): string {
+        let d;
+        try {
+            d = JSON.parse(json);
+        } catch (e) {
+            return "";
+        }
+        const a = d.args ?? {};
+        const file = p => String(p ?? "").replace(/\/+$/, "").split("/").pop() || "your files";
+        switch (d.tool) {
+        case "get_current_weather":
+            return a.location ? `☁ checking the weather in ${a.location}…` : "☁ checking the weather…";
+        case "list_directory":
+            return `📁 looking in ${file(a.path)}…`;
+        case "read_file":
+            return `📄 reading ${file(a.path)}…`;
+        case "search_file":
+            return `🔍 searching ${file(a.path)}…`;
+        case "look_at_image":
+            return `🖼 looking at ${file(a.path)}…`;
+        case "list_todos":
+            return "📝 checking the todo list…";
+        case "add_todo":
+        case "remove_todo":
+        case "edit_todo":
+            return "📝 updating the todo list…";
+        case "set_reminder":
+            return "⏰ setting a reminder…";
+        case "list_reminders":
+        case "cancel_reminder":
+            return "⏰ checking the reminders…";
+        case "last_commands":
+            return "⌨ looking at your last commands…";
+        case "sleep_mode":
+            return "💤 getting sleepy…";
+        }
+        return "";
     }
 
     // The answer without a reasoning model's <think>…</think>
@@ -1413,15 +1456,22 @@ PanelWindow {
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
                 }
             }
-            stderr: StdioCollector {
-                id: jobErrors
+            // Line by line, so what a tool starts doing shows while it runs
+            property string errors: ""
+            stderr: SplitParser {
+                onRead: line => {
+                    job.errors += line + "\n";
+                    const c = job.conv;
+                    if (c?.job === job && line.startsWith("mascot-doing: "))
+                        c.doing = bubble.doingOf(line.slice(14));
+                }
             }
 
             onExited: (exitCode, exitStatus) => {
                 const c = job.conv;
                 if (c?.job === job) { // not stopped
                     if (exitCode !== 0 && !job.done)
-                        c.error = bubble.explained(jobErrors.text.trim()) || `The command failed (exit ${exitCode})`;
+                        c.error = bubble.explained(job.errors.trim()) || `The command failed (exit ${exitCode})`;
                     if (exitCode === 0 && c.replying && c.model)
                         bubble.rememberModel(c.model);
                     if (c.replying && c.streaming >= 0 && c.streaming < c.entries.count)
@@ -1431,7 +1481,7 @@ PanelWindow {
                     if (c.replying) {
                         let todos = null, changes = false;
                         const shows = [];
-                        for (const line of jobErrors.text.split("\n")) {
+                        for (const line of job.errors.split("\n")) {
                             if (line.startsWith("mascot-tools: ")) {
                                 c.entries.append({ kind: "system", body: "✓ " + line.slice(14) });
                                 changes = true;
@@ -1626,6 +1676,18 @@ PanelWindow {
                                         PauseAnimation { duration: (2 - index) * 160 }
                                     }
                                 }
+                            }
+
+                            // What a tool is doing meanwhile (the weather, a file...)
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                leftPadding: 4
+                                visible: text !== ""
+                                text: bubble.current?.doing ?? ""
+                                color: theme.muted
+                                font.pixelSize: 12
+                                elide: Text.ElideRight
+                                width: Math.min(implicitWidth, log.width - 40)
                             }
                         }
                     }
