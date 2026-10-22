@@ -1569,15 +1569,16 @@ PanelWindow {
                         required property int index
 
                         // Reasoning models write <think>…</think> before the answer: hide it,
-                        // and say "thinking…" until the answer starts
+                        // and pulse three dots until the answer starts (also while the
+                        // model loads and reads the prompt, before it writes anything)
                         readonly property bool answering: kind === "reply" || kind === "remark"
                         readonly property string answer: answering ? bubble.answerOf(body) : body.trim()
-                        readonly property bool thinking: answering && answer === "" && /<think/.test(body)
+                        readonly property bool thinking: answering && answer === ""
                             && bubble.current.streaming === index && !!bubble.current.job
 
                         width: log.width
-                        visible: text !== "" // a command that has printed nothing yet
-                        text: thinking ? "thinking…" : (kind === "you" ? "› " : "") + answer
+                        visible: text !== "" || thinking // a command that has printed nothing yet
+                        text: (kind === "you" ? "› " : "") + answer
                         textFormat: TextEdit.PlainText // model output is never markup
                         wrapMode: TextEdit.Wrap
                         // Selectable for copying; the input keeps the keyboard
@@ -1593,10 +1594,40 @@ PanelWindow {
                         }
                         Component.onDestruction: if (bubble.selected === entry)
                             bubble.selected = null
-                        color: thinking ? theme.muted : kind === "you" ? theme.accent : kind === "reply" ? theme.foreground
+                        color: kind === "you" ? theme.accent : kind === "reply" ? theme.foreground
                             : kind === "remark" || kind === "reminder" ? theme.remark : theme.muted
                         font.pixelSize: 13
                         font.family: kind === "listing" ? "monospace" : Qt.application.font.family
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: entry.thinking
+                            spacing: 5
+
+                            Repeater {
+                                model: 3
+
+                                Rectangle {
+                                    required property int index
+
+                                    width: 6
+                                    height: 6
+                                    radius: 3
+                                    color: entry.kind === "remark" ? theme.remark : theme.accent
+                                    opacity: 0.25
+
+                                    // One after the other, like a wave
+                                    SequentialAnimation on opacity {
+                                        running: entry.thinking
+                                        loops: Animation.Infinite
+                                        PauseAnimation { duration: index * 160 }
+                                        NumberAnimation { to: 1; duration: 320; easing.type: Easing.OutQuad }
+                                        NumberAnimation { to: 0.25; duration: 320; easing.type: Easing.InQuad }
+                                        PauseAnimation { duration: (2 - index) * 160 }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
