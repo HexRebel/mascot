@@ -181,6 +181,7 @@ PanelWindow {
         bubble.grabKeyboard(); // before showing it, so it maps with the keyboard
         bubble.visible = true;
         input.forceActiveFocus();
+        warmUp(bubble.current, bubble.event?.command || "aichat"); // while the first message is written
         runPending();
     }
 
@@ -412,6 +413,7 @@ PanelWindow {
     // running reply carries on into its conversation
     function dismiss(): void {
         bubble.visible = false;
+        coolDown();
         bubble.remarking = false; // after hiding, or OnDemand would take the keyboard first
         bubble.reminding = false;
         bubble.keepKeyboard = false;
@@ -601,6 +603,39 @@ PanelWindow {
         run([JSON.stringify(args)], false, "system", null, bubble.current, `'${path}'`,
             { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile, MASCOT_REMINDER_FILE: bubble.reminderFile,
               MASCOT_CHAT_SOCKET: bubble.chatSocket });
+    }
+
+    // Ollama models kept loaded while the bubble is open (OLLAMA_KEEP_ALIVE may
+    // unload them after every answer, and loading one takes seconds; it then
+    // also reuses the role and tools it read before): name -> true
+    property var warmModels: ({})
+
+    function ollama(model: string, keepAlive: var): void {
+        const host = Quickshell.env("OLLAMA_HOST") || "127.0.0.1:11434";
+        const url = `${host.includes("://") ? host : "http://" + host}`.replace(/\/+$/, "") + "/api/generate";
+        // Detached, so the unload still goes out when the bubble quits
+        Quickshell.execDetached(["curl", "-s", "-o", "/dev/null", "-m", "30", url,
+                                 "-d", JSON.stringify({ model: model, keep_alive: keepAlive })]);
+    }
+
+    // Loads the mascot's model if it is a local one, for 10 minutes at most
+    // (should the bubble never say it closed), and again with each message
+    function warmUp(c: QtObject, command: string): void {
+        const probe = (c.model ? ["-m", c.model] : []).concat(roleFlags(), "-s", "mascot-probe");
+        lookup(probe, c, command, (info, ok) => {
+            const local = ok ? info.match(/^model:?\s+ollama:(\S+)/m) : null;
+            if (!local || !bubble.visible)
+                return;
+            bubble.warmModels[local[1]] = true;
+            ollama(local[1], "10m");
+        });
+    }
+
+    // The bubble closed: unload them again (a running answer finishes first)
+    function coolDown(): void {
+        for (const model in bubble.warmModels)
+            ollama(model, 0);
+        bubble.warmModels = {};
     }
 
     // aichat --info for these args, asked once per bubble: done(info, ok)
@@ -850,6 +885,7 @@ PanelWindow {
     }
 
     function askWithTools(text: string, kind: string, c: QtObject, command: string): void {
+        warmUp(c, command);
         withTools(c, command, (persona, env) => {
             // The model always knows the time, without a tool call, which not
             // every model makes; not shown, but kept in the memory

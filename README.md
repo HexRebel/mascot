@@ -353,7 +353,11 @@ bubble is open.
 
 The bubble is a separate [Quickshell](https://quickshell.org/) project in `ui/`; `make install`
 puts it in `$(PREFIX)/share/mascot/ui/`. The answers come from [aichat](https://github.com/sigoden/aichat),
-so any model aichat supports works, including local ones through Ollama.
+so any model aichat supports works, including local ones through Ollama. With a local model, the
+bubble asks Ollama (`OLLAMA_HOST`, else `127.0.0.1:11434`, with `curl`) to load it as soon as it
+opens and keep it while it is open, and to unload it when it closes, so answers come quicker even
+with `OLLAMA_KEEP_ALIVE=0` (and the model frees its memory again; should the bubble never say
+so, after 10 minutes).
 
 ## Requirements
 
