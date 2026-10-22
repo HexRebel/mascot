@@ -1743,6 +1743,9 @@ PanelWindow {
                         event.accepted = true;
                     } else if (ctrl && event.key === Qt.Key_C && !input.selectedText && bubble.copySelection()) {
                         event.accepted = true; // copy what is selected in the conversation
+                        copied.restart();
+                    } else if (ctrl && event.key === Qt.Key_C && input.selectedText) {
+                        copied.restart(); // the input copies its own selection
                     }
                 }
 
@@ -1752,6 +1755,27 @@ PanelWindow {
                     text: bubble.busy ? "…" : `Message ${bubble.event?.prototype ?? "the mascot"}…  (.help)`
                     color: theme.muted
                     font: input.font
+                }
+            }
+
+            // Ctrl+C copied something: says so for a moment, then fades
+            Text {
+                id: copiedLabel
+
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✓ copied"
+                color: theme.accent
+                font.pixelSize: 12
+                opacity: 0
+
+                SequentialAnimation {
+                    id: copied
+
+                    PropertyAction { target: copiedLabel; property: "opacity"; value: 1 }
+                    PauseAnimation { duration: 900 }
+                    NumberAnimation { target: copiedLabel; property: "opacity"; to: 0; duration: 300; easing.type: Easing.InQuad }
                 }
             }
         }
