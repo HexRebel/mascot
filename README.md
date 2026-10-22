@@ -185,6 +185,10 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   import picks its action from the mascot's own (one with petting, talking or waving in its name) and
   says which; `--talk <action>` picks another (`mascot prototypes info <name>` lists them; take one
   that looks right on the floor), `--talk none` none, and the mascot just sits.
+- Close the bubble while the mascot answers, and it stays sitting and talking until the answer is
+  written, then repeats an `Answered` behavior until you click it to read the answer (at most 10
+  minutes). The import picks one that stays on the spot (looking at you, waving, watching...) and
+  says which; `--answered <action>` picks another, `--answered none` lets it just sit.
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
   `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
   then the import picks a pose that lies still instead (the first part of that `Sleep`, or an action
@@ -195,19 +199,20 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   the new one another name. `--name` works for `.wlshm` files too.
 
 To see what a mascot's actions look like, `mascot prototypes poses "Red Shiba"` opens a page in
-the browser with each of them moving as the mascot plays it, what it talks and sleeps with now
-marked, and buttons that copy the command to change it (the page is written to
+the browser with each of them moving as the mascot plays it, what it talks, waits with an answer
+and sleeps with now marked, and buttons that copy the command to change it (the page is written to
 `$XDG_RUNTIME_DIR`; `--no-open` only says where).
 
-To change what an installed mascot talks or sleeps with later, without importing it again:
+To change what an installed mascot talks, waits with an answer or sleeps with later, without importing it again:
 
 ```
 mascot prototypes set "Red Shiba" --sleep SitAndDangleLegs
 mascot prototypes set Capoo --talk auto --sleep auto
+mascot prototypes set "Brown Bear" --talk BePet --answered Pet
 ```
 
 An action's name (`mascot prototypes info <name>` lists them), `auto` to pick one as the import
-does, or `none` (no `Talk`; for sleep, the mascot's own `Sleep`). It is changed in the mascot's own
+does, or `none` (no `Talk` or `Answered`; for sleep, the mascot's own `Sleep`). It is changed in the mascot's own
 directory and reloaded straight away. A bundled mascot is changed in the installed copy, which takes
 effect when Mascot starts next and which the next `make install` replaces.
 

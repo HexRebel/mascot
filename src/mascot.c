@@ -49,6 +49,7 @@ void mascot_build_behavior_pool(struct mascot *mascot,
                                 const struct mascot_behavior *behavior,
                                 bool add);
 static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot);
+static bool mascot_action_animates(const struct mascot_action *action, int depth);
 
 const struct mascot_behavior *
 mascot_prototype_behavior_by_name(const struct mascot_prototype *prototype,
@@ -483,6 +484,11 @@ static enum mascot_tick_result mascot_action_get_next(struct mascot *mascot,
       return mascot_tick_error;
     }
     actionref.action = (struct mascot_action *)mascot->current_behavior->action;
+    // A behavior's own action has no reference overwriting its locals, but
+    // actions read them all the same (Look, Jump...): none is used
+    static struct mascot_local_variable no_local = {0};
+    static struct mascot_local_variable *no_locals[128] = {[0 ... 127] = &no_local};
+    actionref.overwritten_locals = no_locals;
 
     enum action_set_result action_set =
         mascot_set_action(mascot, &actionref, false, tick);
@@ -965,6 +971,29 @@ bool mascot_chat_talk(struct mascot *mascot, bool talking) {
   return behavior != NULL;
 }
 
+bool mascot_chat_answered(struct mascot *mascot) {
+  pthread_mutex_lock(&mascot->tick_lock);
+  if (!mascot->chat_behavior) {
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return false;
+  }
+
+  // One that draws nothing (e.g. Look alone) would end at once, over and over
+  const struct mascot_behavior *behavior =
+      mascot_prototype_behavior_by_name(mascot->prototype, "Answered");
+  if (behavior && !mascot_action_animates(behavior->action, 0)) {
+    WARN("<Mascot:%s:%u> Its Answered behavior plays no frames, it sits instead",
+         mascot->prototype->name, mascot->id);
+    behavior = NULL;
+  }
+  if (!behavior)
+    behavior = mascot_prototype_behavior_by_name(mascot->prototype, "SitDown");
+  if (behavior)
+    mascot_chat_switch(mascot, behavior);
+  pthread_mutex_unlock(&mascot->tick_lock);
+  return behavior != NULL;
+}
+
 bool mascot_sleep(struct mascot *mascot, bool asleep) {
   static const char *const names[] = {"Asleep", "Sleep", "LieDown", "SitDown"};
 
@@ -1043,6 +1072,25 @@ static bool mascot_action_stays_put(const struct mascot_action *action,
   return true;
 }
 
+// Whether an action plays any frames at all (Look alone ends at once)
+static bool mascot_action_animates(const struct mascot_action *action, int depth) {
+  if (!action || depth > 8)
+    return false;
+  for (uint16_t i = 0; i < action->length; i++) {
+    const struct mascot_action_content *content = &action->content[i];
+    if (content->kind == mascot_action_content_type_animation &&
+        content->value.animation && content->value.animation->frame_count)
+      return true;
+    if (content->kind == mascot_action_content_type_action_reference &&
+        mascot_action_animates(content->value.action_reference->action, depth + 1))
+      return true;
+    if (content->kind == mascot_action_content_type_action &&
+        mascot_action_animates(content->value.action, depth + 1))
+      return true;
+  }
+  return false;
+}
+
 // What a staying mascot does next: any behavior it could pick now that keeps
 // it on its spot (as often as usual) but its sleep (it stays awake), else
 // stay_behavior. Caller holds tick_lock
@@ -1054,7 +1102,8 @@ static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot) {
     const struct mascot_behavior *behavior = mascot->behavior_pool[i].behavior;
     if (behavior && strcmp(behavior->name, "Asleep") &&
         strcmp(behavior->name, "Sleep") &&
-        mascot_action_stays_put(behavior->action, 0))
+        mascot_action_stays_put(behavior->action, 0) &&
+        mascot_action_animates(behavior->action, 0))
       pool[count++] = mascot->behavior_pool[i];
   }
   const struct mascot_behavior *picked =

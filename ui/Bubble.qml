@@ -35,6 +35,9 @@ PanelWindow {
 
     // The mascot plays its "Talk" behavior while a reply streams (not for dot commands)
     signal talked(int mascot, bool active)
+    // Closed while it answered, the mascot has written its answer: it plays its
+    // Answered behaviour until it is clicked (see close())
+    signal answerWaits(int mascot)
     readonly property bool talking: visible && !!current?.job && current.replying
     onTalkingChanged: if (bubble.event)
         bubble.talked(bubble.event.mascot, bubble.talking)
@@ -69,6 +72,11 @@ PanelWindow {
             property bool replying: false // job answers a message, not a dot command
             property string doing: "" // what a tool is doing while it waits, see doingOf()
             property string doingIcon: "" // its icon's name, see icon()
+            property int mascot: -1 // whose conversation it is
+            // Closed while answering: the mascot stays sitting (and talking)
+            // until the answer is read, see close()
+            property bool waiting: false
+            property int waits: 0 // which close() a timer belongs to
             property string error: ""
             property string memory: "" // the aichat session that remembers it
             property string persona: "" // the role flags that session started with
@@ -83,7 +91,7 @@ PanelWindow {
 
     function conversation(mascot: int): QtObject {
         if (!bubble.conversations[mascot])
-            bubble.conversations[mascot] = conversationComponent.createObject(bubble);
+            bubble.conversations[mascot] = conversationComponent.createObject(bubble, { mascot: mascot });
         return bubble.conversations[mascot];
     }
 
@@ -179,6 +187,7 @@ PanelWindow {
 
         bubble.event = e;
         bubble.current = conversation(e.mascot);
+        bubble.current.waiting = false;
         input.text = "";
         bubble.grabKeyboard(); // before showing it, so it maps with the keyboard
         bubble.visible = true;
@@ -394,7 +403,7 @@ PanelWindow {
 
     function closeFor(mascot: int): void {
         if (bubble.visible && bubble.event?.mascot === mascot)
-            bubble.close();
+            bubble.close(false); // dragged: the daemon has let go of it already
     }
 
     function prototypesListed(names: var): void {
@@ -407,6 +416,7 @@ PanelWindow {
         if (!bubble.event || bubble.event.mascot !== e.mascot)
             return;
         bubble.conversations[e.to] = conversation(e.mascot);
+        bubble.conversations[e.to].mascot = e.to;
         delete bubble.conversations[e.mascot];
         // Older daemons send no role with it: keep the old one
         bubble.event = Object.assign({}, bubble.event, { mascot: e.to, prototype: e.prototype },
@@ -430,10 +440,44 @@ PanelWindow {
         bubble.keepKeyboard = false;
     }
 
-    function close(): void {
+    // Closed while the mascot answers (not dragged away): it keeps sitting and
+    // talking until the answer is written, then shows that it has answered and
+    // waits there to be clicked (see answered()) - at most 10 minutes
+    function close(waitForAnswer = true): void {
+        const c = bubble.current;
+        const wait = waitForAnswer && !!c?.job && c.replying && !!bubble.event && !bubble.remarking;
         bubble.dismiss();
-        if (bubble.event)
+        if (!bubble.event)
+            return;
+        if (!wait) {
             bubble.released(bubble.event.mascot);
+            return;
+        }
+        c.waiting = true;
+        const token = ++c.waits;
+        bubble.talked(c.mascot, true);
+        after(10 * 60 * 1000, () => {
+            if (c.waiting && c.waits === token) {
+                c.waiting = false;
+                bubble.released(c.mascot);
+            }
+        });
+    }
+
+    // A waiting mascot's answer is written: "I have answered"
+    function answered(c: QtObject): void {
+        if (c.waiting)
+            bubble.answerWaits(c.mascot);
+    }
+
+    function after(ms: int, done: var): void {
+        const timer = Qt.createQmlObject("import QtQuick; Timer {}", bubble);
+        timer.interval = ms;
+        timer.triggered.connect(() => {
+            timer.destroy();
+            done();
+        });
+        timer.start();
     }
 
     // aichat's REPL dot commands need a tty, so the bubble emulates the useful
@@ -1493,6 +1537,8 @@ PanelWindow {
                         bubble.rememberModel(c.model);
                     if (c.replying && c.streaming >= 0 && c.streaming < c.entries.count)
                         c.memoryChars += c.entries.get(c.streaming).body.length;
+                    if (c.replying)
+                        bubble.answered(c);
                     // What Mascot's tools really changed (they say so on stderr),
                     // whatever the reply claims
                     if (c.replying) {

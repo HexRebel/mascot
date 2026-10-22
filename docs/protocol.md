@@ -864,6 +864,7 @@ at the mascot). Also:
 |-------|------|-------------|
 | asleep | bool | Whether this mascot is asleep (`sleep`, a middle click) |
 | all_asleep | bool | Whether a `sleep` without `mascot` holds (e.g. from hypridle, or with `minutes`) |
+| staying | bool | Whether this mascot stays where it is (`stay`, the menu's Stay) |
 
 ### dragged
 
@@ -898,6 +899,8 @@ held instead. `role` is the new mascot's role, as in `tap`.
 |---------|--------|
 | `{"event":"close","mascot":N}` | The conversation with mascot N is over; it is no longer held |
 | `{"event":"talking","mascot":N,"active":true}` | While `active` is true, the held mascot N plays its `Talk` behaviour (if the prototype defines one; otherwise it keeps sitting). Send `false` when the answer is complete |
+| `{"event":"answered","mascot":N}` | The held mascot N repeats its `Answered` behaviour (otherwise it sits) until the next `tap` holds it again: an answer waits to be read. The bubble sends it when it was closed while answering, without `close`, so the mascot stays |
+| `{"event":"stay","mascot":N,"active":true}` | Mascot N stays where it is, awake (the menu's Stay): it sits, then does what its figure can do on the spot, wherever it is dropped, until `false` |
 | `{"event":"list"}` | Ask for the loaded prototypes, answered with `prototypes` |
 | `{"event":"swap","mascot":N,"prototype":"name"}` | Replace mascot N with a new mascot of the named prototype, at the same position and facing the same way. The name is matched against display and internal names, ignoring case. Answered with `swapped` or `swap_failed` |
 | `{"event":"toggle"}` | Sent by `mascot chat`. Passed on unchanged to every other client: the bubble closes, or asks to open with `open` |

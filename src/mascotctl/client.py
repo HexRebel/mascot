@@ -893,19 +893,47 @@ def guess_sleep(actions: dict, usable: list[str], sleep: str | None) -> str | No
     return None
 
 
+# What an Answered behavior is picked from without --answered: the first hint
+# some action's name has (looking at the user, waving...), one that stays on
+# its spot and is not what it talks with
+ANSWERED_HINTS = ("facemouse", "wave", "lookup", "watch", "hind", "phone", "cheer", "spinhead", "clean")
+MOVES_OFF = re.compile(r"walk|run|dash|jump|climb|fall|chase|throw|drag", re.I)
+
+
+def plays_frames(actions: dict, name: str) -> bool:
+    """Whether an action is drawn: frame animations (Animate, Stay, a Move
+    without velocity), and a Look among them at most - Look alone only turns
+    the mascot and ends at once (no other Embedded action: they jump, fall...)"""
+    parts = action_parts(actions, name)
+    return any(t in ("Animate", "Stay") for _, t in parts) and all(
+        t in ("Animate", "Stay") or (t == "Embedded" and actions.get(n, {}).get("embedded_type") == "Look")
+        for n, t in parts)
+
+
+def guess_answered(actions: dict, usable: list[str], talk: str | None) -> str | None:
+    for hint in ANSWERED_HINTS:
+        found = [a for a in usable if hint in a.lower() and a != talk and plays_frames(actions, a)
+                 and not any(MOVES_OFF.search(n) for n, _ in action_parts(actions, a))]
+        if found:
+            return sorted(found, key=lambda a: (a.lower().endswith("action"), len(a)))[0]
+    return None
+
+
 def hidden_behavior(name: str, action: str) -> dict:
     """A behavior never picked at random (frequency 0): the daemon switches to Talk
-    while a reply streams, and repeats Asleep while the mascot sleeps"""
+    while a reply streams, repeats Answered while an answer waits to be read, and
+    repeats Asleep while the mascot sleeps"""
     return {"name": name, "action": action, "next_behavior_list": [], "next_behavior_list_count": 0,
             "hidden": True, "condition": None, "is_conditioner": False,
             "next_behavior_list_add": True, "frequency": 0}
 
 
 def set_talk_sleep(behaviors: dict, definitions: list, assets: set, talk: str | None, sleep: str | None,
-                   guess: bool) -> list[str]:
-    """Gives behaviors a Talk and an Asleep behavior: talk/sleep name an action,
-    "none" removes it, "auto" picks one (guess_talk(), guess_sleep()); with
-    guess, a missing one is picked too. Returns what it did, one line each"""
+                   guess: bool, answered: str | None = None) -> list[str]:
+    """Gives behaviors a Talk, an Answered and an Asleep behavior: talk/answered/
+    sleep name an action, "none" removes it, "auto" picks one (guess_talk(),
+    guess_answered(), guess_sleep()); with guess, a missing one is picked too.
+    Returns what it did, one line each"""
     referenced = set()
 
     def collect(node):
@@ -953,6 +981,21 @@ def set_talk_sleep(behaviors: dict, definitions: list, assets: set, talk: str | 
                             "('mascot prototypes poses <name>' shows them)")
     elif guess:
         changes.append("keeps its own Talk")
+
+    talks_with = next((d.get("action") for d in own if d.get("name") == "Talk"), None)
+    if answered and answered.lower() == "none":
+        put("Answered", None)
+        changes.append("waits with an answer sitting")
+    elif answered and answered.lower() != "auto":
+        put("Answered", named(answered))
+        changes.append(f"waits with an answer playing {named(answered)}")
+    elif answered or (guess and "Answered" not in defined):
+        match = guess_answered(by_name, actions, talks_with)
+        put("Answered", match)
+        changes.append(f"waits with an answer playing {match} (picked; --answered <action> for another)" if match
+                       else "has nothing to wait with an answer, so it sits (--answered <action> to pick one)")
+    elif guess:
+        changes.append(f"keeps its own Answered ({defined['Answered'].get('action')})")
 
     own_sleep = defined["Sleep"].get("action") if "Sleep" in defined else None
     if sleep and sleep.lower() == "none":
@@ -1003,7 +1046,8 @@ def wlshm_manifest(path: str) -> dict:
             return json.load(source.extractfile("manifest.json")) if "manifest.json" in source.getnames() else {}
 
 
-def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | None = None, name: str | None = None):
+def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | None = None, name: str | None = None,
+                  answered: str | None = None):
     """Copy of a .wlshm with --no-climb/--talk/--sleep/--name applied, as an
     unlinked temporary file. Without --talk/--sleep, a Talk and (when its own
     Sleep gets up or moves) an Asleep behavior are picked, unless it has them;
@@ -1031,7 +1075,7 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
 
     definitions = json.load(source.extractfile(actions_name))
     assets = {n.removeprefix(manifest.get("assets", "assets") + "/") for n in names}
-    changes = set_talk_sleep(behaviors, definitions, assets, talk, sleep, guess=True)
+    changes = set_talk_sleep(behaviors, definitions, assets, talk, sleep, guess=True, answered=answered)
 
     if no_climb:
         disabled = strip_climbing(behaviors)
@@ -1114,8 +1158,9 @@ button:hover { border-color: var(--accent); }
 <header>
 <h1>__TITLE__</h1>
 <p>Each of its actions, moving as the mascot plays it. <b>Talk</b> plays while the chat bubble answers, best one that sits still;
+<b>Answered</b> repeats while an answer waits to be read (the bubble was closed while it answered);
 <b>Sleep</b> repeats while it is asleep, best one marked <i>lies still</i>. The buttons copy the command that makes it so:</p>
-<p><code>mascot prototypes set "__NAME__" --talk &lt;action&gt;</code> &nbsp;or&nbsp; <code>--sleep &lt;action&gt;</code></p>
+<p><code>mascot prototypes set "__NAME__" --talk &lt;action&gt;</code>, <code>--answered &lt;action&gt;</code> &nbsp;or&nbsp; <code>--sleep &lt;action&gt;</code></p>
 <input id="search" type="search" placeholder="Find an action…" autocomplete="off">
 </header>
 <main id="cards"></main>
@@ -1155,7 +1200,7 @@ for (const action of data.actions) {
   if (action.still) tags.insertAdjacentHTML("beforeend", `<span class="tag still">lies still</span>`);
   const buttons = document.createElement("div");
   buttons.className = "buttons";
-  for (const what of ["talk", "sleep"]) {
+  for (const what of ["talk", "answered", "sleep"]) {
     const button = document.createElement("button");
     button.textContent = "Use for " + what;
     button.title = `mascot prototypes set "${data.name}" --${what} ${action.name}`;
@@ -1206,6 +1251,8 @@ def show_poses(arguments: argparse.Namespace):
     uses = {}
     if behaviors.get("Talk"):
         uses.setdefault(behaviors["Talk"], []).append("Talk")
+    if behaviors.get("Answered"):
+        uses.setdefault(behaviors["Answered"], []).append("Answered")
     sleeping = next((b for b in ("Asleep", "Sleep", "LieDown", "SitDown") if behaviors.get(b)), None)
     if sleeping:
         uses.setdefault(behaviors[sleeping], []).append("Sleep")
@@ -1262,10 +1309,10 @@ def prototype_named(name: str):
 
 
 def set_prototype(arguments: argparse.Namespace, client: Client):
-    """mascot prototypes set: changes the Talk and Asleep behaviors of an
-    installed mascot in its own directory, and reloads it"""
-    if not arguments.talk and not arguments.sleep:
-        print("Say what to change: --talk <action> and/or --sleep <action> ('auto' picks one)")
+    """mascot prototypes set: changes the Talk, Answered and Asleep behaviors of
+    an installed mascot in its own directory, and reloads it"""
+    if not arguments.talk and not arguments.sleep and not arguments.answered:
+        print("Say what to change: --talk, --answered and/or --sleep <action> ('auto' picks one)")
         exit(1)
     prototype = prototype_named(arguments.name)
     path, reloadable = prototype_dir(arguments, prototype.path)
@@ -1282,10 +1329,12 @@ def set_prototype(arguments: argparse.Namespace, client: Client):
             definitions = json.load(f)
         assets_dir = os.path.join(path, manifest.get("assets", "assets"))
         assets = {os.path.relpath(os.path.join(root, n), assets_dir) for root, _, files in os.walk(assets_dir) for n in files}
-        changes = set_talk_sleep(behaviors, definitions, assets, arguments.talk, arguments.sleep, guess=False)
+        changes = set_talk_sleep(behaviors, definitions, assets, arguments.talk, arguments.sleep, guess=False,
+                                 answered=arguments.answered)
         # Written whole first, so a failure never leaves half a file
         with tempfile.NamedTemporaryFile("w", dir=path, delete=False, suffix=".tmp") as f:
             json.dump(behaviors, f, indent=4, ensure_ascii=False)
+            f.write("\n")
         os.replace(f.name, behaviors_path)
     except ValueError as e:
         print(f"Not changed: {e}")
@@ -1508,7 +1557,7 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                         continue
                 try:
                     copy, manifest, changes = wlshm_adjusted(input_file, arguments.no_climb, arguments.talk,
-                                                             arguments.sleep, rename)
+                                                             arguments.sleep, rename, arguments.answered)
                 except (tarfile.TarError, ValueError, KeyError) as e:
                     logger.error(f"Could not prepare '{input_file}': {e}")
                     continue
@@ -2191,9 +2240,10 @@ if __name__ == "__main__":
     prototype_poses.add_argument("name", help="The mascot, by its name (e.g. \"Red Shiba\")")
     prototype_poses.add_argument("--no-open", action="store_true", help="Only write the page and say where")
 
-    prototype_setter = prototype_subparsers.add_parser("set", help="Change what an installed mascot talks and sleeps with")
+    prototype_setter = prototype_subparsers.add_parser("set", help="Change what an installed mascot talks, waits with an answer and sleeps with")
     prototype_setter.add_argument("name", help="The mascot, by its name (e.g. \"Red Shiba\")")
     prototype_setter.add_argument("--talk", metavar="ACTION", help="Action it plays while the chat bubble answers; 'auto' to pick one, 'none' for none")
+    prototype_setter.add_argument("--answered", metavar="ACTION", help="Action it repeats while an answer waits to be read (the bubble was closed while it answered); 'auto' to pick one, 'none' to sit")
     prototype_setter.add_argument("--sleep", metavar="ACTION", help="Action it plays while asleep; 'auto' to pick one (its own Sleep if that lies still), 'none' for its own Sleep")
 
     prototype_exporter = prototype_subparsers.add_parser("export", help="Export a prototype")
@@ -2206,6 +2256,7 @@ if __name__ == "__main__":
     prototype_importer.add_argument("-f", "--force", action="store_true", help="Overwrite existing prototypes")
     prototype_importer.add_argument("--no-climb", action="store_true", help="Remove wall and ceiling behaviors, so the mascot stays on the floor")
     prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info'); without it one is picked (a petting, talking or waving one), 'none' for none")
+    prototype_importer.add_argument("--answered", metavar="ACTION", help="Action the mascot repeats while an answer waits to be read; without it one is picked (looking at you, waving...), 'none' to sit")
     prototype_importer.add_argument("--sleep", metavar="ACTION", help="Action the mascot plays while asleep (mascot sleep, a middle click), if its own Sleep does not look like sleeping")
     prototype_importer.add_argument("--figure", action="append", metavar="NAME", help="Mascot of a Shimeji-ee pack to import (can be given more than once); without it, the pack's only one, or you pick")
     prototype_importer.add_argument("--all", action="store_true", help="Import all mascots of a Shimeji-ee pack")
@@ -2289,6 +2340,7 @@ if __name__ == "__main__":
     prototype_importer.add_argument("-f", "--force", action="store_true", help="Overwrite existing prototypes")
     prototype_importer.add_argument("--no-climb", action="store_true", help="Remove wall and ceiling behaviors, so the mascot stays on the floor")
     prototype_importer.add_argument("--talk", metavar="ACTION", help="Action the mascot plays while the chat bubble answers (see 'mascot prototypes info'); without it one is picked (a petting, talking or waving one), 'none' for none")
+    prototype_importer.add_argument("--answered", metavar="ACTION", help="Action the mascot repeats while an answer waits to be read; without it one is picked (looking at you, waving...), 'none' to sit")
     prototype_importer.add_argument("--sleep", metavar="ACTION", help="Action the mascot plays while asleep (mascot sleep, a middle click), if its own Sleep does not look like sleeping")
     prototype_importer.add_argument("--figure", action="append", metavar="NAME", help="Mascot of a Shimeji-ee pack to import (can be given more than once); without it, the pack's only one, or you pick")
     prototype_importer.add_argument("--all", action="store_true", help="Import all mascots of a Shimeji-ee pack")

@@ -535,6 +535,10 @@ bool mascot_chat_hold(struct mascot* mascot, bool hold);
 // prototype has one (otherwise it keeps sitting); talking=false sits it down
 // again. Returns false if the mascot is not held
 bool mascot_chat_talk(struct mascot* mascot, bool talking);
+// An answer waits to be read (the bubble was closed while it was written): a
+// held mascot repeats its "Answered" behavior (otherwise it sits) until the
+// next tap holds it again. Returns false if the mascot is not held
+bool mascot_chat_answered(struct mascot* mascot);
 // Puts the mascot to sleep: repeats the first of the behaviors "Asleep",
 // "Sleep", "LieDown" and "SitDown" the prototype has, on the floor and not
 // while held for chat. asleep=false wakes it up right away. Returns false if

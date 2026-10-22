@@ -180,7 +180,8 @@ static struct mascot* chat_line_mascot(const char* line);
 // {"event":"wake"} (from `mascot sleep`/`mascot wake`, e.g. hypridle; with
 // "minutes":N they sleep that long, and only "wake" with "all":true ends it
 // early, e.g. the sleep_mode tool; with "mascot":N only that one, from the
-// menu), {"event":"stay","mascot":N,"active":true|false} (the menu's "Stay")
+// menu), {"event":"stay","mascot":N,"active":true|false} (the menu's "Stay"),
+// {"event":"answered","mascot":N} (the held mascot's answer waits to be read)
 // and {"event":"dismiss","mascot":N} (the menu's "Send away"). Anything
 // else is ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
@@ -190,6 +191,12 @@ static void chat_handle_line(int fd, const char* line)
         struct mascot* mascot = chat_line_mascot(line);
         if (mascot && mascot_sleep(mascot, sleep))
             INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id, sleep ? "Put to sleep" : "Woken up");
+        return;
+    }
+    if (strstr(line, "\"event\":\"answered\"")) {
+        struct mascot* mascot = chat_line_mascot(line);
+        if (mascot && (int64_t)mascot->id == held_mascot_id && mascot_chat_answered(mascot))
+            INFO("<Mascot:%s:%u> Waits with an answer", mascot->prototype->name, mascot->id);
         return;
     }
     if (strstr(line, "\"event\":\"stay\"")) {

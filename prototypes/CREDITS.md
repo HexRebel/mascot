@@ -13,6 +13,7 @@ redistribution, and list it here (`git add -f`).
 
 Changes to Shimeji.Shimeji (as its license requires them to be marked): converted from
 Shimeji-ee XML to this format with `mascot convert`, climbing/hanging behaviours disabled with
-`scripts/noclimb.py`, `artist`/`description` set in `manifest.json`, and a `Talk` behaviour
-(the existing `SitAndSpinHead` action, never picked at random) added for the chat bubble. Images
+`scripts/noclimb.py`, `artist`/`description` set in `manifest.json`, and a `Talk` and an
+`Answered` behaviour (the existing `SitAndSpinHead` and `SitAndFaceMouse` actions, never picked
+at random) added for the chat bubble. Images
 are unchanged apart from the conversion to QOI.
