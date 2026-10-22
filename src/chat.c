@@ -180,7 +180,8 @@ static struct mascot* chat_line_mascot(const char* line);
 // {"event":"wake"} (from `mascot sleep`/`mascot wake`, e.g. hypridle; with
 // "minutes":N they sleep that long, and only "wake" with "all":true ends it
 // early, e.g. the sleep_mode tool; with "mascot":N only that one, from the
-// menu) and {"event":"dismiss","mascot":N} (the menu's "Send away"). Anything
+// menu), {"event":"stay","mascot":N,"active":true|false} (the menu's "Stay")
+// and {"event":"dismiss","mascot":N} (the menu's "Send away"). Anything
 // else is ignored, e.g. the "hiding"/"hidden" events older bubbles still send
 static void chat_handle_line(int fd, const char* line)
 {
@@ -189,6 +190,13 @@ static void chat_handle_line(int fd, const char* line)
         struct mascot* mascot = chat_line_mascot(line);
         if (mascot && mascot_sleep(mascot, sleep))
             INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id, sleep ? "Put to sleep" : "Woken up");
+        return;
+    }
+    if (strstr(line, "\"event\":\"stay\"")) {
+        bool stay = strstr(line, "\"active\":true") != NULL;
+        struct mascot* mascot = chat_line_mascot(line);
+        if (mascot && mascot_stay(mascot, stay))
+            INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id, stay ? "Stays put" : "Walks again");
         return;
     }
     if (strstr(line, "\"event\":\"dismiss\"")) {
@@ -448,13 +456,14 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     }
 
     // The menu shows what it can do: wake it or let it sleep, and wake them all
-    // after "sleep" (with minutes)
+    // after "sleep" (with minutes), and whether it stays put
     char extra[160] = "";
     if (kind == chat_remark_tap)
         snprintf(extra, sizeof(extra), ",\"remark\":true");
     else if (kind == chat_menu)
-        snprintf(extra, sizeof(extra), ",\"asleep\":%s,\"all_asleep\":%s",
-                 mascot->asleep ? "true" : "false", asleep ? "true" : "false");
+        snprintf(extra, sizeof(extra), ",\"asleep\":%s,\"all_asleep\":%s,\"staying\":%s",
+                 mascot->asleep ? "true" : "false", asleep ? "true" : "false",
+                 mascot->stay_behavior ? "true" : "false");
 
     // Everything is environment-local, logical px, top-referenced
     char line[8192];
@@ -610,6 +619,7 @@ static void chat_swap(int fd, const char* line)
     pthread_mutex_lock(&replacement->tick_lock);
     replacement->LookingRight->value.i = old->LookingRight->value.i;
     pthread_mutex_unlock(&replacement->tick_lock);
+    if (old->stay_behavior) mascot_stay(replacement, true);
 
     // Hold the new one first: chat_hold() releases the old one
     if (held_mascot_id == old->id) chat_hold(replacement);

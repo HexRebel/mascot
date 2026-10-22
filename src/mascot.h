@@ -449,6 +449,9 @@ struct mascot {
     bool asleep;
     const struct mascot_behavior* sleep_behavior;
 
+    // Repeated while it stays put (the menu's "Stay"), see mascot_stay()
+    const struct mascot_behavior* stay_behavior;
+
     environment_t* environment; // opaque pointer to the environment
     environment_subsurface_t* subsurface; // opaque pointer to the mascot's surface
 
@@ -536,6 +539,10 @@ bool mascot_chat_talk(struct mascot* mascot, bool talking);
 // while held for chat. asleep=false wakes it up right away. Returns false if
 // nothing changed
 bool mascot_sleep(struct mascot* mascot, bool asleep);
+// Keeps the mascot where it is, awake: repeats "SitDown" on the floor, after
+// chat and sleep, wherever it is dropped. stay=false lets it walk again right
+// away. Returns false if nothing changed
+bool mascot_stay(struct mascot* mascot, bool stay);
 
 // Callback for position change
 bool mascot_moved(struct mascot* mascot, int32_t x, int32_t y);

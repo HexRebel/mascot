@@ -144,6 +144,8 @@ ShellRoot {
                 bubble.fromKey = true;
             if (action === "sleep" || action === "wake")
                 root.send({ event: action, mascot: mascot });
+            else if (action === "stay")
+                root.send({ event: "stay", mascot: mascot, active: argument === "true" });
             else if (action === "nap")
                 root.send({ event: "sleep", minutes: Number(argument) });
             else if (action === "wake_all")

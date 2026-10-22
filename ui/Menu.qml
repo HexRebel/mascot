@@ -1,7 +1,7 @@
 // Menu.qml - the menu a right click on a mascot opens, at the pointer
 //
 // Shown from the daemon's menu event (like a tap event, see src/chat.c, with
-// "asleep" and "all_asleep"); the daemon holds the mascot until the bubble
+// "asleep", "all_asleep" and "staying"); the daemon holds the mascot until the bubble
 // lets go. It takes no keyboard and closes when an item is picked, when the
 // pointer leaves it, or after a few seconds if the pointer never comes to it.
 // Opened from a key (`mascot menu`), it takes the keyboard instead (arrows,
@@ -267,6 +267,8 @@ PanelWindow {
         return [
             { label: "Mascot", heading: true },
             { label: "Settings ›", action: "page", argument: "settings" },
+            // Sits where it is, awake, until picked again (ticked meanwhile)
+            { label: "Stay", action: "stay", argument: !e.staying, checked: !!e.staying },
             e.asleep ? { label: "Wake up", action: "wake" } : { label: "Sleep", action: "sleep" },
             e.all_asleep ? { label: "Wake everyone", action: "wake_all" }
                 : { label: "Quiet ›", action: "page", argument: "quiet" },
