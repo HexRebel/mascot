@@ -63,6 +63,8 @@ bool mascot_prototype_store_remove(mascot_prototype_store*, const struct mascot_
 struct mascot_prototype* mascot_prototype_store_get(mascot_prototype_store*, const char* name);
 struct mascot_prototype* mascot_prototype_store_get_by_id(mascot_prototype_store*, uint32_t id);
 struct mascot_prototype* mascot_prototype_store_get_index(mascot_prototype_store*, int index);
+// The prototype loaded from this path (as the daemon names it), or NULL
+struct mascot_prototype* mascot_prototype_store_get_by_path(mascot_prototype_store*, const char* path);
 int mascot_prototype_store_count(mascot_prototype_store*);
 void mascot_prototype_store_free(mascot_prototype_store*);
 

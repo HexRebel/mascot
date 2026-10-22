@@ -1351,6 +1351,36 @@ def set_prototype(arguments: argparse.Namespace, client: Client):
               f"Mascot replaces it ({path})")
 
 
+def remove_prototype(arguments: argparse.Namespace, client: Client):
+    """mascot prototypes remove: sends an installed mascot's mascots away,
+    deletes its directory and has the daemon forget it. Only one of your own
+    (PROTOTYPES_LOCATION): the bundled ones come with Mascot"""
+    prototype = prototype_named(arguments.name)
+    path, removable = prototype_dir(arguments, prototype.path)
+    if not path:
+        print(f"Cannot find where {prototype.display_name} is kept ({prototype.path})")
+        exit(1)
+    if not removable:
+        print(f"{prototype.display_name} comes with Mascot and cannot be removed ({path})")
+        exit(1)
+    if not arguments.yes:
+        answer = input(f"Remove {prototype.display_name} and delete {path}? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Not removed")
+            exit(1)
+    away = [m for m in list(mascots.values()) if m.prototype is prototype]
+    for mascot in away:
+        mascot.dismiss()
+    try:
+        shutil.rmtree(path)
+    except OSError as e:
+        print(f"Cannot delete {path}: {e.strerror}")
+        exit(1)
+    # By the path the daemon knows it by; it is gone, so the daemon forgets it
+    client.queue_packet(ReloadPrototype(prototype.path))
+    print(f"Removed {prototype.display_name}" + (f" (sent {len(away)} away)" if away else ""))
+
+
 def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
     match arguments.action:
         case "list":
@@ -1429,6 +1459,9 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
 
         case "set":
             set_prototype(arguments, client)
+
+        case "remove":
+            remove_prototype(arguments, client)
 
         case "poses":
             show_poses(arguments)
@@ -2245,6 +2278,10 @@ if __name__ == "__main__":
     prototype_setter.add_argument("--talk", metavar="ACTION", help="Action it plays while the chat bubble answers; 'auto' to pick one, 'none' for none")
     prototype_setter.add_argument("--answered", metavar="ACTION", help="Action it repeats while an answer waits to be read (the bubble was closed while it answered); 'auto' to pick one, 'none' to sit")
     prototype_setter.add_argument("--sleep", metavar="ACTION", help="Action it plays while asleep; 'auto' to pick one (its own Sleep if that lies still), 'none' for its own Sleep")
+
+    prototype_remover = prototype_subparsers.add_parser("remove", help="Remove one of your own installed mascots (sends its mascots away and deletes it)")
+    prototype_remover.add_argument("name", help="The mascot, by its name (e.g. \"Red Shiba\")")
+    prototype_remover.add_argument("-y", "--yes", action="store_true", help="Do not ask first")
 
     prototype_exporter = prototype_subparsers.add_parser("export", help="Export a prototype")
     prototype_exporter.add_argument("-i", "--name", action="append", help="Name of the prototype to export. Can be specified multiple times.")

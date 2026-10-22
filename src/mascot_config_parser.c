@@ -317,6 +317,16 @@ int mascot_prototype_store_count(mascot_prototype_store* store)
     return store->count;
 }
 
+struct mascot_prototype* mascot_prototype_store_get_by_path(mascot_prototype_store* store, const char* path)
+{
+    if (!store || !path) return NULL;
+    for (size_t i = 0; i < store->size; i++) {
+        struct mascot_prototype* prototype = store->prototypes[i];
+        if (prototype && prototype->path && !strcmp(prototype->path, path)) return prototype;
+    }
+    return NULL;
+}
+
 struct mascot_prototype* mascot_prototype_store_get_index(mascot_prototype_store* store, int index)
 {
     if (index < 0 || index >= (int32_t)store->size) {

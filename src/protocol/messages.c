@@ -720,6 +720,15 @@ bool protocol_handler_reload_prototype(struct protocol_client* client, ipc_packe
             protocol_server_announce_new_prototype(prototype, NULL);
             return true;
         }
+        // Its directory is gone (`mascot prototypes remove`): forget it; clients
+        // hear it is withdrawn once no mascot of it is left
+        struct mascot_prototype* gone = result == PROTOTYPE_LOAD_NOT_FOUND
+            ? mascot_prototype_store_get_by_path(state->prototypes, prototype_path) : NULL;
+        if (gone) {
+            INFO("Prototype %s removed (its directory is gone)", gone->name);
+            mascot_prototype_store_remove(state->prototypes, gone);
+            return true;
+        }
         ipc_packet_t* warning = NULL;
         switch (result) {
             case PROTOTYPE_LOAD_NOT_FOUND:

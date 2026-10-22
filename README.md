@@ -216,6 +216,10 @@ does, or `none` (no `Talk` or `Answered`; for sleep, the mascot's own `Sleep`). 
 directory and reloaded straight away. A bundled mascot is changed in the installed copy, which takes
 effect when Mascot starts next and which the next `make install` replaces.
 
+To remove a mascot you imported, with its files: `mascot prototypes remove "Red Shiba"` (it asks
+first; `-y` does not). Its mascots on the screen are sent away. The bundled ones come with Mascot
+and stay.
+
 Packs made for Windows sometimes name their images in another letter case than their actions do
 (`swag1.png` for `Swag1.png`); that is matched.
 
