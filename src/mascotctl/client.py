@@ -192,7 +192,15 @@ class Client:
             "apply_behavior.error.no_mascot": "Mascot not found"
         }
 
-        [logger.info, logger.warning, logger.error][packet.severity](strings.get(packet.message, packet.message).format(*packet.formating_values))
+        if packet.message == "connector.error.initialization":
+            # mascotd could not start: say why, and what to do when the desktop cannot show it
+            text = "Mascot could not start:\n" + "\n".join(str(v).strip() for v in packet.formating_values)
+            if "wlr_layer_shell" in text or "wl_subcompositor" in text:
+                text += ("\n\nYour desktop does not support what Mascot needs to draw on the screen (wlr-layer-shell). "
+                         "GNOME does not; Mascot works on Hyprland, Sway and other wlroots compositors, and KDE Plasma.")
+            logger.error(text)
+        else:
+            [logger.info, logger.warning, logger.error][packet.severity](strings.get(packet.message, packet.message).format(*packet.formating_values))
 
         if packet.severity == 2:
             exit(1)

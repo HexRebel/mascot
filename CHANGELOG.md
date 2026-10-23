@@ -5,6 +5,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- When Mascot cannot start, `mascot` says why instead of `connector.error.initialization`, and on a desktop
+  without wlr-layer-shell (GNOME) which desktops it works on.
 - **Getting started** in the README, for someone new: install (AUR or source), give aichat a model (Ollama or
   OpenRouter, with a config to copy), start Robo.
 - The bubble explains the errors someone new meets: aichat not set up or not installed, Ollama not running, a
