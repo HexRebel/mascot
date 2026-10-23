@@ -41,6 +41,12 @@ PanelWindow {
     readonly property bool talking: visible && !!current?.job && current.replying
     onTalkingChanged: if (bubble.event)
         bubble.talked(bubble.event.mascot, bubble.talking)
+    // While a tool runs for it, the mascot can show what it does (e.g. its
+    // "Todo" behavior for the todo list), see doingOf(); "" when the answer starts
+    signal toolUsed(int mascot, string tool)
+    readonly property string toolPose: talking ? (current?.toolKind ?? "") : ""
+    onToolPoseChanged: if (bubble.event)
+        bubble.toolUsed(bubble.event.mascot, bubble.toolPose)
 
     // Each mascot keeps its own conversation until the bubble quits (with the
     // daemon), by mascot id, and a reply keeps streaming into it while the
@@ -72,6 +78,7 @@ PanelWindow {
             property bool replying: false // job answers a message, not a dot command
             property string doing: "" // what a tool is doing while it waits, see doingOf()
             property string doingIcon: "" // its icon's name, see icon()
+            property string toolKind: "" // doingIcon from when the tool starts until the answer does
             property int mascot: -1 // whose conversation it is
             // Closed while answering: the mascot stays sitting (and talking)
             // until the answer is read, see close()
@@ -323,9 +330,26 @@ PanelWindow {
             const late = now - r.at > 60000 ? ` (was for ${Qt.formatDateTime(new Date(r.at), "ddd dd.MM HH:mm")})` : "";
             c.entries.append({ kind: "reminder", body: `⏰ ${r.text}${late}` });
         }
+        // The mascot shows it is time (its "Alarm" behavior): until the bubble that
+        // opened for it closes, or for a few seconds in a conversation
+        if (bubble.visible && bubble.event && c === bubble.current) {
+            bubble.toolUsed(bubble.event.mascot, "alarm");
+            if (bubble.reminding)
+                alarmTimer.stop();
+            else
+                alarmTimer.restart();
+        }
         bubble.shownUntil = Math.max(bubble.shownUntil, ...due.map(r => r.at));
         dueJob.command = [`${bubble.toolsDir}/bin/due_reminders`, JSON.stringify({ until: bubble.shownUntil / 1000 })];
         dueJob.running = true;
+    }
+
+    Timer {
+        id: alarmTimer
+
+        interval: 6000
+        onTriggered: if (bubble.event)
+            bubble.toolUsed(bubble.event.mascot, bubble.toolPose)
     }
 
     FileView {
@@ -1014,6 +1038,7 @@ PanelWindow {
         c.replying = reply;
         c.doing = "";
         c.doingIcon = "";
+        c.toolKind = "";
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -1515,6 +1540,9 @@ PanelWindow {
                         job.output += data;
                     else if (c.streaming < c.entries.count)
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
+                    if (c.toolKind && c.streaming >= 0 && c.streaming < c.entries.count
+                            && bubble.answerOf(c.entries.get(c.streaming).body))
+                        c.toolKind = "";
                 }
             }
             // Line by line, so what a tool starts doing shows while it runs
@@ -1523,14 +1551,17 @@ PanelWindow {
                 onRead: line => {
                     job.errors += line + "\n";
                     const c = job.conv;
-                    if (c?.job === job && line.startsWith("mascot-doing: "))
+                    if (c?.job === job && line.startsWith("mascot-doing: ")) {
                         [c.doingIcon, c.doing] = bubble.doingOf(line.slice(14));
+                        c.toolKind = c.doingIcon;
+                    }
                 }
             }
 
             onExited: (exitCode, exitStatus) => {
                 const c = job.conv;
                 if (c?.job === job) { // not stopped
+                    c.toolKind = "";
                     if (exitCode !== 0 && !job.done)
                         c.error = bubble.explained(job.errors.trim()) || `The command failed (exit ${exitCode})`;
                     if (exitCode === 0 && c.replying && c.model)

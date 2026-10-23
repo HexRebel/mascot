@@ -269,7 +269,8 @@ static void chat_handle_line(int fd, const char* line)
         return;
     }
     bool talking = strstr(line, "\"event\":\"talking\"");
-    if (!talking && !strstr(line, "\"event\":\"close\"")) return;
+    bool doing = strstr(line, "\"event\":\"doing\"");
+    if (!talking && !doing && !strstr(line, "\"event\":\"close\"")) return;
 
     const char* field = strstr(line, "\"mascot\":");
     if (!field) return;
@@ -278,12 +279,28 @@ static void chat_handle_line(int fd, const char* line)
     if (end == field + strlen("\"mascot\":")) return;
     if (id != held_mascot_id) return;
 
-    if (!talking) {
+    if (!talking && !doing) {
         chat_release_held();
         return;
     }
     struct mascot* mascot = chat_find_mascot(held_mascot_id);
-    if (mascot) mascot_chat_talk(mascot, strstr(line, "\"active\":true") != NULL);
+    if (!mascot) return;
+    if (talking) {
+        mascot_chat_talk(mascot, strstr(line, "\"active\":true") != NULL);
+        return;
+    }
+    // "tool":"todo" while a tool runs, "tool":"" when it is done
+    char tool[32] = "";
+    const char* value = strstr(line, "\"tool\":\"");
+    if (value) {
+        value += strlen("\"tool\":\"");
+        size_t len = strcspn(value, "\"");
+        if (len < sizeof(tool)) {
+            memcpy(tool, value, len);
+            tool[len] = 0;
+        }
+    }
+    mascot_chat_doing(mascot, tool);
 }
 
 bool chat_client_readable(int fd)

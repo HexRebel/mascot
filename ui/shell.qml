@@ -113,6 +113,7 @@ ShellRoot {
 
         onReleased: mascot => root.send({ event: "close", mascot: mascot })
         onTalked: (mascot, active) => root.send({ event: "talking", mascot: mascot, active: active })
+        onToolUsed: (mascot, tool) => root.send({ event: "doing", mascot: mascot, tool: tool })
         onAnswerWaits: mascot => root.send({ event: "answered", mascot: mascot })
         onListRequested: root.send({ event: "list" })
         onSwapRequested: (mascot, prototype) => root.send({ event: "swap", mascot: mascot, prototype: prototype })

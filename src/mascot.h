@@ -444,6 +444,9 @@ struct mascot {
 
     // Repeated while the chat bubble is open, see mascot_chat_hold()
     const struct mascot_behavior* chat_behavior;
+    // Its answer is being written (mascot_chat_talk()): where a tool's
+    // behavior goes back to, see mascot_chat_doing()
+    bool chat_talking;
 
     // Repeated while asleep (mascot sleep), see mascot_sleep()
     bool asleep;
@@ -535,6 +538,11 @@ bool mascot_chat_hold(struct mascot* mascot, bool hold);
 // prototype has one (otherwise it keeps sitting); talking=false sits it down
 // again. Returns false if the mascot is not held
 bool mascot_chat_talk(struct mascot* mascot, bool talking);
+// A tool runs for a held mascot's reply (tool: its kind, e.g. "todo"): it plays
+// the prototype's behavior for that kind ("Todo", "Weather", "Files"...; see
+// the table in mascot.c) instead of Talk, if it has one; "" when the tool is done (the answer starts) goes back to Talk. Returns
+// false if nothing changed
+bool mascot_chat_doing(struct mascot* mascot, const char* tool);
 // An answer waits to be read (the bubble was closed while it was written): a
 // held mascot repeats its "Answered" behavior (otherwise it sits) until the
 // next tap holds it again. Returns false if the mascot is not held

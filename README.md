@@ -189,6 +189,11 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   written, then repeats an `Answered` behavior until you click it to read the answer (at most 10
   minutes). The import picks one that stays on the spot (looking at you, waving, watching...) and
   says which; `--answered <action>` picks another, `--answered none` lets it just sit.
+- While a tool runs for the answer, a mascot can show what it does: it plays its behavior for that
+  tool instead of `Talk`, if it has one, until the answer starts. `Todo` and `Reminder` (the todo list
+  and reminders), `Weather`, `Files` (a folder or file), `Search` (in a file), `Image`, `Shell` (your
+  last commands), `Sleepy` (the sleep tool). Robo writes in its notepad, holds up the globe, opens
+  its head while it reads your commands... A reminder that is due plays `Alarm` (Robo's yellow "!").
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
   `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
   then the import picks a pose that lies still instead (the first part of that `Sleep`, or an action

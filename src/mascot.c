@@ -930,6 +930,7 @@ static void mascot_chat_switch(struct mascot *mascot,
 
 bool mascot_chat_hold(struct mascot *mascot, bool hold) {
   pthread_mutex_lock(&mascot->tick_lock);
+  mascot->chat_talking = false;
   if (!hold) {
     // The current sit runs to its end, then behaviors are picked as usual (or,
     // asleep, it lies down again)
@@ -960,11 +961,48 @@ bool mascot_chat_talk(struct mascot *mascot, bool talking) {
     return false;
   }
 
+  mascot->chat_talking = talking;
   const struct mascot_behavior *behavior =
       talking ? mascot_prototype_behavior_by_name(mascot->prototype, "Talk")
               : NULL;
   if (!behavior)
     behavior = mascot_prototype_behavior_by_name(mascot->prototype, "SitDown");
+  if (behavior)
+    mascot_chat_switch(mascot, behavior);
+  pthread_mutex_unlock(&mascot->tick_lock);
+  return behavior != NULL;
+}
+
+bool mascot_chat_doing(struct mascot *mascot, const char *tool) {
+  // A tool's kind (the bubble's icon for it, see doingOf() in ui/Bubble.qml)
+  // and the behavior it plays
+  static const char *const kinds[][2] = {
+      {"todo", "Todo"},     {"reminder", "Reminder"}, {"weather", "Weather"},
+      {"folder", "Files"},  {"file", "Files"},        {"search", "Search"},
+      {"image", "Image"},   {"shell", "Shell"},       {"sleep", "Sleepy"},
+      {"alarm", "Alarm"}}; // a reminder is due (not a tool)
+
+  pthread_mutex_lock(&mascot->tick_lock);
+  if (!mascot->chat_behavior) {
+    pthread_mutex_unlock(&mascot->tick_lock);
+    return false;
+  }
+
+  const struct mascot_behavior *behavior = NULL;
+  bool doing = false; // already playing one of them
+  for (size_t i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) {
+    const struct mascot_behavior *own =
+        mascot_prototype_behavior_by_name(mascot->prototype, kinds[i][1]);
+    if (own && own == mascot->chat_behavior) doing = true;
+    if (own && !strcmp(tool, kinds[i][0])) behavior = own;
+  }
+  // Done (or a kind it has nothing for): back to talking, or sitting
+  if (!behavior && doing) {
+    if (mascot->chat_talking)
+      behavior = mascot_prototype_behavior_by_name(mascot->prototype, "Talk");
+    if (!behavior)
+      behavior = mascot_prototype_behavior_by_name(mascot->prototype, "SitDown");
+  }
   if (behavior)
     mascot_chat_switch(mascot, behavior);
   pthread_mutex_unlock(&mascot->tick_lock);
