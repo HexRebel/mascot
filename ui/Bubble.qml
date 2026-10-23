@@ -1137,7 +1137,8 @@ PanelWindow {
             return "default";
         if (bubble.event.role && !chosen().noRole)
             return `${bubble.event.role} (default)`;
-        return bubble.prompt ? "none (Mascot's prompt)" : "none (aichat's default)";
+        return bubble.event?.prompt ? "none (the mascot's own prompt)"
+            : bubble.prompt ? "none (Mascot's prompt)" : "none (aichat's default)";
     }
 
     function dotCommand(text: string): void {
@@ -1382,14 +1383,16 @@ PanelWindow {
         }
     }
 
-    // Mascot's own system prompt, used unless a role is chosen with .role; {name}
-    // is the mascot's name. A prompt.md in the data directory replaces the
-    // bundled one (an empty one turns the prompt off). Read when the bubble starts
+    // The system prompt, used unless a role is chosen (.role, CHAT_ROLES,
+    // CHAT_ROLE); {name} is the mascot's name. A mascot's own prompt.md (the
+    // daemon sends it with the tap, e.g. Robo's) comes first; else a prompt.md in
+    // the data directory replaces Mascot's bundled one (an empty one turns the
+    // prompt off). Read when the bubble starts
     readonly property string dataDir: Quickshell.env("MASCOT_DATA_DIR")
         || `${Quickshell.env("XDG_DATA_HOME") || Quickshell.env("HOME") + "/.local/share"}/mascot`
     property var userPrompt: null // null: no prompt.md in dataDir
     property string bundledPrompt: ""
-    readonly property string prompt: (userPrompt ?? bundledPrompt).trim()
+    readonly property string prompt: (bubble.event?.prompt || (userPrompt ?? bundledPrompt)).trim()
 
     FileView {
         path: `${bubble.dataDir}/prompt.md`

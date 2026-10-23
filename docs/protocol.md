@@ -833,7 +833,7 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
  "pointer":{"x":285,"y":1403},"anchor":{"x":285,"y":1440},"looking_right":true,
  "sprite":{"x":220,"y":1312,"width":128,"height":128},
  "surface":{"width":2560,"height":1440},"command":null,"role":null,"memory":8000,
- "tools":"time,weather","dotfiles":null}
+ "tools":"time,weather","dotfiles":null,"prompt":null}
 ```
 
 | Field | Type | Description |
@@ -852,6 +852,7 @@ disconnects. Only one mascot is held at a time. A double click gives two `tap` e
 | role | string or null | The role the bubble starts with for this mascot: its entry in `chat_roles`, else the `chat_role` setting; null if neither is set or its entry is empty |
 | tools | string or null | The `chat_tools` setting: the bubble's tools, comma-separated; null if it is empty |
 | dotfiles | string or null | The `chat_dotfiles` setting: the hidden files and directories the file tools may see, `;`-separated; null if it is empty |
+| prompt | string or null | The prototype's own system prompt (a `prompt.md` in its directory, at most 4 KiB, e.g. Robo's personality); null if it has none. The bubble uses it unless a role is chosen |
 
 ### menu
 

@@ -3,9 +3,10 @@ seven things it does now and then on the floor (Hologram, Tinker, Notepad, OpenC
 does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy) and Alarm (a reminder
 that is due),
 makes it hover (Walk/Run/Dash lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off)
-look straight ahead when it stands still (60), and dangle whenever it is held up"""
+look straight ahead when it stands still (60), dangle whenever it is held up, and its personality (prompt.md)"""
 import io
 import json
+import os
 import sys
 import tarfile
 
@@ -91,10 +92,17 @@ manifest["description"] = "Robo, Mascot's own mascot: a small hovering robot. Ma
 manifest["artist"] = "Xedoc91 (made with Google Gemini)"
 patched = {"actions.json": json.dumps(actions).encode(), "manifest.json": json.dumps(manifest).encode(),
            "behaviors.json": json.dumps(behaviors).encode()}
+# Robo's personality (the bubble uses it unless a role is chosen): the one in the repository's bundled copy
+PROMPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../prototypes/Shimeji.Robo/prompt.md")
+with open(PROMPT, "rb") as f:
+    prompt = f.read()
 
 with open(dst, "wb") as out:
     out.write(header)
     with tarfile.open(fileobj=out, mode="w") as tar:
+        info = tarfile.TarInfo("prompt.md")
+        info.size, info.mode = len(prompt), 0o644
+        tar.addfile(info, io.BytesIO(prompt))
         for member in source.getmembers():
             if member.name in patched:
                 member.size = len(patched[member.name])

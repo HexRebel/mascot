@@ -29,6 +29,7 @@
 #include "protocol/server.h"
 #include "third_party/json.h/json.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <linux/limits.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -447,6 +448,26 @@ static void chat_role_json(const struct mascot_prototype* prototype, char* dest,
 
 enum chat_announce_kind { chat_tap, chat_remark_tap, chat_menu };
 
+// The prototype's own system prompt (prompt.md in its directory, e.g. Robo's
+// personality) as a quoted JSON string into dest, or null without one
+static void chat_prototype_prompt_json(const struct mascot_prototype* prototype, char* dest, size_t size)
+{
+    snprintf(dest, size, "null");
+    if (!prototype || prototype->path_fd < 0) return;
+    int fd = openat(prototype->path_fd, "prompt.md", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    char text[4097];
+    ssize_t got = read(fd, text, sizeof(text) - 1);
+    close(fd);
+    if (got <= 0) return;
+    text[got] = 0;
+    if (got == sizeof(text) - 1)
+        WARN("%s's prompt.md is longer than %zu bytes, cut off", prototype->name, sizeof(text) - 1);
+    char escaped[12288];
+    json_escape(text, escaped, sizeof(escaped));
+    snprintf(dest, size, "\"%s\"", escaped);
+}
+
 static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y,
                           enum chat_announce_kind kind)
 {
@@ -488,6 +509,10 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
         snprintf(dotfiles, sizeof(dotfiles), "\"%s\"", escaped);
     }
 
+    // And the prototype's own prompt (prompt.md), if it has one
+    char prompt[12300];
+    chat_prototype_prompt_json(mascot->prototype, prompt, sizeof(prompt));
+
     char sprite[128] = "null";
     struct bounding_box box;
     if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
@@ -506,21 +531,21 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
                  mascot->stay_behavior ? "true" : "false");
 
     // Everything is environment-local, logical px, top-referenced
-    char line[8192];
+    char line[20480];
     int len = snprintf(line, sizeof(line),
         "{\"event\":\"%s\",\"mascot\":%u,\"prototype\":\"%s\",\"output\":\"%s\","
         "\"pointer\":{\"x\":%d,\"y\":%d},"
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s%s}\n",
+        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s,\"prompt\":%s%s}\n",
         kind == chat_menu ? "menu" : "tap", mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role, config_get_chat_memory(), tools, dotfiles, extra);
+        command, role, config_get_chat_memory(), tools, dotfiles, prompt, extra);
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;

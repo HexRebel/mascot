@@ -3,6 +3,12 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- **Robo's own personality:** a mascot can bring its own system prompt, a `prompt.md` in its prototype
+  directory, used unless a role is chosen (`.role`, `CHAT_ROLES`, `CHAT_ROLE`). Robo has one: warm, curious
+  and playful, a little robot now and then, in your language. `.info` shows it as the mascot's own prompt.
+
 ## 0.1.0 (2026-10-23)
 
 The first version of Mascot as its own program.
