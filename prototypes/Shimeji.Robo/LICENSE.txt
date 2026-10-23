@@ -1,6 +1,6 @@
 Robo, the bundled mascot of Mascot (prototypes/Shimeji.Robo and art/robo/)
 
-Made in 2026 by Xedoc91 with Google Gemini 3.1 Flash Image (through OpenRouter),
+Made in 2026 by HexRebel with Google Gemini 3.1 Flash Image (through OpenRouter),
 from text prompts (see art/robo/PROMPTS.md).
 To the extent possible under law, its author has dedicated all copyright and related and
 neighboring rights to it to the public domain worldwide under CC0 1.0 Universal, below.

@@ -5,7 +5,7 @@ whose visor shows how it feels. CC0 (see `prototypes/Shimeji.Robo/LICENSE.txt`);
 in [PROMPTS.md](PROMPTS.md).
 
 The big source images (28 MB) are not in git: download `robo-sources.zip` from the
-[releases](https://github.com/Xedoc91/mascot/releases) and unpack it here. The scripts are in git.
+[releases](https://github.com/HexRebel/mascot/releases) and unpack it here. The scripts are in git.
 
 | | |
 |---|---|

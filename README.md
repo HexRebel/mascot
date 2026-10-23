@@ -46,7 +46,7 @@ Or from source (any distribution; on Arch the packages are named as below):
 
 ```sh
 sudo pacman -S --needed base-devel git wayland wayland-protocols libarchive uthash python python-pillow quickshell aichat
-git clone --recurse-submodules https://github.com/Xedoc91/mascot.git
+git clone --recurse-submodules https://github.com/HexRebel/mascot.git
 cd mascot
 make -j$(nproc)
 make PREFIX=$HOME/.local install    # then ~/.local/bin must be in your PATH

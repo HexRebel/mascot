@@ -89,7 +89,7 @@ for name, act in TOOLS.items():
     behavior(name, act, 0, True)
 manifest = json.load(source.extractfile("manifest.json"))
 manifest["description"] = "Robo, Mascot's own mascot: a small hovering robot. Made with Google Gemini from a text prompt; CC0."
-manifest["artist"] = "Xedoc91 (made with Google Gemini)"
+manifest["artist"] = "HexRebel (made with Google Gemini)"
 patched = {"actions.json": json.dumps(actions).encode(), "manifest.json": json.dumps(manifest).encode(),
            "behaviors.json": json.dumps(behaviors).encode()}
 # Robo's personality (the bubble uses it unless a role is chosen): the one in the repository's bundled copy
