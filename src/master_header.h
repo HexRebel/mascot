@@ -11,13 +11,15 @@
 #ifndef MASTER_HEADER
 #define MASTER_HEADER
 
-#define MASCOTD_VERSION "0.0.2"
+// Mascot's own version (upstream wl_shimeji was 0.0.2 when it forked)
+#define MASCOTD_VERSION "0.1.0"
 #define MASCOTD_MASCOT_MIN_VER "0.0.1"
 #define MASCOTD_MASCOT_CUR_VER "0.0.1"
 
 #define MASCOTD_PROTOCOL_VERSION "0.1.0"
 #define MASCOTD_PROTOCOL_MIN_VER "0.1.0"
 
+// The plugin ABI, still upstream's: not the version above
 #define MASCOTD_PLUGIN_TARGET_VERSION "0.0.2"
 
 #if defined(GNU_EXTS) && defined(__has_attribute)
