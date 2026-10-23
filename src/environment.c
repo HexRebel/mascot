@@ -1655,7 +1655,7 @@ static void mascot_on_pointer_button(void *data, struct wl_pointer *pointer,
           pressed_button == mascot_hotspot_button_middle) {
         INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id,
              mascot->asleep ? "Woken up" : "Put to sleep");
-        mascot_sleep(mascot, !mascot->asleep);
+        mascot_sleep(mascot, !mascot->asleep, false);
       }
     } else {
       environment_on_pointer_button(data, pointer, serial, time, button, state);

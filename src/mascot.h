@@ -549,9 +549,10 @@ bool mascot_chat_doing(struct mascot* mascot, const char* tool);
 bool mascot_chat_answered(struct mascot* mascot);
 // Puts the mascot to sleep: repeats the first of the behaviors "Asleep",
 // "Sleep", "LieDown" and "SitDown" the prototype has, on the floor and not
-// while held for chat. asleep=false wakes it up right away. Returns false if
-// nothing changed
-bool mascot_sleep(struct mascot* mascot, bool asleep);
+// while held for chat; quiet (asleep for a while, e.g. the menu's Quiet) tries
+// "Quiet" first. asleep=false wakes it up right away. Returns false if nothing
+// changed
+bool mascot_sleep(struct mascot* mascot, bool asleep, bool quiet);
 // Keeps the mascot where it is, awake: on the floor, after chat and sleep and
 // wherever it is dropped, it sits down, then picks among its behaviors that keep
 // it on its spot (sitting, lying, looking around...). stay=false lets it walk

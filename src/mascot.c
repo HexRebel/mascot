@@ -1032,8 +1032,9 @@ bool mascot_chat_answered(struct mascot *mascot) {
   return behavior != NULL;
 }
 
-bool mascot_sleep(struct mascot *mascot, bool asleep) {
-  static const char *const names[] = {"Asleep", "Sleep", "LieDown", "SitDown"};
+bool mascot_sleep(struct mascot *mascot, bool asleep, bool quiet) {
+  static const char *const names[] = {"Quiet", "Asleep", "Sleep", "LieDown",
+                                      "SitDown"};
 
   pthread_mutex_lock(&mascot->tick_lock);
   if (mascot->asleep == asleep) {
@@ -1056,7 +1057,8 @@ bool mascot_sleep(struct mascot *mascot, bool asleep) {
     return true;
   }
 
-  for (size_t i = 0; i < sizeof(names) / sizeof(*names) && !mascot->sleep_behavior; i++)
+  for (size_t i = quiet ? 0 : 1;
+       i < sizeof(names) / sizeof(*names) && !mascot->sleep_behavior; i++)
     mascot->sleep_behavior =
         mascot_prototype_behavior_by_name(mascot->prototype, names[i]);
   if (!mascot->sleep_behavior)

@@ -189,7 +189,7 @@ static void chat_handle_line(int fd, const char* line)
     bool sleep = strstr(line, "\"event\":\"sleep\"") != NULL;
     if ((sleep || strstr(line, "\"event\":\"wake\"")) && strstr(line, "\"mascot\":")) {
         struct mascot* mascot = chat_line_mascot(line);
-        if (mascot && mascot_sleep(mascot, sleep))
+        if (mascot && mascot_sleep(mascot, sleep, false))
             INFO("<Mascot:%s:%u> %s", mascot->prototype->name, mascot->id, sleep ? "Put to sleep" : "Woken up");
         return;
     }
@@ -842,7 +842,8 @@ static bool chat_sleep_all(bool sleep, bool only_new)
 
     for (size_t i = 0; i < count; i++) {
         struct mascot* mascot = chat_find_mascot(ids[i]);
-        if (mascot) mascot_sleep(mascot, sleep);
+        // Asleep for a while (Quiet, the sleep tool): its quiet pose, if it has one
+        if (mascot) mascot_sleep(mascot, sleep, sleep && sleep_until);
     }
     return any_asleep;
 }

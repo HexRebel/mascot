@@ -309,7 +309,8 @@ again) closes it. What it opens in the bubble keeps the keyboard too.
 
 `mascot sleep` puts every mascot to sleep until `mascot wake`: each one lies down as soon as it is on
 the floor, and mascots summoned meanwhile fall asleep too. A mascot sleeps with the first of these
-behaviors its prototype has: `Asleep`, `Sleep`, `LieDown`, `SitDown`. Shimeji-ee's `Sleep` often
+behaviors its prototype has: `Asleep`, `Sleep`, `LieDown`, `SitDown`; asleep for a while (Quiet, `-m`,
+the sleep tool) `Quiet` comes first (Robo switches off). Shimeji-ee's `Sleep` often
 ends by getting up again; to choose another pose, add a behavior `Asleep` with `frequency` 0 that
 points to it. A sleeping mascot does not disturb: it makes no remarks (`CHAT_REMARKS`), and
 reminders wait until one wakes up. A middle click on a mascot puts just that one to sleep, or wakes
