@@ -16,7 +16,8 @@ exactly what has changed.
   <img src="./docs/screenshot.png" style="width: 100%;">
 </p>
 
-The mascot on the screenshot is the bundled Shimeji by Yuki Yamada (Group Finity), chatting through the bubble.
+On the screenshot is Robo, Mascot's own mascot: you type, it answers; close the bubble while it answers and it
+keeps thinking, then shows *NEW* until you click it to read the answer.
 
 ## Compositor support
 
@@ -37,11 +38,11 @@ git clone --recurse-submodules https://github.com/Xedoc91/mascot.git
 cd mascot
 make -j$(nproc)
 make PREFIX=$HOME/.local install
-mascot summon Shimeji     # starts the daemon and the chat bubble
+mascot summon Robo        # starts the daemon and the chat bubble
 mascot stop               # stops both again
 ```
 
-Mascot ships with the original Shimeji; `mascot import <shimeji-ee pack.zip>` adds others (see
+Mascot ships with Robo, its own mascot, and the original Shimeji; `mascot import <shimeji-ee pack.zip>` adds others (see
 [Adding mascots](#adding-mascots)). For the chat bubble you also need Quickshell and a configured
 aichat (see [Chat bubble](#chat-bubble)).
 
@@ -250,8 +251,9 @@ You can list all available mascot prototypes using the following command:
 mascot prototypes list
 ```
 
-Mascot ships with the original Shimeji by Yuki Yamada (Group Finity), installed to
-`$(PREFIX)/share/mascot/prototypes/`. Prototypes you import yourself go to
+Mascot ships with two, installed to `$(PREFIX)/share/mascot/prototypes/`: **Robo**, Mascot's own
+mascot (a small hovering robot whose visor shows how it feels; CC0, sources and how it was made in
+[`art/robo/`](art/robo/)), and the original **Shimeji** by Yuki Yamada (Group Finity). Prototypes you import yourself go to
 `~/.local/share/mascot/shimejis/` and take precedence over a bundled one with the same name.
 
 # Summoning mascots
@@ -388,7 +390,7 @@ You do not start the bubble yourself: `mascotd` starts it (`qs -p $(PREFIX)/shar
 stops it again, so it runs exactly as long as Mascot does.
 
 ```sh
-mascot summon Shimeji   # starts mascotd, which starts the bubble
+mascot summon Robo      # starts mascotd, which starts the bubble
 mascot stop             # stops mascotd and the bubble, including an aichat that is answering
 ```
 
