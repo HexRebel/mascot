@@ -3,7 +3,7 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-23)
 
 The first version of Mascot as its own program.
 
