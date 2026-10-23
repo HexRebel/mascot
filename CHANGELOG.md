@@ -5,6 +5,13 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- **Getting started** in the README, for someone new: install (AUR or source), give aichat a model (Ollama or
+  OpenRouter, with a config to copy), start Robo.
+- The bubble explains the errors someone new meets: aichat not set up or not installed, Ollama not running, a
+  model that is not downloaded.
+- **`CHAT_LANGUAGE`:** tell Mascot your language (e.g. `Danish`); the mascot answers in it unless you write in
+  another, and its remarks use it. Without it, remarks now name the locale's language ("English" for `en_DK`)
+  instead of its code, which made models guess Norwegian or Swedish.
 - **A shorter `.help`:** the commands most people need, and how to reach the menu; `.help all` lists every
   command, as `.help` did, and is what the menu's Help shows.
 - **Robo's own personality:** a mascot can bring its own system prompt, a `prompt.md` in its prototype

@@ -513,6 +513,15 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     char prompt[12300];
     chat_prototype_prompt_json(mascot->prototype, prompt, sizeof(prompt));
 
+    // And CHAT_LANGUAGE, the user's language
+    char language[160] = "null";
+    const char* chat_language = config_get_chat_language();
+    if (chat_language) {
+        char escaped[150];
+        json_escape(chat_language, escaped, sizeof(escaped));
+        snprintf(language, sizeof(language), "\"%s\"", escaped);
+    }
+
     char sprite[128] = "null";
     struct bounding_box box;
     if (environment_subsurface_sprite_geometry(mascot->subsurface, &box)) {
@@ -538,14 +547,14 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s,\"prompt\":%s%s}\n",
+        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s,\"prompt\":%s,\"language\":%s%s}\n",
         kind == chat_menu ? "menu" : "tap", mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,
         mascot->LookingRight->value.i ? "true" : "false",
         sprite,
         environment_workarea_width(env), environment_workarea_height(env),
-        command, role, config_get_chat_memory(), tools, dotfiles, prompt, extra);
+        command, role, config_get_chat_memory(), tools, dotfiles, prompt, language, extra);
     if (len < 0 || len >= (int)sizeof(line)) {
         WARN("Chat event for mascot %u too long, dropped", mascot->id);
         return false;

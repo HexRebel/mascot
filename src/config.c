@@ -81,6 +81,7 @@ struct config {
     int32_t chat_memory;
     char* chat_tools;
     char* chat_dotfiles;
+    char* chat_language;
     bool bubble_enabled;
     char* bubble_command;
 
@@ -286,6 +287,8 @@ bool config_parse(const char* path)
             config_set_chat_tools(value);
         } else if (strcasecmp(key, "chat_dotfiles") == 0) {
             config_set_chat_dotfiles(value);
+        } else if (strcasecmp(key, "chat_language") == 0) {
+            config_set_chat_language(value);
         } else if (strcasecmp(key, "bubble_enabled") == 0) {
             config_set_bubble_enabled(parse_bool(value));
         } else if (strcasecmp(key, "bubble_command") == 0) {
@@ -346,6 +349,7 @@ void config_write(const char* path)
     // Always written: empty turns the tools off, a missing line means the default
     fprintf(file, "chat_tools=%s\n", config.chat_tools ? config.chat_tools : "");
     if (config.chat_dotfiles) fprintf(file, "chat_dotfiles=%s\n", config.chat_dotfiles);
+    if (config.chat_language) fprintf(file, "chat_language=%s\n", config.chat_language);
     fprintf(file, "bubble_enabled=%s\n", config.bubble_enabled ? "true" : "false");
     if (config.bubble_command) fprintf(file, "bubble_command=%s\n", config.bubble_command);
 
@@ -903,6 +907,21 @@ const char* config_get_chat_dotfiles()
     return config.chat_dotfiles;
 }
 
+// CHAT_LANGUAGE: the user's language (e.g. "Danish"); the bubble tells the
+// model to answer in it unless the user writes in another, and remarks use it
+bool config_set_chat_language(const char* value)
+{
+    if (value && strchr(value, '\n')) return false;
+    free(config.chat_language);
+    config.chat_language = (value && *value) ? strdup(value) : NULL;
+    return true;
+}
+
+const char* config_get_chat_language()
+{
+    return config.chat_language;
+}
+
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
 // prototype's display or internal name (any case). An empty role means none,
 // not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
@@ -1110,6 +1129,9 @@ bool config_get_by_key(const char* key, char* dest, uint8_t size)
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_DOTFILES)) {
         snprintf(dest, size, "%s", config.chat_dotfiles ? config.chat_dotfiles : "");
         return true;
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_LANGUAGE)) {
+        snprintf(dest, size, "%s", config.chat_language ? config.chat_language : "");
+        return true;
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         snprintf(dest, size, "%s", config.bubble_enabled ? "true" : "false");
         return true;
@@ -1214,6 +1236,8 @@ bool config_set_by_key(const char* key, const char* value)
         res = config_set_chat_tools(value);
     } else if (!strcmp(key, CONFIG_PARAM_CHAT_DOTFILES)) {
         res = config_set_chat_dotfiles(value);
+    } else if (!strcmp(key, CONFIG_PARAM_CHAT_LANGUAGE)) {
+        res = config_set_chat_language(value);
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_ENABLED)) {
         res = config_set_bubble_enabled(parse_bool(value));
     } else if (!strcmp(key, CONFIG_PARAM_BUBBLE_COMMAND)) {

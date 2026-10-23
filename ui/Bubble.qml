@@ -276,8 +276,8 @@ PanelWindow {
         // Not shown, but kept in the memory like any message
         ask("(Not from the user: you have not talked for a while. Say one short "
             + "thing to the user on your own, in character - a remark, a question or something you noticed. "
-            + "Write in the language of your earlier conversation, if any, else in the language of the locale "
-            + `${Qt.locale().name}. Do not mention this note.)`, "remark");
+            + "Write in the language of your earlier conversation, if any, else in "
+            + `${bubble.language}. Do not mention this note.)`, "remark");
     }
 
     // Reminders (.remind, the reminders tool): reminderFile is watched, and each
@@ -558,13 +558,18 @@ PanelWindow {
         "Select text with the mouse and press Ctrl+C to copy part of it."
     ].join("\n")
 
+    // The user's language for remarks: CHAT_LANGUAGE, else the locale's language
+    // by name ("English" for en_DK: its code alone made models guess Norwegian)
+    readonly property string language: bubble.event?.language || Qt.locale().nativeLanguageName || Qt.locale().name
+
     function roleFlags(): var {
         const c = chosen();
         const role = c.role || (c.noRole ? "" : bubble.event.role);
         if (role)
             return ["-r", role]; // only ever one -r: aichat refuses two
         if (bubble.prompt)
-            return ["--prompt", bubble.prompt.replace(/\{name\}/g, bubble.event?.prototype || "a desktop mascot")];
+            return ["--prompt", bubble.prompt.replace(/\{name\}/g, bubble.event?.prototype || "a desktop mascot")
+                + (bubble.event?.language ? `\n\nThe user's language is ${bubble.event.language}: answer in it unless the user writes in another language.` : "")];
         return [];
     }
 
@@ -1513,11 +1518,29 @@ PanelWindow {
     }
 
     // aichat's error, with what to do about the ones that need it
+    // What went wrong, said so that someone new to aichat knows what to do (the
+    // error itself follows)
     function explained(error: string): string {
         const gone = error.match(/No endpoints found for ([^".]+)/);
         if (gone)
             return `OpenRouter has no model ${gone[1]} (any more) - pick another under Settings › Model, or find one `
                 + `on openrouter.ai/models and use .model openrouter:<name>\n\n${error}`;
+        if (/Failed to load config/.test(error))
+            return "aichat is not set up yet, so there is no model to answer with. See \"Getting started\" in "
+                + `Mascot's README: a free local model with Ollama, or a hosted one with OpenRouter.\n\n${error}`;
+        if (/aichat: (command )?not found/.test(error))
+            return `aichat is not installed: install it (on Arch: pacman -S aichat), then set it up as `
+                + `"Getting started" in Mascot's README says.\n\n${error}`;
+        const missing = error.match(/model '([^']+)' not found/);
+        if (missing)
+            return `The model ${missing[1]} is not there - if it is a local one, download it with: ollama pull `
+                + `${missing[1].replace(/^ollama:/, "")}\n\n${error}`;
+        const unreachable = error.match(/error sending request for url \((https?:\/\/[^/)]+)/);
+        if (unreachable)
+            return (/:11434$/.test(unreachable[1])
+                ? "Ollama does not answer - is it running? Start it with: systemctl start ollama"
+                : `Nothing answers at ${unreachable[1]} - check your network, or the address in aichat's config`)
+                + `\n\n${error}`;
         return error;
     }
 

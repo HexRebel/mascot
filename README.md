@@ -31,20 +31,81 @@ Gamescope will not work.
 - **KDE Plasma, Sway and other wlroots compositors** are supported by upstream but have not been
   tested with Mascot's changes.
 
-## Quick start
+## Getting started
+
+Mascot needs a Wayland compositor with layer-shell: Hyprland, Sway or another wlroots compositor, or KDE
+Plasma (not GNOME). Three steps:
+
+**1. Install it.** On Arch, from the AUR (with an AUR helper such as `yay` or `paru`):
 
 ```sh
+yay -S mascot
+```
+
+Or from source (any distribution; on Arch the packages are named as below):
+
+```sh
+sudo pacman -S --needed base-devel git wayland wayland-protocols libarchive uthash python python-pillow quickshell aichat
 git clone --recurse-submodules https://github.com/Xedoc91/mascot.git
 cd mascot
 make -j$(nproc)
-make PREFIX=$HOME/.local install
-mascot summon Robo        # starts the daemon and the chat bubble
-mascot stop               # stops both again
+make PREFIX=$HOME/.local install    # then ~/.local/bin must be in your PATH
 ```
 
-Mascot ships with Robo, its own mascot, and the original Shimeji; `mascot import <shimeji-ee pack.zip>` adds others (see
-[Adding mascots](#adding-mascots)). For the chat bubble you also need Quickshell and a configured
-aichat (see [Chat bubble](#chat-bubble)).
+**2. Give it a language model to talk with.** The chat bubble talks through
+[aichat](https://github.com/sigoden/aichat), which needs a model in its config,
+`~/.config/aichat/config.yaml`. If you already use aichat, skip this. Otherwise pick one:
+
+- **Free and local, with Ollama** (runs on your own computer; a graphics card helps):
+
+  ```sh
+  sudo pacman -S ollama            # or ollama-rocm (AMD) / ollama-cuda (NVIDIA)
+  sudo systemctl enable --now ollama
+  ollama pull llama3.2             # about 2 GB
+  ```
+
+  and put this in `~/.config/aichat/config.yaml`:
+
+  ```yaml
+  model: ollama:llama3.2
+  clients:
+    - type: openai-compatible
+      name: ollama
+      api_base: http://localhost:11434/v1
+      models:
+        - name: llama3.2
+          supports_function_calling: true
+  ```
+
+- **Hosted, with [OpenRouter](https://openrouter.ai)** (needs an account and an API key from
+  [openrouter.ai/keys](https://openrouter.ai/keys); you pay per message):
+
+  ```yaml
+  model: openrouter:anthropic/claude-haiku-5.5
+  clients:
+    - type: openai-compatible
+      name: openrouter
+      api_base: https://openrouter.ai/api/v1
+      api_key: sk-or-your-key-here
+      models:
+        - name: anthropic/claude-haiku-5.5
+          supports_function_calling: true
+  ```
+
+Check it with `aichat "Hello"` in a terminal: it should answer.
+
+**3. Start Robo**, Mascot's own mascot:
+
+```sh
+mascot summon Robo        # starts Mascot and the chat bubble
+```
+
+Click Robo and write to it; `.help` in the bubble lists what you can do, and right-clicking Robo opens its
+menu. `mascot stop` stops Mascot again. If Robo answers in a language you did not write in, tell it yours:
+`mascot config set CHAT_LANGUAGE Danish` (see [Configuration](#configuration-1)).
+
+Mascot also ships with the original Shimeji; `mascot import <shimeji-ee pack.zip>` adds others (see
+[Adding mascots](#adding-mascots)).
 
 # Requirements
 
@@ -82,7 +143,8 @@ Your compositor should *at least* support xdg-shell, wlr-layer-shell protocols, 
 
 ## Packages
 
-There are no packages for Mascot yet; build it from source (below).
+Mascot is on the AUR as [mascot](https://aur.archlinux.org/packages/mascot) (`yay -S mascot`); elsewhere, build it
+from source (below).
 The upstream project has packages of its own, which install wl_shimeji, not Mascot:
 [wl_shimeji-git](https://aur.archlinux.org/packages/wl_shimeji-git) and
 [wl_shimeji-plugin-kwinsupport](https://aur.archlinux.org/packages/wl_shimeji-plugin-kwinsupport) on the AUR,
@@ -500,7 +562,7 @@ mascot; with Mascot's prompt it answers under its new name from the next message
 ## The mascot's personality
 
 Unless you pick a role with `.role` or set `CHAT_ROLE`, every message is sent with Mascot's own system prompt
-(aichat's `--prompt`), so the mascot answers in character, briefly and in your language. `{name}` in
+(aichat's `--prompt`), so the mascot answers in character, briefly and in your language (set `CHAT_LANGUAGE` if it guesses wrong, e.g. Norwegian for Danish). `{name}` in
 the prompt becomes the mascot's name, so Shimeji answers as Shimeji. A mascot can bring its own prompt:
 a `prompt.md` in its prototype directory comes first (Robo has one: a small, playful robot, which now
 and then mentions its visor or its tools). Your aichat roles and
@@ -641,6 +703,7 @@ models call tools more reliably than others; one that does not just answers with
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo`, `reminders`, `shell` and/or `sleep`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
 | `CHAT_DOTFILES` | *(empty)* | The hidden files and directories the file tools may see, `;`-separated, e.g. `~/.zshrc;~/.config/hypr`; empty: none (see *Tools*). Takes effect from the next tap. |
+| `CHAT_LANGUAGE` | *(empty)* | Your language, e.g. `Danish`: with a mascot's or Mascot's prompt (not your own roles) the model answers in it unless you write in another, and remarks use it. Empty: the mascot follows your messages, and remarks use your locale's language (e.g. English for `en_DK`). Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 

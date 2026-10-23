@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import errno
-import tempfile
-import os
-from dataclasses import dataclass, field
-from typing import Dict, Optional
-import tarfile
-import html
-import zipfile
-import stat
-import sys
 import time
-from xml.etree import ElementTree
-import logging
-from PIL import Image
-import base64
-import pathlib
-import random
-import shutil
+import html
+import tarfile
 from typing import Callable, Any
-import enum
-import json
-import argparse
-import re
-import socket
-from dataclasses import dataclass
 import xml.etree.ElementTree as ET
 import xml
-import io
+from typing import Dict, Optional
+import zipfile
+import enum
 import struct
+import random
+import os
+import json
+import errno
+import pathlib
+import logging
+import base64
+import sys
+from dataclasses import dataclass
 import subprocess
+from PIL import Image
+import tempfile
+import argparse
+import socket
+import stat
+from xml.etree import ElementTree
+import io
+import re
+from dataclasses import dataclass, field
+import shutil
 
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
 # Modified for Mascot by Xedoc91, 2026; see the git history for details.
@@ -4712,6 +4712,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         "CHAT_MEMORY": "Chat Memory",
         "CHAT_TOOLS": "Chat Tools",
         "CHAT_DOTFILES": "Chat Dotfiles",
+        "CHAT_LANGUAGE": "Chat Language",
         "BUBBLE_ENABLED": "Bubble Enabled",
         "BUBBLE_COMMAND": "Bubble Command"
     }
@@ -4805,6 +4806,7 @@ def local_config_handler(arguments: argparse.Namespace, parser):
         "CHAT_MEMORY": "chat_memory",
         "CHAT_TOOLS": "chat_tools",
         "CHAT_DOTFILES": "chat_dotfiles",
+        "CHAT_LANGUAGE": "chat_language",
         "BUBBLE_ENABLED": "bubble_enabled",
         "BUBBLE_COMMAND": "bubble_command",
     }

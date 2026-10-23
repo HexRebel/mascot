@@ -64,6 +64,7 @@
 #define CONFIG_PARAM_CHAT_MEMORY "CHAT_MEMORY"
 #define CONFIG_PARAM_CHAT_TOOLS "CHAT_TOOLS"
 #define CONFIG_PARAM_CHAT_DOTFILES "CHAT_DOTFILES"
+#define CONFIG_PARAM_CHAT_LANGUAGE "CHAT_LANGUAGE"
 #define CONFIG_PARAM_BUBBLE_ENABLED "BUBBLE_ENABLED"
 #define CONFIG_PARAM_BUBBLE_COMMAND "BUBBLE_COMMAND"
 #define CONFIG_PARAM_COUNT 37
@@ -173,6 +174,10 @@ const char* config_get_chat_tools();
 // (default none); NULL = none
 bool config_set_chat_dotfiles(const char* value);
 const char* config_get_chat_dotfiles();
+// The user's language (e.g. "Danish"), for when a message does not say it;
+// NULL = follow the user's messages (and the locale for remarks)
+bool config_set_chat_language(const char* value);
+const char* config_get_chat_language();
 
 // Whether mascotd starts the chat bubble, and the command to start it with
 bool config_set_bubble_enabled(int32_t value);
@@ -224,6 +229,7 @@ __attribute((unused)) static const char* config_keys[] = {
     CONFIG_PARAM_CHAT_MEMORY,
     CONFIG_PARAM_CHAT_TOOLS,
     CONFIG_PARAM_CHAT_DOTFILES,
+    CONFIG_PARAM_CHAT_LANGUAGE,
     CONFIG_PARAM_BUBBLE_ENABLED,
     CONFIG_PARAM_BUBBLE_COMMAND,
     NULL
