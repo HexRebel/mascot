@@ -2,44 +2,44 @@
 
 from __future__ import annotations
 from PIL import Image
-import errno
-import tempfile
-import sys
-import enum
-import zipfile
-import xml
-from xml.etree import ElementTree
-import logging
-import os
-import struct
-import html
-import tarfile
-import random
-import argparse
-import stat
-from typing import Callable, Any
-import shutil
-import json
-from typing import Dict, Optional
-import xml.etree.ElementTree as ET
-import re
-import time
-from dataclasses import dataclass, field
 import socket
+import tempfile
 import io
-import subprocess
-import pathlib
+import enum
+import stat
+from dataclasses import dataclass, field
+import random
+import errno
+from typing import Callable, Any
+import json
+import os
 from dataclasses import dataclass
 import base64
+import struct
+import zipfile
+import re
+import argparse
+import html
+import time
+from typing import Dict, Optional
+from xml.etree import ElementTree
+import logging
+import xml.etree.ElementTree as ET
+import sys
+import shutil
+import tarfile
+import xml
+import subprocess
+import pathlib
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 
 TokenType = enum.Enum('TokenType', ["IDENTIFIER", "NUMBER", "OPENING_BRACKET", "CLOSING_BRACKET", "OPERATOR", "QUESTION_MARK", "COLON", "SEMICOLON", "EOF", "SOF", "ACCESS_OPERATOR", "COMMA", "INVALID"])
 BracketType = enum.Enum('BracketType', ["EXPRESSION", "SCOPE", "ARRAY"])
@@ -289,8 +289,8 @@ class Tokenizer:
         return current_token
 
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 
 
 
@@ -489,8 +489,8 @@ class AbstractSyntaxTree:
         raise SyntaxError(f"Unexpected token: {token}")
 
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 
 
 
@@ -770,8 +770,8 @@ class Program:
         return f"<{self.__class__.__name__}: {len(self.instructions)} instructions long, located at 0x{id(self)}>"
 
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 
 INLINED_ACTION_AUTOINCREMENT = 0
 INLINED_BEHAVIOUR_AUTOINCREMENT = 0
@@ -1776,8 +1776,8 @@ def main():
 
 
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 def lv_distance(s1: str, s2: str) -> float:
     len1, len2 = len(s1), len(s2)
 
@@ -1812,8 +1812,8 @@ def lv_variant(pool: list[str], s: str) -> str:
 #   noclimb.py - strip wall and ceiling behaviours from a prototype
 #
 #
-#   Copyright (C) 2026  Xedoc91
-#   Copyright (C) 2026  Xedoc91
+#   Copyright (C) 2026  HexRebel
+#   Copyright (C) 2026  HexRebel
 #
 #
 #   This program is free software; you can redistribute it and/or
@@ -1915,8 +1915,8 @@ def strip_climbing(behaviors: dict) -> list[str]:
 
 
 
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
-# Modified for Mascot by Xedoc91, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
+# Modified for Mascot by HexRebel, 2026; see the git history for details.
 
 
 prototypes: dict[int, Prototype] = {}

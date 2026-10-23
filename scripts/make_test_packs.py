@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #   make_test_packs.py - Shimeji-ee packs in odd shapes, to test mascot import
 #
-#   Copyright (C) 2026  Xedoc91
+#   Copyright (C) 2026  HexRebel
 #
 #   This program is free software; you can redistribute it and/or
 #   modify it under the terms of the GNU General Public License

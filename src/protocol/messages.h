@@ -1,4 +1,4 @@
-/* Modified for Mascot by Xedoc91, 2026; see the git history for details. */
+/* Modified for Mascot by HexRebel, 2026; see the git history for details. */
 #ifndef PROTOCOL_MESSAGES_H
 #define PROTOCOL_MESSAGES_H
 

@@ -2,7 +2,7 @@
     look.h - mascot's look action implementation
 
     Copyright (C) 2024  CluelessCatBurger <github.com/CluelessCatBurger>
-    Modified for Mascot by Xedoc91, 2026; see the git history for details.
+    Modified for Mascot by HexRebel, 2026; see the git history for details.
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License

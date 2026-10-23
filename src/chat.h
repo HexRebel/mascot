@@ -1,7 +1,7 @@
 /*
     chat.h - line-JSON socket for the chat bubble
 
-    Copyright (C) 2026  Xedoc91
+    Copyright (C) 2026  HexRebel
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
