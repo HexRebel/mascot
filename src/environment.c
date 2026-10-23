@@ -2745,6 +2745,19 @@ environment_subsurface_t *environment_create_subsurface(environment_t *env) {
 }
 
 void environment_destroy_subsurface(environment_subsurface_t *surface) {
+  // Freed while it is being dragged (e.g. a client sends the mascot away, as
+  // mascot prototypes remove does): the pointer must let go of it first, or its
+  // next motion moves a freed surface
+  environment_pointer_t *drag_pointer = surface->drag_pointer;
+  if (drag_pointer && drag_pointer->grabbed_subsurface == surface) {
+    drag_pointer->grabbed_subsurface = NULL;
+    drag_pointer->above_environment = NULL;
+    if (drag_pointer->above_surface == surface->surface)
+      drag_pointer->above_surface = NULL;
+    enable_input_on_environments(false);
+    environment_pointer_apply_cursor(drag_pointer, -2);
+  }
+
   if (surface->alpha_modifier) {
     wp_alpha_modifier_surface_v1_destroy(surface->alpha_modifier);
   }
