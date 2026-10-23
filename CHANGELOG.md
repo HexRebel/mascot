@@ -5,6 +5,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- **A shorter `.help`:** the commands most people need, and how to reach the menu; `.help all` lists every
+  command, as `.help` did, and is what the menu's Help shows.
 - **Robo's own personality:** a mascot can bring its own system prompt, a `prompt.md` in its prototype
   directory, used unless a role is chosen (`.role`, `CHAT_ROLES`, `CHAT_ROLE`). Robo has one: warm, curious
   and playful, a little robot now and then, in your language. `.info` shows it as the mascot's own prompt.

@@ -295,7 +295,7 @@ you pick it again; ticked meanwhile), **Sleep** or **Wake
 up** (just this mascot, like a middle click), **Quiet** (all of them sleep for **10 min**, **30 min**
 or **1 hour**, like `mascot sleep --minutes 30`, or **Set time…**, the bubble with `.quiet` typed for
 a time of your own; **Wake everyone** while they sleep), **Todo list** and **Reminders** (the bubble with
-`.todo` or `.reminders`), **Help** (`.help`) and **Send away** (sending the last one away stops
+`.todo` or `.reminders`), **Help** (`.help all`) and **Send away** (sending the last one away stops
 Mascot). It takes no keyboard and closes when you pick something or
 move the pointer off it.
 
@@ -439,7 +439,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 
 | Command | Effect |
 |---|---|
-| `.help` | List the commands |
+| `.help` | The commands most people need; `.help all` lists every one |
 | `.info` | Show aichat's settings |
 | `.models`, `.roles`, `.sessions` | List them |
 | `.models <search>` | Find models on OpenRouter, newest first, with price, context and whether they can use tools, e.g. `.models gemini flash` |

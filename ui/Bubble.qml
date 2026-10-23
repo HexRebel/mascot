@@ -517,6 +517,19 @@ PanelWindow {
         return { model: c?.model ?? "", role: c?.role ?? "", noRole: c?.noRole ?? false, session: c?.session ?? "" };
     }
 
+    // .help: what most people need; .help all: every command
+    readonly property string helpShort: [
+        "Just write to me, or use a command:",
+        ".model <name>          switch model (.models lists them)",
+        ".todo                  your todo list (.todo add <item>)",
+        ".remind <when> <text>  a reminder, e.g. .remind 10m tea",
+        ".quiet <when>          let the mascots sleep, e.g. .quiet 2h",
+        ".copy                  copy the last answer",
+        ".clear                 start this conversation over",
+        ".help all              every command",
+        "",
+        "Right-click a mascot for its menu. Select text and press Ctrl+C to copy it."
+    ].join("\n")
     readonly property string helpText: [
         ".info                  show aichat's settings",
         ".models / .roles / .sessions   list them",
@@ -1146,7 +1159,7 @@ PanelWindow {
         const arg = rest.join(" ");
         switch (name) {
         case ".help":
-            say(helpText);
+            say(arg === "all" ? helpText : helpShort);
             return;
         case ".info":
             {

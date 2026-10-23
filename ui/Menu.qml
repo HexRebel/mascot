@@ -274,7 +274,7 @@ PanelWindow {
                 : { label: "Quiet ›", action: "page", argument: "quiet" },
             { label: "Todo list", action: "todo" },
             { label: "Reminders", action: "reminders" },
-            { label: "Help", action: "command", argument: ".help" },
+            { label: "Help", action: "command", argument: ".help all" },
             { label: "Send away", action: "dismiss" } // last, out of the way; the last mascot going stops Mascot
         ];
     }
