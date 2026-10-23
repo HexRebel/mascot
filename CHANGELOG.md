@@ -3,22 +3,25 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.2.0 (2026-10-23)
 
-- When Mascot cannot start, `mascot` says why instead of `connector.error.initialization`, and on a desktop
-  without wlr-layer-shell (GNOME) which desktops it works on.
-- **Getting started** in the README, for someone new: install (AUR or source), give aichat a model (Ollama or
-  OpenRouter, with a config to copy), start Robo.
-- The bubble explains the errors someone new meets: aichat not set up or not installed, Ollama not running, a
-  model that is not downloaded.
+Robo's own personality, and a smoother start for someone new to Mascot.
+
+- **Robo's own personality:** a mascot can bring its own system prompt, a `prompt.md` in its prototype
+  directory, used unless a role is chosen (`.role`, `CHAT_ROLES`, `CHAT_ROLE`). Robo has one: warm, curious
+  and playful, a little robot now and then, in your language. `.info` shows it as the mascot's own prompt.
 - **`CHAT_LANGUAGE`:** tell Mascot your language (e.g. `Danish`); the mascot answers in it unless you write in
   another, and its remarks use it. Without it, remarks now name the locale's language ("English" for `en_DK`)
   instead of its code, which made models guess Norwegian or Swedish.
 - **A shorter `.help`:** the commands most people need, and how to reach the menu; `.help all` lists every
   command, as `.help` did, and is what the menu's Help shows.
-- **Robo's own personality:** a mascot can bring its own system prompt, a `prompt.md` in its prototype
-  directory, used unless a role is chosen (`.role`, `CHAT_ROLES`, `CHAT_ROLE`). Robo has one: warm, curious
-  and playful, a little robot now and then, in your language. `.info` shows it as the mascot's own prompt.
+- **On the AUR:** `yay -S mascot` (the package is in [`packaging/aur/mascot/`](packaging/aur/mascot/)).
+- **Getting started** in the README, for someone new: install (AUR or source), give aichat a model (Ollama or
+  OpenRouter, with a config to copy), start Robo.
+- The bubble explains the errors someone new meets: aichat not set up or not installed, Ollama not running, a
+  model that is not downloaded.
+- When Mascot cannot start, `mascot` says why instead of `connector.error.initialization`, and on a desktop
+  without wlr-layer-shell (GNOME) which desktops it works on.
 
 ## 0.1.0 (2026-10-23)
 
