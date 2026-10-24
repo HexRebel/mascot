@@ -64,6 +64,10 @@ PanelWindow {
     property bool fromKey: false
     property bool keyboard: false
     property int selected: -1 // the item the keyboard is on
+    // Where the pointer was last seen in the window (null: not yet). From a key,
+    // the pointer only counts once it moves: resting on the menu's bottom row
+    // (the menu opens over the mascot), it would mark that row on every page
+    property var pointerAt: null
 
     function toggle(mascot: int): void {
         if (menu.visible || firstLists.running) {
@@ -77,6 +81,7 @@ PanelWindow {
     function openFor(e: var, choice: var): void {
         menu.keyboard = menu.fromKey;
         menu.fromKey = false;
+        menu.pointerAt = null;
         menu.event = e;
         menu.choice = choice;
         menu.page = "main";
@@ -495,7 +500,7 @@ PanelWindow {
                         width: parent.width
                         height: menu.itemHeight
                         radius: 6
-                        color: (area.containsMouse || index === menu.selected) && modelData.action
+                        color: ((area.containsMouse && !menu.keyboard) || index === menu.selected) && modelData.action
                             ? Qt.alpha(menu.theme?.accent ?? "#89b4fa", 0.25) : "transparent"
 
                         Text {
@@ -526,6 +531,14 @@ PanelWindow {
 
                             anchors.fill: parent
                             hoverEnabled: true
+                            // From a key, a pointer that really moves takes the keyboard's place
+                            onPositionChanged: mouse => {
+                                const at = mapToItem(null, mouse.x, mouse.y);
+                                const was = menu.pointerAt;
+                                menu.pointerAt = at;
+                                if (menu.keyboard && was && (was.x !== at.x || was.y !== at.y) && parent.modelData.action)
+                                    menu.selected = parent.index;
+                            }
                             // One call: it may replace the items, this one too
                             onClicked: menu.choose(parent.modelData)
                         }

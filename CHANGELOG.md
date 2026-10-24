@@ -8,6 +8,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - **Debian 13:** how to install on Debian in the README's Getting started (Quickshell from `trixie-backports`,
   aichat from its releases), tested in a clean Debian 13 container; the Debian package names under
   Requirements are corrected.
+- The menu opened from a key (`mascot menu`) no longer marks its bottom row as well: the pointer resting over
+  the mascot, under that row, counted as hovering it. From a key the pointer now counts once it moves, and
+  then takes over the keyboard's choice.
 - A sleeping mascot swapped for another (`.mascot`, the menu's Change mascot) no longer wakes up: the new one
   sleeps too.
 - Reminders work with Quickshell 0.3.0 (Debian's): the bubble could not hand the reminder tool its
