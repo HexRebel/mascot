@@ -8,6 +8,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - **Debian 13:** how to install on Debian in the README's Getting started (Quickshell from `trixie-backports`,
   aichat from its releases), tested in a clean Debian 13 container; the Debian package names under
   Requirements are corrected.
+- A sleeping mascot swapped for another (`.mascot`, the menu's Change mascot) no longer wakes up: the new one
+  sleeps too.
 - Reminders work with Quickshell 0.3.0 (Debian's): the bubble could not hand the reminder tool its
   environment there, so the tool refused to run and reminders never showed.
 - The memory's summary no longer carries the model's reasoning (`<think>`) into the new conversation, where

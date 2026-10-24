@@ -694,6 +694,9 @@ static void chat_swap(int fd, const char* line)
     replacement->LookingRight->value.i = old->LookingRight->value.i;
     pthread_mutex_unlock(&replacement->tick_lock);
     if (old->stay_behavior) mascot_stay(replacement, true);
+    // Asleep one by one (a middle click, the menu's Sleep) too; when all sleep,
+    // chat_tick() puts new ones to sleep anyway
+    if (old->asleep) mascot_sleep(replacement, true, sleep_until != 0);
 
     // Hold the new one first: chat_hold() releases the old one
     if (held_mascot_id == old->id) chat_hold(replacement);
