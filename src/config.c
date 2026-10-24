@@ -869,7 +869,7 @@ int32_t config_get_chat_memory()
     return config.chat_memory;
 }
 
-// CHAT_TOOLS is a comma-separated list of "time", "weather", "files", "todo", "reminders", "shell" and "sleep"
+// CHAT_TOOLS is a comma-separated list of "time", "weather", "files", "todo", "reminders", "shell", "sleep" and "system"
 bool config_set_chat_tools(const char* value)
 {
     if (value && strchr(value, '\n')) return false;
@@ -879,7 +879,7 @@ bool config_set_chat_tools(const char* value)
         tool = string_strip(tool);
         if (*tool && strcasecmp(tool, "time") && strcasecmp(tool, "weather") && strcasecmp(tool, "files")
             && strcasecmp(tool, "todo") && strcasecmp(tool, "reminders") && strcasecmp(tool, "shell")
-            && strcasecmp(tool, "sleep"))
+            && strcasecmp(tool, "sleep") && strcasecmp(tool, "system"))
             return false;
     }
     free(config.chat_tools);

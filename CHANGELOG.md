@@ -5,6 +5,13 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- **Troubleshooting:** a new tool group, `system` in `CHAT_TOOLS` (local models only): ask the mascot why
+  something does not work - the network or a game's LAN, sound, a program that crashes, a service - and it
+  looks with `check_system` (network and firewall, sound, crashes, services) and `read_log` (the system
+  log). It only reads, without `sudo`, says what it could not see, and gives you the command that fixes
+  it instead of running it; it is told to say it does not know rather than guess. Robo opens its chest
+  while it checks (`System`), and shows a "?" (`Unsure`, a new image) when it found nothing to go on.
+- The mascot now offers its tools when one could help, instead of waiting for you to know them.
 - **Debian 13:** how to install on Debian in the README's Getting started (Quickshell from `trixie-backports`,
   aichat from its releases), tested in a clean Debian 13 container; the Debian package names under
   Requirements are corrected.

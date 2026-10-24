@@ -1974,7 +1974,7 @@ CONFIG_CHOICES = {
                             "keep_offscreen"],
     "WLR_SHELL_LAYER": ["background", "bottom", "top", "overlay"],
 }
-CONFIG_CHAT_TOOLS = ["time", "weather", "files", "todo", "reminders", "shell", "sleep"]
+CONFIG_CHAT_TOOLS = ["time", "weather", "files", "todo", "reminders", "shell", "sleep", "system"]
 
 def config_value_problem(key, value):
     """None if mascotd would take value for key, else why not"""

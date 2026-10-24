@@ -79,6 +79,10 @@ PanelWindow {
             property string doing: "" // what a tool is doing while it waits, see doingOf()
             property string doingIcon: "" // its icon's name, see icon()
             property string toolKind: "" // doingIcon from when the tool starts until the answer does
+            // check_system/read_log came back empty-handed, and none found anything:
+            // the mascot shows it does not know ("unsure") while it answers
+            property bool unsure: false
+            property bool found: false
             property int mascot: -1 // whose conversation it is
             // Closed while answering: the mascot stays sitting (and talking)
             // until the answer is read, see close()
@@ -653,10 +657,11 @@ PanelWindow {
         todo: ["list_todos", "add_todo", "remove_todo", "edit_todo"],
         reminders: ["set_reminder", "list_reminders", "cancel_reminder"],
         shell: ["last_commands"],
-        sleep: ["sleep_mode"]
+        sleep: ["sleep_mode"],
+        system: ["check_system", "read_log"]
     })
     // Only with a local model, so what they read stays on this computer
-    readonly property var localTools: ["files", "todo", "reminders", "shell"]
+    readonly property var localTools: ["files", "todo", "reminders", "shell", "system"]
     readonly property string toolsDir: Quickshell.shellPath("../tools")
     // One list for all mascots, in Markdown ("- [ ] item"), kept in the data directory
     readonly property string todoFile: `${bubble.dataDir}/todo.md`
@@ -780,6 +785,9 @@ PanelWindow {
                     return;
                 }
                 const front = meta.filter(l => !/^use_tools:/.test(l)).concat(`use_tools: ${env.AICHAT_USE_TOOLS}`);
+                // Otherwise the user has to know what the mascot can do
+                const offer = "\n\nWhen one of your tools could help with what the user is doing or asking about, "
+                    + "offer it in a few words or just use it - but only the tools you have, and not in every answer.";
                 // Models like to say they noted something without doing it
                 const todo = env.AICHAT_USE_TOOLS.includes("add_todo") ? "\n\nYou keep the user's todo list with the "
                     + "tools list_todos, add_todo, remove_todo and edit_todo. When the user wants something on it, off it, "
@@ -807,7 +815,14 @@ PanelWindow {
                 const sleep = env.AICHAT_USE_TOOLS.includes("sleep_mode") ? "\n\nWhen the user wants quiet or to "
                     + "focus, or asks you to sleep for a while, call sleep_mode; never say you will sleep without "
                     + "calling it." : "";
-                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${files}${todo}${remind}${shell}${sleep}`), env);
+                // It may only look: the user runs the fix
+                const system = env.AICHAT_USE_TOOLS.includes("check_system") ? "\n\nWhen the user asks why something "
+                    + "on their computer does not work (the network, a game's LAN, sound, a program that crashes, a "
+                    + "service), call check_system for that area first, and read_log to dig further. Base your answer "
+                    + "only on what they show: say what you found, and when they found nothing that explains it, or "
+                    + "could not see something, say so plainly instead of guessing. You cannot change anything: give "
+                    + "the exact command that fixes it (with sudo when it needs it), and never say you ran it." : "";
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${offer}${files}${todo}${remind}${shell}${sleep}${system}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || (c.session && bubble.sessionKinds[c.session] !== "private")) {
                 send("");
@@ -1062,6 +1077,8 @@ PanelWindow {
         c.doing = "";
         c.doingIcon = "";
         c.toolKind = "";
+        c.unsure = false;
+        c.found = false;
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -1089,7 +1106,7 @@ PanelWindow {
         const icons = {
             weather: ["\uf0c2", "☁"], folder: ["\uf07c", "📁"], file: ["\uf15c", "📄"], search: ["\uf002", "🔍"],
             image: ["\uf03e", "🖼"], todo: ["\uf0ae", "📝"], reminder: ["\uf017", "⏰"], shell: ["\uf120", "⌨"],
-            sleep: ["\uf186", "💤"], check: ["\uf00c", "✓"]
+            sleep: ["\uf186", "💤"], system: ["\uf2db", "🔧"], check: ["\uf00c", "✓"]
         };
         return (icons[name] ?? ["", ""])[bubble.nerdFont ? 0 : 1];
     }
@@ -1131,6 +1148,11 @@ PanelWindow {
             return ["shell", "looking at your last commands…"];
         case "sleep_mode":
             return ["sleep", "getting sleepy…"];
+        case "check_system":
+            return ["system", { network: "checking the network…", sound: "checking the sound…",
+                crashes: "looking for crashes…", services: "checking the services…" }[a.area] ?? "checking the system…"];
+        case "read_log":
+            return ["system", a.search ? `searching the log for ${a.search}…` : "reading the system's log…"];
         }
         return ["", ""];
     }
@@ -1586,7 +1608,7 @@ PanelWindow {
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
                     if (c.toolKind && c.streaming >= 0 && c.streaming < c.entries.count
                             && bubble.answerOf(c.entries.get(c.streaming).body))
-                        c.toolKind = "";
+                        c.toolKind = c.unsure && !c.found ? "unsure" : "";
                 }
             }
             // Line by line, so what a tool starts doing shows while it runs
@@ -1598,6 +1620,10 @@ PanelWindow {
                     if (c?.job === job && line.startsWith("mascot-doing: ")) {
                         [c.doingIcon, c.doing] = bubble.doingOf(line.slice(14));
                         c.toolKind = c.doingIcon;
+                    } else if (c?.job === job && line === "mascot-unsure") {
+                        c.unsure = true;
+                    } else if (c?.job === job && line === "mascot-found") {
+                        c.found = true;
                     }
                 }
             }

@@ -273,8 +273,10 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
 - While a tool runs for the answer, a mascot can show what it does: it plays its behavior for that
   tool instead of `Talk`, if it has one, until the answer starts. `Todo` and `Reminder` (the todo list
   and reminders), `Weather`, `Files` (a folder or file), `Search` (in a file), `Image`, `Shell` (your
-  last commands), `Sleepy` (the sleep tool). Robo writes in its notepad, holds up the globe, opens
-  its head while it reads your commands... A reminder that is due plays `Alarm` (Robo's yellow "!").
+  last commands), `Sleepy` (the sleep tool), `System` (troubleshooting). Robo writes in its notepad,
+  holds up the globe, opens its head while it reads your commands, opens its chest while it checks
+  your system... When the system tools found nothing to go on, it plays `Unsure` while it answers
+  (Robo's "?"). A reminder that is due plays `Alarm` (Robo's yellow "!").
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
   `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
   then the import picks a pose that lies still instead (the first part of that `Sleep`, or an action
@@ -618,10 +620,12 @@ writes, deletes or runs anything else:
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 | `sleep` | `sleep_mode` | "I need to focus, sleep for an hour": all mascots sleep until then (see *Putting mascots to sleep*); "wake up" wakes them early |
 | `shell` | `last_commands` | Your last commands in the terminal (5, or up to 10), to explain one: "what did my last command do?", "explain the git command I just ran" |
+| `system` | `check_system`, `read_log` | Troubleshoot your computer when you ask: "why can't my game find the others on the LAN?", "why is there no sound?", "why does Steam keep crashing?". It looks at the network (and firewall), sound, crashes or services, and searches the system log; it tells you what it found and the command that fixes it, and never runs it |
 
 `CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files, `todo`
-for the todo list, `reminders` for reminders, `shell` for your last commands and `sleep` to let the
-mascots nap, e.g. `mascot config set CHAT_TOOLS time,weather,files,todo,reminders,shell,sleep`, or set
+for the todo list, `reminders` for reminders, `shell` for your last commands, `sleep` to let the
+mascots nap and `system` for troubleshooting, e.g. `mascot config set CHAT_TOOLS
+time,weather,files,todo,reminders,shell,sleep,system`, or set
 it empty to turn the tools off. It takes effect from the
 next tap.
 
@@ -642,7 +646,7 @@ shown reminder is taken off the file. `.remind` understands a duration (`10m`, `
 or a date and time (`2026-10-19 12:00`, `19.10.26 12:00`). `.remind` works without the tool and with any
 model, like `.todo`; the reminders are shown whatever `CHAT_TOOLS` says.
 
-The file, todo, reminder and shell tools keep to what is yours to share:
+The file, todo, reminder, shell and system tools keep to what is yours to share:
 
 - Files: only your home directory, and no hidden files or directories (dotfiles, `~/.config`, …)
   unless you list them in `CHAT_DOTFILES`, separated by `;`, e.g. `mascot config set CHAT_DOTFILES
@@ -676,6 +680,15 @@ The file, todo, reminder and shell tools keep to what is yours to share:
   `HISTCONTROL=ignorespace` in bash; fish does it by default). zsh needs `INC_APPEND_HISTORY` or
   `SHARE_HISTORY` to write a command as soon as it ran (oh-my-zsh sets `SHARE_HISTORY`), and bash
   `PROMPT_COMMAND="history -a"`; otherwise the mascot sees a terminal's commands only after it closes.
+- System: `check_system` and `read_log` only read, as you, without `sudo`: the journal
+  (`journalctl`; all of it if you are in the `wheel`, `adm` or `systemd-journal` group, else only your
+  own), `coredumpctl`, `systemctl`, `ip`, `pactl`/`wpctl` and the firewall's rule files (ufw's in
+  `/etc/ufw`; firewalld and nftables need root, so it says it cannot see them). Every answer from them
+  says what they could not see, and the mascot is told to say so rather than guess, and to give you
+  the command to run yourself (with `sudo` when it needs it), never to say it ran it. Log lines are
+  cut to the newest 60 (or what fits the model), and a value after *password*, *token*, *secret*,
+  *api_key* and the like is shown as *[hidden]*. When they found nothing to go on, the mascot shows it
+  does not know while it answers (Robo's "?").
 - Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
   your computer. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
   its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).

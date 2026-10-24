@@ -231,5 +231,60 @@
         "wake_up"
       ]
     }
+  },
+  {
+    "name": "check_system",
+    "description": "Look into why something on the user's computer does not work: what the system's own tools and logs say about one area, read without sudo, and what could not be seen. Use it when the user asks why their network, a game's LAN, sound, a program that crashes or a service does not work. Base your answer only on what it shows.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "area": {
+          "type": "string",
+          "enum": [
+            "network",
+            "sound",
+            "crashes",
+            "services"
+          ],
+          "description": "network (connections, open ports, the firewall and what it blocked), sound (PipeWire's devices, volume and errors), crashes (programs that crashed) or services (failed services and errors in the log)."
+        },
+        "program": {
+          "type": "string",
+          "description": "For crashes: only this program (e.g. \"kitty\"), with where it crashed."
+        },
+        "since": {
+          "type": "string",
+          "description": "How far back, e.g. \"1h\", \"30m\", \"today\" (default: since the computer started; crashes: 7 days)."
+        }
+      },
+      "required": [
+        "area"
+      ]
+    }
+  },
+  {
+    "name": "read_log",
+    "description": "Read the newest lines of the system's log (journalctl), to dig further into what check_system found: lines with some text, of one service, or from the kernel.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "type": "string",
+          "description": "Only lines with this text (any letter case), e.g. \"UFW BLOCK\", \"error\" or a program's name."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Only this service, e.g. \"NetworkManager\", \"bluetooth\" or \"pipewire\"."
+        },
+        "kernel": {
+          "type": "boolean",
+          "description": "Only the kernel's messages (hardware, drivers, the firewall)."
+        },
+        "since": {
+          "type": "string",
+          "description": "How far back, e.g. \"1h\", \"30m\" or \"today\" (default: since the computer started)."
+        }
+      }
+    }
   }
 ]

@@ -27,10 +27,14 @@ secrets are kept (SECRET_DIRS and SECRET_NAMES: .ssh, keys, tokens, browser
 profiles, shell history...). The file, todo and reminder tools only work when the bubble
 says the model is local (MASCOT_TOOLS_LOCAL=1), so what they read stays on this
 computer. So does last_commands, the one tool that reads shell history: only
-its last commands, and never one that looks like it holds a secret."""
+its last commands, and never one that looks like it holds a secret. And so do
+check_system and read_log, which read what the system's own tools and log say
+(nmcli, ss, UFW's rules, wpctl, coredumpctl, systemctl, journalctl), never
+with sudo, with what looks like a password or key in a log line hidden."""
 
 import base64
 import fcntl
+import ipaddress
 import json
 import os
 import re
@@ -948,8 +952,385 @@ def sleep_mode(args):
             "bubble is closed")
 
 
+# Troubleshooting: what the system's own tools and logs say, read without
+# sudo. Every answer says what could not be seen, so the model has no gap to
+# guess into, and tells the bubble whether it found anything ("mascot-found"),
+# or not ("mascot-unsure": the mascot shows it does not know)
+SYSTEM_AREAS = ("network", "sound", "crashes", "services")
+LOG_LINES = 60  # lines of the log read_log shows, the newest
+LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
+SECRET_VALUE = re.compile(r"((?:pass(?:wd|word)?|secret|token|api[_-]?key|apikey|auth[_-]?key|bearer|credential)"
+                          r"\s*[=:]\s*)\S+", re.I)
+SINCE = re.compile(r"^(\d+)\s*(s|m|min|h|t|d)$", re.I)
+
+
+def run(*command, timeout=8):
+    """(stdout, stderr) of a command, or (None, why) when it cannot run"""
+    import subprocess
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL,
+                              env=dict(os.environ, LC_ALL="C", SYSTEMD_COLORS="0", SYSTEMD_PAGER=""))
+    except FileNotFoundError:
+        return None, f"{command[0]} is not installed"
+    except subprocess.TimeoutExpired:
+        return None, f"{command[0]} took too long"
+    return done.stdout, done.stderr
+
+
+def masked(line):
+    """A log line without what looks like a password or key in it"""
+    line = SECRET_VALUE.sub(r"\1[hidden]", line)
+    return RANDOM_LOOKING.sub(lambda m: "[hidden]" if re.search(r"\d", m[0]) and re.search(r"[A-Za-z]", m[0])
+                              and "/" not in m[0] else m[0], line)
+
+
+def journal(*args):
+    """(lines, why only part of it could be seen or None) of journalctl"""
+    out, err = run("journalctl", "-q", "--no-pager", *args)
+    if out is None:
+        return [], err
+    partial = None
+    if "not seeing messages from other users and the system" in err:
+        partial = ("the system's log (only the user's own: they are not in the systemd-journal or wheel group, "
+                   "`sudo journalctl` shows it)")
+    elif err.strip() and not out.strip():
+        partial = f"the log ({err.strip().splitlines()[0]})"
+    lines = [masked(line) for line in out.splitlines() if line.strip()]
+    if "short-iso" in args:
+        # Oldest first: with --grep and -n, journalctl gives the newest first. A
+        # message's further lines (indented) stay with it
+        entries = []
+        for line in lines:
+            if line[:1].isspace() and entries:
+                entries[-1].append(line)
+            else:
+                entries.append([line])
+        lines = [line for entry in sorted(entries, key=lambda e: e[0][:25]) for line in entry]
+    return lines, partial
+
+
+def since_option(since):
+    """journalctl's --since for "1h", "30m", "today", "this boot"... (None: this boot)"""
+    since = " ".join(str(since or "").lower().split())
+    if not since or since in ("boot", "this boot", "since boot"):
+        return None
+    m = SINCE.match(since)
+    if m:
+        return f"-{m[1]}{ {'s': 's', 'm': 'min', 'min': 'min', 'h': 'h', 't': 'h', 'd': 'd'}[m[2]] }"
+    if since in ("today", "i dag", "idag", "yesterday", "i går", "igår"):
+        return "today" if since in ("today", "i dag", "idag") else "yesterday"
+    if re.match(r"^\d{4}-\d\d-\d\d( \d\d:\d\d(:\d\d)?)?$", since):
+        return since
+    raise ToolError(f"cannot tell when \"{since}\" is - use e.g. 30m, 2h, 1d, today or this boot")
+
+
+def firewall_rules():
+    """(lines about the firewall, what could not be seen)"""
+    lines, missing = [], []
+    conf = "/etc/ufw/ufw.conf"
+    if os.path.exists(conf):
+        try:
+            enabled = re.search(r"^ENABLED=(\w+)", open(conf).read(), re.M)
+            lines.append(f"UFW: {'on' if enabled and enabled[1] == 'yes' else 'off'}")
+        except OSError:
+            missing.append("whether UFW is on (`sudo ufw status`)")
+        try:
+            policy = re.search(r'^DEFAULT_INPUT_POLICY="?(\w+)', open("/etc/default/ufw").read(), re.M)
+            if policy:
+                lines.append(f"UFW incoming by default: {policy[1].lower()}")
+        except OSError:
+            pass
+        rules = []
+        for name in ("/etc/ufw/user.rules", "/etc/ufw/user6.rules"):
+            try:
+                for line in open(name):
+                    # "### tuple ### allow udp 27015 0.0.0.0/0 any 0.0.0.0/0 in"
+                    m = re.match(r"^### tuple ### (\S+) (\S+) (\S+) (\S+) (\S+) (\S+)(?: (in|out))?"
+                                 r"(?: comment=([0-9a-f]+))?", line)
+                    if m:
+                        what, proto, port, to, sport, source, way, comment = m.groups()
+                        rule = (f"{what} {way or 'in'} {'any' if proto == 'any' else proto} port "
+                                f"{'any' if port == 'any' else port.replace(':', '-')}"
+                                + ("" if source in ("0.0.0.0/0", "::/0") else f" from {source}"))
+                        # ufw keeps a rule's comment in hex; it tells what the rule is for
+                        try:
+                            rule += f' ("{masked(bytes.fromhex(comment).decode()[:40])}")' if comment else ""
+                        except ValueError:
+                            pass
+                        if rule not in rules:
+                            rules.append(rule)
+            except OSError:
+                missing.append(f"UFW's rules ({name}, `sudo ufw status`)")
+                break
+        else:
+            lines.append("UFW rules: " + ("; ".join(rules) if rules else "none of the user's own"))
+    else:
+        out, _ = run("systemctl", "is-active", "firewalld")
+        if out and out.strip() == "active":
+            missing.append("firewalld's rules (they need root: `sudo firewall-cmd --list-all`)")
+        else:
+            lines.append("No UFW; firewalld is not running (an nftables or iptables firewall needs root to see: "
+                         "`sudo nft list ruleset`)")
+    return lines, missing
+
+
+def firewall_blocks(since):
+    """(lines about what UFW blocked, how many blocks, what could not be seen)"""
+    args = ["-k", "-o", "short-iso", "-n", str(LOG_SCAN)] + (["--since", since] if since else ["-b"])
+    log, partial = journal(*args)
+    groups = {}
+    for line in log:
+        if "UFW BLOCK" not in line:
+            continue
+        field = dict(re.findall(r"\b([A-Z]+)=(\S*)", line))
+        proto = {"2": "IGMP", "1": "ICMP"}.get(field.get("PROTO", ""), field.get("PROTO", "?"))
+        dst = field.get("DST", "")
+        kind = ("broadcast" if dst.endswith(".255") or dst == "255.255.255.255" else
+                "multicast" if re.match(r"^(22[4-9]|23\d)\.", dst) or dst.lower().startswith("ff") else "to this computer")
+        key = (proto, field.get("DPT", ""), field.get("IN", ""), kind)
+        g = groups.setdefault(key, {"count": 0, "sources": set(), "last": ""})
+        g["count"] += 1
+        g["sources"].add(field.get("SRC", "?"))
+        g["last"] = line[11:16]
+    lines = []
+    for (proto, port, interface, kind), g in sorted(groups.items(), key=lambda kv: -kv[1]["count"])[:12]:
+        sources = sorted(g["sources"])
+        lines.append(f"- {proto}{' port ' + port if port else ''} {kind} on {interface or '?'}: {g['count']}x, "
+                     f"last {g['last']}, from {', '.join(sources[:3])}{' and more' if len(sources) > 3 else ''}")
+    return lines, sum(g["count"] for g in groups.values()), [partial] if partial else []
+
+
+def check_network(args):
+    found, lines, missing = 0, [], []
+    out, err = run("nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device")
+    if out is not None:
+        devices = [d.split(":") for d in out.splitlines() if d and not re.match(r"^(lo|p2p-dev)", d)]
+        lines.append("Connections: " + "; ".join(f"{d[0]} ({d[1]}) {d[2]}" + (f" to {d[3]}" if len(d) > 3 and d[3] else "")
+                                                 for d in devices if len(d) >= 3))
+        if not any(len(d) >= 3 and d[2] == "connected" for d in devices):
+            found += 1
+            lines.append("No device is connected.")
+    else:
+        out, err = run("ip", "-brief", "address")
+        if out is None:
+            missing.append("the network devices (" + err + ")")
+        else:
+            lines.append("Devices: " + "; ".join(" ".join(l.split()) for l in out.splitlines() if not l.startswith("lo ")))
+    # The local networks, so a firewall rule for the LAN is not guessed from one address
+    out, _ = run("ip", "-4", "-o", "address", "show", "scope", "global")
+    nets = []
+    for m in re.finditer(r"^\d+:\s+(\S+)\s+inet\s+(\S+)", out or "", re.M):
+        try:
+            nets.append(f"{m[1]} {ipaddress.ip_interface(m[2]).network}")
+        except ValueError:
+            pass
+    if nets:
+        lines.append("Local networks (IPv4): " + "; ".join(nets))
+    out, err = run("ss", "-tulnH")
+    if out is None:
+        missing.append("the open ports (" + err + ")")
+    else:
+        ports = sorted({f"{l.split()[0]} {l.split()[4].rsplit(':', 1)[-1]}" for l in out.splitlines() if len(l.split()) > 4},
+                       key=lambda p: (p.split()[0], int(p.split()[1]) if p.split()[1].isdigit() else 0))
+        lines.append("Listening here (any program): " + (", ".join(ports[:40]) if ports else "nothing"))
+    rules, cannot = firewall_rules()
+    lines += rules
+    missing += cannot
+    since = since_option(args.get("since"))
+    blocks, count, cannot = firewall_blocks(since)
+    missing += cannot
+    if blocks:
+        found += 1
+        lines.append(f"The firewall blocked {count} incoming packets {'since ' + str(args.get('since')) if since else 'since boot'} "
+                     "(multicast and broadcast are often harmless noise, but games find each other on a LAN with them):")
+        lines += blocks
+    elif rules or os.path.exists("/etc/ufw/ufw.conf"):
+        lines.append("The firewall blocked nothing " + ("since " + str(args.get("since")) if since else "since boot")
+                     + " (UFW logs what it blocks, unless its logging is off).")
+    return found, lines, missing
+
+
+def check_sound(args):
+    found, lines, missing = 0, [], []
+    out, _ = run("systemctl", "--user", "is-active", "pipewire", "pipewire-pulse", "wireplumber")
+    if out is not None:
+        states = dict(zip(("pipewire", "pipewire-pulse", "wireplumber"), out.split()))
+        down = [name for name, state in states.items() if state != "active"]
+        lines.append("Sound services: " + ", ".join(f"{n} {s}" for n, s in states.items()))
+        found += bool(down)
+    out, err = run("wpctl", "status")
+    if out is None:
+        missing.append("PipeWire's devices (" + err + ")")
+    else:
+        part = re.search(r"^Audio\n(.*?)(?=^\S)", out + "\nEnd\n", re.S | re.M)
+        audio = [re.sub(r"[│├└─]", " ", l).rstrip() for l in (part[1] if part else "").splitlines()]
+        audio = [re.sub(r"\s+", " ", l).strip() for l in audio if l.strip()]
+        lines.append("Audio (* = the default): " + " | ".join(audio[:40]))
+        if not re.search(r"Sinks:\s*\|?\s*\*", " | ".join(audio)) and "Sinks:" in " | ".join(audio):
+            found += 1
+            lines.append("No default output (sink).")
+        volume, _ = run("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
+        if volume:
+            lines.append("Default output: " + volume.strip())
+            if "MUTED" in volume or re.search(r"Volume: 0\.00", volume):
+                found += 1
+    log, partial = journal("--user", "-b", "-p", "warning", "-o", "short-iso", "-n", "20",
+                           "-u", "pipewire", "-u", "pipewire-pulse", "-u", "wireplumber")
+    if partial:
+        missing.append(partial)
+    if log:
+        found += 1
+        lines.append("Warnings and errors from the sound services since boot (newest last):")
+        lines += [f"- {l[11:]}" for l in log[-12:]]
+    else:
+        lines.append("No warnings or errors from the sound services since boot.")
+    return found, lines, missing
+
+
+def check_crashes(args):
+    found, lines, missing = 0, [], []
+    since = since_option(args.get("since")) or "-7d"
+    out, err = run("coredumpctl", "list", "--json=short", f"--since={since}", "-q")
+    program = str(args.get("program") or "").strip().lower()
+    if out is None:
+        missing.append("the crashes (" + err + ")")
+        return found, lines, missing
+    try:
+        dumps = json.loads(out) if out.strip() else []
+    except json.JSONDecodeError:
+        dumps = []
+    if program:
+        dumps = [d for d in dumps if program in os.path.basename(str(d.get("exe", ""))).lower()]
+    signals = {6: "SIGABRT", 11: "SIGSEGV", 4: "SIGILL", 7: "SIGBUS", 8: "SIGFPE", 5: "SIGTRAP", 3: "SIGQUIT"}
+    by_program = {}
+    for d in dumps:
+        name = os.path.basename(str(d.get("exe", "?")))
+        p = by_program.setdefault(name, {"count": 0, "last": 0, "sig": d.get("sig"), "pid": d.get("pid")})
+        p["count"] += 1
+        if d.get("time", 0) >= p["last"]:
+            p.update(last=d.get("time", 0), sig=d.get("sig"), pid=d.get("pid"))
+    when = "in the last 7 days" if since == "-7d" else f"since {args.get('since')}"
+    if not by_program:
+        lines.append(f"No crashes{' of ' + program if program else ''} {when} (coredumpctl).")
+        return found, lines, missing
+    found += 1
+    lines.append(f"Crashes {when}, newest first:")
+    for name, p in sorted(by_program.items(), key=lambda kv: -kv[1]["last"])[:15]:
+        at = time.strftime("%Y-%m-%d %H:%M", time.localtime(p["last"] / 1e6)) if p["last"] else "?"
+        lines.append(f"- {name}: {p['count']}x, last {at} ({signals.get(p['sig'], 'signal ' + str(p['sig']))})")
+    if program:
+        newest = max(by_program.values(), key=lambda p: p["last"])
+        info, _ = run("coredumpctl", "info", str(newest["pid"]), "--no-pager", timeout=15)
+        trace = re.search(r"Stack trace of thread.*?\n((?:\s+#\d+.*\n?){1,12})", info or "")
+        if trace:
+            lines.append("Where the newest one crashed (stack trace, innermost first):")
+            lines += [" " + masked(" ".join(l.split())) for l in trace[1].splitlines()]
+        else:
+            lines.append("No stack trace was saved for it.")
+    return found, lines, missing
+
+
+def check_services(args):
+    found, lines, missing = 0, [], []
+    for scope in ([], ["--user"]):
+        out, err = run("systemctl", *scope, "--failed", "--no-legend", "--plain")
+        name = "user" if scope else "system"
+        if out is None:
+            missing.append(f"the failed {name} services ({err})")
+            continue
+        failed = [l.split()[0] for l in out.splitlines() if l.strip()]
+        found += bool(failed)
+        lines.append(f"Failed {name} services: " + (", ".join(failed) if failed else "none"))
+    since = since_option(args.get("since"))
+    log, partial = journal("-p", "err", "-o", "json", "-n", "400", *(["--since", since] if since else ["-b"]))
+    if partial:
+        missing.append(partial)
+    errors = {}
+    for line in log:
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        who = e.get("SYSLOG_IDENTIFIER") or e.get("_COMM") or "?"
+        message = e.get("MESSAGE")
+        message = message if isinstance(message, str) else "(binary)"
+        g = errors.setdefault(who, {"count": 0, "last": ""})
+        g["count"] += 1
+        g["last"] = masked(" ".join(message.split()))[:200]
+    if errors:
+        found += 1
+        lines.append(f"Errors in the log {'since ' + str(args.get('since')) if since else 'since boot'}, by program "
+                     "(the most first, with its newest message):")
+        lines += [f"- {who} {g['count']}x: {g['last']}" for who, g in sorted(errors.items(), key=lambda kv: -kv[1]["count"])[:12]]
+    else:
+        lines.append("No errors in the log " + ("since " + str(args.get("since")) if since else "since boot") + ".")
+    return found, lines, missing
+
+
+def sure(found):
+    """Tells the bubble whether the tool found something to go on"""
+    print("mascot-found" if found else "mascot-unsure", file=sys.stderr)
+
+
+def check_system(args):
+    if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
+        raise ToolError("the system can only be checked with a local model")
+    area = str(args.get("area") or "").strip().lower()
+    if area not in SYSTEM_AREAS:
+        raise ToolError("area must be one of " + ", ".join(SYSTEM_AREAS))
+    found, lines, missing = {"network": check_network, "sound": check_sound, "crashes": check_crashes,
+                             "services": check_services}[area](args)
+    sure(found)
+    result = [f"What the system says about {area} (read without sudo):"] + lines
+    if missing:
+        result.append("Could not see: " + "; ".join(missing) + ".")
+    if not found:
+        result.append(f"Nothing here points to a problem with {area}. Say so, and that you cannot tell the cause "
+                      "from this; do not guess one.")
+    return "\n".join(result)[:read_limit()]
+
+
+def read_log(args):
+    """The newest lines of the system's log (journalctl), filtered"""
+    if not os.environ.get("MASCOT_TOOLS_LOCAL") == "1":
+        raise ToolError("the system's log can only be read with a local model")
+    search = str(args.get("search") or "").strip()
+    unit = str(args.get("unit") or "").strip()
+    if unit and not re.match(r"^[\w@.:-]+$", unit):
+        raise ToolError(f"\"{unit}\" is not a service name")
+    since = since_option(args.get("since"))
+    base = ["-o", "short-iso", "-n", str(LOG_LINES)] + (["--since", since] if since else ["-b"])
+    if args.get("kernel"):
+        base.append("-k")
+    if search:
+        base += ["--grep", search, "--case-sensitive=false"]
+    log, partial = journal(*base, *(["-u", unit] if unit else []))
+    if unit and not log:  # maybe the user's own service
+        log, partial = journal("--user", *base, "-u", unit)
+    sure(log)
+    what = " ".join(filter(None, [f"of {unit}" if unit else "", "from the kernel" if args.get("kernel") else "",
+                                  f"with \"{search}\"" if search else ""]))
+    when = f"since {args.get('since')}" if since else "since boot"
+    if not log:
+        return (f"No lines in the log {what} {when}." + (f" Could not see: {partial}." if partial else "")
+                + " Say so; do not guess what happened.").replace("  ", " ")
+    limit = read_limit() // 2
+    shown, size = [], 0
+    for line in reversed(log):
+        size += len(line) + 1
+        if size > limit:
+            break
+        shown.append(line)
+    lines = [f"The newest {len(shown)} lines of the log {what} {when}, oldest first:".replace("  ", " ")]
+    lines += reversed(shown)
+    if partial:
+        lines.append(f"Could not see: {partial}.")
+    return "\n".join(lines)
+
+
 TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, search_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
-                                 set_reminder, list_reminders, cancel_reminder, due_reminders, last_commands, sleep_mode, context_size)}
+                                 set_reminder, list_reminders, cancel_reminder, due_reminders, last_commands, sleep_mode, context_size,
+                                 check_system, read_log)}
 
 
 def main():
