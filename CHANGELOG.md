@@ -3,7 +3,9 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.3.0 (2026-10-24)
+
+The mascot can troubleshoot your computer, Mascot installs on Debian 13, and a handful of fixes.
 
 - **Troubleshooting:** a new tool group, `system` in `CHAT_TOOLS` (local models only): ask the mascot why
   something does not work - the network or a game's LAN, sound, a program that crashes, a service - and it
