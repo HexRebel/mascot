@@ -3,6 +3,18 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- **Debian 13:** how to install on Debian in the README's Getting started (Quickshell from `trixie-backports`,
+  aichat from its releases), tested in a clean Debian 13 container; the Debian package names under
+  Requirements are corrected.
+- Reminders work with Quickshell 0.3.0 (Debian's): the bubble could not hand the reminder tool its
+  environment there, so the tool refused to run and reminders never showed.
+- The memory's summary no longer carries the model's reasoning (`<think>`) into the new conversation, where
+  gemma4 answered it with raw template tokens.
+- The bubble no longer counts the model's reasoning towards the memory limit (aichat never sends it to the
+  model again), so it sums up later.
+
 ## 0.2.0 (2026-10-23)
 
 Robo's own personality, and a smoother start for someone new to Mascot.

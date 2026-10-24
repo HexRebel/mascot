@@ -52,6 +52,23 @@ make -j$(nproc)
 make PREFIX=$HOME/.local install    # then ~/.local/bin must be in your PATH
 ```
 
+On **Debian 13 (trixie)**, Quickshell comes from `trixie-backports` and aichat from its GitHub releases (it is not
+packaged in Debian):
+
+```sh
+echo "deb http://deb.debian.org/debian trixie-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
+sudo apt update
+sudo apt install build-essential pkg-config git curl libwayland-dev libwayland-bin wayland-protocols \
+    libarchive-dev uthash-dev python3 python3-pil
+sudo apt install -t trixie-backports quickshell
+curl -LO https://github.com/sigoden/aichat/releases/download/v0.30.0/aichat-v0.30.0-x86_64-unknown-linux-musl.tar.gz
+tar xzf aichat-v0.30.0-x86_64-unknown-linux-musl.tar.gz
+mkdir -p ~/.local/bin && install -m755 aichat ~/.local/bin/
+```
+
+then clone and build as above. Debian adds `~/.local/bin` to your PATH at login once it exists, so log out and in
+again after the first install.
+
 **2. Give it a language model to talk with.** The chat bubble talks through
 [aichat](https://github.com/sigoden/aichat), which needs a model in its config,
 `~/.config/aichat/config.yaml`. If you already use aichat, skip this. Otherwise pick one:
@@ -59,7 +76,7 @@ make PREFIX=$HOME/.local install    # then ~/.local/bin must be in your PATH
 - **Free and local, with Ollama** (runs on your own computer; a graphics card helps):
 
   ```sh
-  sudo pacman -S ollama            # or ollama-rocm (AMD) / ollama-cuda (NVIDIA)
+  sudo pacman -S ollama            # or ollama-rocm (AMD) / ollama-cuda (NVIDIA); elsewhere see ollama.com/download
   sudo systemctl enable --now ollama
   ollama pull llama3.2             # about 2 GB
   ```
@@ -117,7 +134,7 @@ Mascot also ships with the original Shimeji; `mascot import <shimeji-ee pack.zip
   - Fedora: `dnf install libwayland-client wayland-devel`
 - wayland-protocols:
   - Arch: `pacman -S wayland-protocols`
-  - Debian: ??? You can manually clone wayland-protocols and then specify it path by setting WAYLAND_PROTOCOLS_DIR to wayland-protocols' absolute path
+  - Debian: `apt-get install wayland-protocols` (or clone wayland-protocols and set WAYLAND_PROTOCOLS_DIR to its absolute path)
   - Fedora: `dnf install wayland-protocols-devel`
 - libarchive:
   - Arch: `pacman -S libarchive`
@@ -125,7 +142,7 @@ Mascot also ships with the original Shimeji; `mascot import <shimeji-ee pack.zip
   - Fedora: `dnf install libarchive-devel`
 - uthash:
   - Arch: `pacman -S uthash`
-  - Debian: `apt-get install libuthash-dev`
+  - Debian: `apt-get install uthash-dev`
   - Fedora: `dnf install uthash-devel`
 
 ## Runtime requirements
@@ -136,6 +153,7 @@ Your compositor should *at least* support xdg-shell, wlr-layer-shell protocols, 
 
 - python-pillow
   - Arch: `pacman -S python-pillow`
+  - Debian: `apt-get install python3-pil`
   - Fedora: `dnf install python3-pillow`
 - python >= 3.10
 
