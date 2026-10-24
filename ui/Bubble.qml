@@ -45,8 +45,30 @@ PanelWindow {
     // "Todo" behavior for the todo list), see doingOf(); "" when the answer starts
     signal toolUsed(int mascot, string tool)
     readonly property string toolPose: talking ? (current?.toolKind ?? "") : ""
-    onToolPoseChanged: if (bubble.event)
-        bubble.toolUsed(bubble.event.mascot, bubble.toolPose)
+    property string shownPose: ""
+    onToolPoseChanged: {
+        if (!bubble.event)
+            return;
+        // A short answer would end the "?" (Unsure) at once: it stays a few seconds,
+        // set again after the daemon has sat the mascot down for the end of the answer
+        if (bubble.shownPose === "unsure" && !bubble.toolPose && !bubble.talking) {
+            const mascot = bubble.event.mascot;
+            Qt.callLater(() => bubble.toolUsed(mascot, "unsure"));
+            unsureTimer.restart();
+        } else {
+            unsureTimer.stop();
+            bubble.toolUsed(bubble.event.mascot, bubble.toolPose);
+        }
+        bubble.shownPose = bubble.toolPose;
+    }
+
+    Timer {
+        id: unsureTimer
+
+        interval: 5000
+        onTriggered: if (bubble.event)
+            bubble.toolUsed(bubble.event.mascot, bubble.toolPose)
+    }
 
     // Each mascot keeps its own conversation until the bubble quits (with the
     // daemon), by mascot id, and a reply keeps streaming into it while the
@@ -822,7 +844,11 @@ PanelWindow {
                     + "only on what they show: say what you found, and when they found nothing that explains it, or "
                     + "could not see something, say so plainly instead of guessing. You cannot change anything: give "
                     + "the exact command that fixes it (with sudo when it needs it), and never say you ran it." : "";
-                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${offer}${files}${todo}${remind}${shell}${sleep}${system}`), env);
+                // A role does not get CHAT_LANGUAGE's note (see roleFlags()), and after
+                // the tools' English a model drifts (gemma4: from Danish to Norwegian)
+                const language = bubble.event?.language ? `\n\nThe tools answer in English, but you answer in `
+                    + `${bubble.event.language} unless the user writes in another language.` : "";
+                done(model.concat(`--prompt=---\n${front.join("\n")}\n---\n${prompt}${offer}${files}${todo}${remind}${shell}${sleep}${system}${language}`), env);
             };
             if (!tools.some(t => bubble.localTools.includes(t)) || (c.session && bubble.sessionKinds[c.session] !== "private")) {
                 send("");

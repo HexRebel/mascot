@@ -12,6 +12,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   it instead of running it; it is told to say it does not know rather than guess. Robo opens its chest
   while it checks (`System`), and shows a "?" (`Unsure`, a new image) when it found nothing to go on.
 - The mascot now offers its tools when one could help, instead of waiting for you to know them.
+- With tools, the mascot is told to answer in `CHAT_LANGUAGE` after the tools' English, also with a role of its
+  own (gemma4 drifted from Danish to Norwegian), and the "?" stays a few seconds after a short answer.
 - **Debian 13:** how to install on Debian in the README's Getting started (Quickshell from `trixie-backports`,
   aichat from its releases), tested in a clean Debian 13 container; the Debian package names under
   Requirements are corrected.
