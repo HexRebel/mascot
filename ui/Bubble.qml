@@ -1030,11 +1030,14 @@ PanelWindow {
         run(base.concat("-s", c.memory, "--", "(Not from the user: sum up our conversation so far in a few short "
             + "sentences, for your own memory - names, facts, what we talked about and how. Write only the "
             + "summary, in the language of the conversation.)"), false, "", (summary, ok) => {
+            // Without the model's reasoning: in a user message it is not hidden,
+            // and gemma4 then answers with its raw template tokens
+            summary = answerOf(summary);
             // Failed: carry on in the long memory rather than lose it
-            if (ok && summary.trim()) {
+            if (ok && summary) {
                 c.memory = `chat-${++bubble.memoryCount}`;
                 c.memoryChars = 0;
-                text = `(What we talked about before, summed up: ${summary.trim()})\n\n${text}`;
+                text = `(What we talked about before, summed up: ${summary})\n\n${text}`;
             }
             post(text);
         }, c, command, toolEnvironment([], ""));
