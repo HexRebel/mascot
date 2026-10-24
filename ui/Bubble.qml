@@ -340,7 +340,10 @@ PanelWindow {
                 alarmTimer.restart();
         }
         bubble.shownUntil = Math.max(bubble.shownUntil, ...due.map(r => r.at));
-        dueJob.command = [`${bubble.toolsDir}/bin/due_reminders`, JSON.stringify({ until: bubble.shownUntil / 1000 })];
+        // Through env, not the Process's environment: Quickshell 0.3.0 (Debian 13)
+        // cannot bind an object to it, and the tool would refuse to run
+        dueJob.command = ["env", "MASCOT_TOOLS_LOCAL=1", `MASCOT_REMINDER_FILE=${bubble.reminderFile}`,
+            `${bubble.toolsDir}/bin/due_reminders`, JSON.stringify({ until: bubble.shownUntil / 1000 })];
         dueJob.running = true;
     }
 
@@ -366,7 +369,6 @@ PanelWindow {
     Process {
         id: dueJob
 
-        environment: ({ MASCOT_TOOLS_LOCAL: "1", MASCOT_REMINDER_FILE: bubble.reminderFile })
         onExited: reminderView.reload()
     }
 
