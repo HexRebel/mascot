@@ -1608,8 +1608,10 @@ PanelWindow {
                         c.error = bubble.explained(job.errors.trim()) || `The command failed (exit ${exitCode})`;
                     if (exitCode === 0 && c.replying && c.model)
                         bubble.rememberModel(c.model);
+                    // Without the reasoning: aichat keeps it in the session file,
+                    // but never sends it to the model again
                     if (c.replying && c.streaming >= 0 && c.streaming < c.entries.count)
-                        c.memoryChars += c.entries.get(c.streaming).body.length;
+                        c.memoryChars += bubble.answerOf(c.entries.get(c.streaming).body).length;
                     if (c.replying)
                         bubble.answered(c);
                     // What Mascot's tools really changed (they say so on stderr),
