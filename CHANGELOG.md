@@ -9,6 +9,10 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   a restart after an update. `mascot --version` shows the installed one's.
 - A dot command's output (`.info`, `.help all`, `.todo` ...) is read from the top: the bubble no longer scrolls
   past the command's line. Answers still follow the bottom.
+- Robo no longer pulls himself up now and then (a jump aside, a fall and a dizzy landing while he walks): 0.4.0
+  meant to switch it off, but mascotd picks by the frequency in the list that names a behaviour.
+- A mascot waiting with an answer (NEW) still waits after it is dragged: it is held again when it lands.
+- Quiet switches off a mascot that is already asleep, too.
 
 ## 0.4.0 (2026-10-25)
 

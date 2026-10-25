@@ -873,7 +873,8 @@ static bool chat_sleep_all(bool sleep, bool only_new)
             struct mascot* mascot = list_get(mascots, j);
             if (!mascot) continue;
             if (mascot->id > newest_mascot_id) newest_mascot_id = mascot->id;
-            if ((!only_new || mascot->id > newest) && mascot->asleep != sleep) {
+            // Quiet (asleep for a while) also asks the sleeping ones: they switch off
+            if ((!only_new || mascot->id > newest) && (mascot->asleep != sleep || (sleep && sleep_until))) {
                 ids[count++] = mascot->id;
                 any_asleep |= sleep;
             } else {

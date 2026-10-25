@@ -1041,10 +1041,18 @@ bool mascot_sleep(struct mascot *mascot, bool asleep, bool quiet) {
                                       "SitDown"};
 
   pthread_mutex_lock(&mascot->tick_lock);
-  if (mascot->asleep == asleep) {
+  // Asleep already, Quiet still switches it off (but a plain sleep, e.g.
+  // hypridle's, leaves a quiet one quiet)
+  const struct mascot_behavior *off =
+      asleep && quiet && mascot->asleep
+          ? mascot_prototype_behavior_by_name(mascot->prototype, "Quiet")
+          : NULL;
+  if (mascot->asleep == asleep && (!off || mascot->sleep_behavior == off)) {
     pthread_mutex_unlock(&mascot->tick_lock);
     return false;
   }
+  if (off)
+    mascot->sleep_behavior = NULL;
   mascot->asleep = asleep;
 
   if (!asleep) {
