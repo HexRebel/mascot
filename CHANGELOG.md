@@ -14,7 +14,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - A mascot waiting with an answer (NEW) still waits after it is dragged: it is held again when it lands.
 - Quiet switches off a mascot that is already asleep, too.
 - Robo no longer laughs and shakes now and then on the floor (the image is gone).
-- Robo waves, puts on sunglasses and gets heart eyes now and then (three new images).
+- Robo waves, puts on sunglasses, gets heart eyes, wonders and looks through binoculars now and then (five new
+  images), and meditates for longer.
 - **Power:** a new area for `check_system` (in `system`): how the CPU is set to run, its governor, energy
   preference, speed and boost, and the power profile (platform_profile, power-profiles-daemon, tuned) and battery,
   read from `/sys`. Ask "which governor is my CPU on?". Robo holds up a magnifying glass while it checks, and shows

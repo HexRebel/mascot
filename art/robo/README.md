@@ -23,8 +23,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `full.png` | 3×3, the first sheet before its legs were taken off; used: row 3 column 3, waving (96) |
 | `experimental4.png` | 3×3; used: row 2 column 1, glowing heart eyes (98) |
 | `experimental11.png` | 3×3; used: row 2 column 3, sunglasses (97) |
-| `experimental12.png` | 3×3; used: row 2 column 1, a magnifying glass (99, `Power`) |
-| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime100.png` (128×128, base at (64, 128)) and `preview.png` |
+| `experimental12.png` | 3×3; used: row 2 column 1, a magnifying glass (99, `Power`); row 1 column 1, wondering (101); row 2 column 3, binoculars (102) |
+| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime102.png` (128×128, base at (64, 128)) and `preview.png` |
 | `scripts/chest.py` | Swaps the square on its chest for a speech bubble (or the Arch logo, for your own copy only: it is Arch Linux's trademark) |
 | `scripts/measure.py` | Checks that Robo is the same size in every frame (by its visor); run it after adding images |
 | `scripts/cutout.py` | `robo.png` → `robo-cutout.png` |
@@ -46,7 +46,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   (`Snooze`). An answer waiting to be read: **NEW** on its visor (`NewMessage`). Clicked quickly many times:
   it holds up an **Easter egg** (`EasterEgg`).
 - Now and then on the floor: a hologram cube, tinkering, its notepad, opening its chest,
-  giggling, winking, meditating, waving, sunglasses, heart eyes. Drawn but not used yet (they need events of their own): singing
+  giggling, winking, meditating (longer than the others), waving, sunglasses, heart eyes, wondering, looking through
+  binoculars. Drawn but not used yet (they need events of their own): singing
   (while music plays), nervous,
   cheering, grumpy, heart eyes, shrugging, sweating, worried with a drop of sweat, a tear, the magnifying
   glass (kept for something else).
