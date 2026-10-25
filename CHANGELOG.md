@@ -13,6 +13,7 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   meant to switch it off, but mascotd picks by the frequency in the list that names a behaviour.
 - A mascot waiting with an answer (NEW) still waits after it is dragged: it is held again when it lands.
 - Quiet switches off a mascot that is already asleep, too.
+- Robo no longer laughs and shakes now and then on the floor (the image is gone).
 
 ## 0.4.0 (2026-10-25)
 

@@ -40,10 +40,13 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks
   (`Snooze`). An answer waiting to be read: **NEW** on its visor (`NewMessage`).
 - Now and then on the floor: a hologram cube, tinkering, its notepad, opening its chest,
-  giggling, winking, laughing, meditating. Drawn but not used yet (they need events of their own): singing
+  giggling, winking, meditating. Drawn but not used yet (they need events of their own): singing
   (while music plays), nervous,
   cheering, grumpy, heart eyes, shrugging, sweating, worried with a drop of sweat, a tear, the magnifying
   glass (kept for something else).
+- **Never used** (the user's choice): laughing and shaking (`experimental5.png` row 1 column 3, frame 82 until
+  0.4.0), the two with legs (`experimental7.png` row 3 column 2, heart eyes sitting; `experimental8.png` row 2
+  column 2, meditating cross-legged) and standing on a plate (`experimental.png` row 3 column 2).
 
 ## Building it
 

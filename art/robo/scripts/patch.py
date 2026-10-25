@@ -1,5 +1,5 @@
 """Adds Chatter (talk: thinking), Snooze (sleep) and NewMessage (answered) to a converted Robo .wlshm,
-eight things it does now and then on the floor (Hologram, Tinker, Notepad, OpenChest, Giggle, Wink, Laugh,
+seven things it does now and then on the floor (Hologram, Tinker, Notepad, OpenChest, Giggle, Wink,
 Meditate), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System,
 Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed) and Alarm
 (a reminder that is due),
@@ -67,8 +67,7 @@ for a in actions:
         for f in a["content"][0]["frames"]:
             f["duration"] = {"shime18.qoi": 13, "shime19.qoi": 25}.get(f["image"], f["duration"])
 # Things it does now and then on the floor
-FUN = {"Hologram": 64, "Tinker": 65, "Notepad": 66, "OpenChest": 67, "Giggle": 74, "Wink": 81, "Laugh": 82,
-       "Meditate": 72}
+FUN = {"Hologram": 64, "Tinker": 65, "Notepad": 66, "OpenChest": 67, "Giggle": 74, "Wink": 81, "Meditate": 72}
 # Singing (73) only while music plays: experimental, not yet (Mascot has to see that music plays, MPRIS)
 # Poses only for a tool
 POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94}  # the magnifying glass (78): kept for later

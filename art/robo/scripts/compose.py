@@ -240,7 +240,9 @@ def cells_of(name, wanted, top=(), grid=3, left=None):
     return out
 
 
-five = cells_of("experimental5.png", [(0, 0), (0, 2), (1, 0), (1, 1), (2, 1), (2, 2)], top=[(0, 0)])
+# Never used (the user's choice, 25 Oct): experimental5 row 1 column 3 (laughing, shaking; was 82), experimental7
+# row 3 column 2 and experimental8 row 2 column 2 (it has legs), experimental row 3 column 2 (standing on a plate)
+five = cells_of("experimental5.png", [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)], top=[(0, 0)])
 six = cells_of("experimental6.png", [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1)])
 seven = cells_of("experimental7.png", [(2, 0)])
 eight = cells_of("experimental8.png", [(1, 2), (2, 0), (2, 2)], left={(2, 2): 0.06})  # confetti
@@ -292,7 +294,6 @@ frames = {
     79: stand(0, im=five[0, 0]),  # thinking, a light bulb in a bubble (Chatter)
     80: stand(0, im=five[2, 2]),  # saluting: a reminder
     81: stand(0, im=five[2, 1]),  # winking
-    82: stand(0, im=five[0, 2]),  # laughing, shaking
     83: stand(0, im=six[1, 0]),   # heart eyes (not used yet: a compliment)
     84: stand(0, im=six[1, 1]),   # shrugging (not used yet: an answer that failed, or it does not know)
     85: stand(0, im=six[2, 1]),   # sweating (not used yet)
