@@ -22,6 +22,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   "100% FULL POWER" when the governor or the profile is on performance (two new images).
 - Thank Robo or praise him ("thanks!", "well done", "tusind tak ❤") and he gets heart eyes (`Love`). Only when
   the message is nothing but that, in the common languages: "thanks, but that was wrong" does not.
+- A reminder says the time it was for (*⏰ 20:15 · timer, 10 min*), and the model no longer writes "the timer is
+  going off now" into it.
 - An easter egg: click Robo quickly many times. Other figures can have one too (`EasterEgg`).
 
 ## 0.4.0 (2026-10-25)

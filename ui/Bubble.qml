@@ -377,9 +377,11 @@ PanelWindow {
     function showReminders(due: var, c: QtObject): void {
         const now = Date.now();
         for (const r of due) {
-            // Late (Mascot was not running): say when it was for
-            const late = now - r.at > 60000 ? ` (was for ${Qt.formatDateTime(new Date(r.at), "ddd dd.MM HH:mm")})` : "";
-            c.entries.append({ kind: "reminder", body: `⏰ ${r.text}${late}` });
+            // When it was for, so "now" is never wrong; the day too when it is late
+            // (Mascot was not running then)
+            const late = now - r.at > 60000 && new Date(r.at).toDateString() !== new Date(now).toDateString();
+            const when = Qt.formatDateTime(new Date(r.at), late ? "ddd dd.MM HH:mm" : "HH:mm");
+            c.entries.append({ kind: "reminder", body: `⏰ ${when} · ${r.text}` });
         }
         // The mascot shows it is time (its "Alarm" behavior): until the bubble that
         // opened for it closes, or for a few seconds in a conversation

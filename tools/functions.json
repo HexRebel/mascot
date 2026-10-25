@@ -166,7 +166,7 @@
         },
         "text": {
           "type": "string",
-          "description": "What to remind of, short, in the user's words and language, e.g. \"water the flowers\"; for a plain timer say so, e.g. \"timer, 10 min\" (in their language)."
+          "description": "What to remind of, short, in the user's words and language, e.g. \"water the flowers\"; for a plain timer say so, e.g. \"timer, 10 min\" (in their language). Only what it is, never when: the bubble shows the time itself, so no \"now\" or \"the timer is going off\"."
         }
       },
       "required": [

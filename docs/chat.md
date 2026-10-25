@@ -192,9 +192,9 @@ mascot looked the todo list up, or drew a tree of a directory, and the reply lea
 shows it under the reply.
 
 Reminders are kept in `reminders.md` in the data directory, one `- 2026-10-19 12:00 text` line each
-(your local time). When one is due, a mascot says it (*⏰ text*): in the open bubble, or else the
+(your local time). When one is due, a mascot says it with the time it was for (*⏰ 12:00 · text*): in the open bubble, or else the
 bubble opens at a mascot without taking the keyboard and stays until you close it or click it. One
-that fell due while Mascot was not running is shown when it starts, with the time it was for. A
+that fell due while Mascot was not running is shown when it starts (with the day, when it was another). A
 shown reminder is taken off the file. `.remind` understands a duration (`10m`, `1h30m`, `2 hours`,
 `45s`; a bare number is minutes), a time of day (`12:00`, today or else tomorrow), `tomorrow 9:00`,
 or a date and time (`2026-10-19 12:00`, `19.10.26 12:00`). `.remind` works without the tool and with any
