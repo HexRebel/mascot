@@ -3,8 +3,22 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.5.0 (2026-10-25)
 
+The mascot can tell how the CPU is set to run, Robo gets heart eyes when you thank him, five new things to do on
+the floor and an easter egg, and a few fixes (the jump while walking is really gone now).
+
+- **Power:** a new area for `check_system` (in `system`): how the CPU is set to run, its governor, energy
+  preference, speed and boost, and the power profile (platform_profile, power-profiles-daemon, tuned) and battery,
+  read from `/sys`. Ask "which governor is my CPU on?". Robo holds up a magnifying glass while it checks, and shows
+  "100% FULL POWER" when the governor or the profile is on performance (two new images).
+- Thank Robo or praise him ("thanks!", "well done", "tusind tak ❤") and he gets heart eyes (`Love`). Only when
+  the message is nothing but that, in the common languages: "thanks, but that was wrong" does not.
+- An easter egg: click Robo quickly many times. Other figures can have one too (`EasterEgg`).
+- Robo waves, puts on sunglasses, gets heart eyes, wonders and looks through binoculars now and then (five new
+  images), and meditates for longer.
+- A reminder says the time it was for (*⏰ 20:15 · timer, 10 min*), and the model no longer writes "the timer is
+  going off now" into it.
 - `.info` (and the menu's Info) starts with Mascot's version: the running one's, so it shows when Mascot wants
   a restart after an update. `mascot --version` shows the installed one's.
 - A dot command's output (`.info`, `.help all`, `.todo` ...) is read from the top: the bubble no longer scrolls
@@ -14,17 +28,6 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - A mascot waiting with an answer (NEW) still waits after it is dragged: it is held again when it lands.
 - Quiet switches off a mascot that is already asleep, too.
 - Robo no longer laughs and shakes now and then on the floor (the image is gone).
-- Robo waves, puts on sunglasses, gets heart eyes, wonders and looks through binoculars now and then (five new
-  images), and meditates for longer.
-- **Power:** a new area for `check_system` (in `system`): how the CPU is set to run, its governor, energy
-  preference, speed and boost, and the power profile (platform_profile, power-profiles-daemon, tuned) and battery,
-  read from `/sys`. Ask "which governor is my CPU on?". Robo holds up a magnifying glass while it checks, and shows
-  "100% FULL POWER" when the governor or the profile is on performance (two new images).
-- Thank Robo or praise him ("thanks!", "well done", "tusind tak ❤") and he gets heart eyes (`Love`). Only when
-  the message is nothing but that, in the common languages: "thanks, but that was wrong" does not.
-- A reminder says the time it was for (*⏰ 20:15 · timer, 10 min*), and the model no longer writes "the timer is
-  going off now" into it.
-- An easter egg: click Robo quickly many times. Other figures can have one too (`EasterEgg`).
 
 ## 0.4.0 (2026-10-25)
 
