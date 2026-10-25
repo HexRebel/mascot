@@ -6,8 +6,8 @@ Cells: 1 glide (drawn facing right) · 2 dangle left · 3 dangle right · 4 fall
 Next to it: robo-cutout.png (looking straight ahead) and experimental.png (3x3; row 2: hologram,
 thinking, tinkering; row 3: notepad, -, opening its chest) and experimental3.png (3x3: pondering, nervous,
 cheering; grumpy, gears, singing; giggling, globe, meditating), and a few of experimental5.png and
-experimental6.png, the "?" of experimental7.png, a few of experimental8.png and experimental9.png (4x4) and the Easter egg of
-experimental10.png
+experimental6.png, the "?" of experimental7.png, a few of experimental8.png and experimental9.png (4x4), the Easter egg of
+experimental10.png and one each of full.png, experimental11.png and experimental4.png
 """
 import os
 import sys
@@ -249,6 +249,10 @@ seven = cells_of("experimental7.png", [(2, 0)])
 eight = cells_of("experimental8.png", [(1, 2), (2, 0), (2, 2)], left={(2, 2): 0.06})  # confetti
 nine = cells_of("experimental9.png", [(3, 2)], grid=4)
 ten = cells_of("experimental10.png", [(0, 0)])
+# Three more things it does on the floor (the user's choice, 25 Oct)
+waving = cells_of("full.png", [(2, 2)])
+eleven = cells_of("experimental11.png", [(1, 2)])
+four = cells_of("experimental4.png", [(1, 0)])
 eight[2, 2] = resized(unpinked(eight[2, 2]), 0.87)  # the graph on its visor: measured by its height (100 px, like 60)
 still = stand(0, im=hanging)  # front.png: standing still and sitting
 frames = {
@@ -308,6 +312,9 @@ frames = {
     93: stand(0, im=eight[1, 2]), # worried, a drop of sweat (not used yet: kept for something else)
     94: stand(0, im=nine[3, 2]),  # "ERROR" on its visor, a tear: an answer failed (Failed)
     95: stand(0, im=ten[0, 0]),   # holding an Easter egg: tapped quickly many times (EasterEgg)
+    96: stand(0, im=waving[2, 2]),  # waving, eyes smiling
+    97: stand(0, im=eleven[1, 2]),  # sunglasses
+    98: stand(0, im=four[1, 0]),    # heart eyes, glowing
     90: dangle(0, im=hanging),    # held up and still: hanging straight down (Pinched, Resisting)
 }
 for n in (12, 13, 14, 23, 24, 25, 38, 39, 40, 41, 42, 43, 44, 45, 46, 49, 50, 51, 52, 53, 54, 55):

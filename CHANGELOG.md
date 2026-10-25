@@ -14,6 +14,7 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - A mascot waiting with an answer (NEW) still waits after it is dragged: it is held again when it lands.
 - Quiet switches off a mascot that is already asleep, too.
 - Robo no longer laughs and shakes now and then on the floor (the image is gone).
+- Robo waves, puts on sunglasses and gets heart eyes now and then (three new images).
 - An easter egg: click Robo quickly many times. Other figures can have one too (`EasterEgg`).
 
 ## 0.4.0 (2026-10-25)
