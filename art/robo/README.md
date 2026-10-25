@@ -19,7 +19,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `experimental7.png` | 3×3; used: row 3 column 1, a "?" on its visor, hand on its chin (89, `Unsure`) |
 | `experimental8.png` | 3×3; used: row 3 column 1, laughing with its eyes shut tight, "><" (91, `Done`); row 3 column 3, a magnifying glass over a graph (92, `Machine`); row 2 column 3, worried and sweating (93, not used yet) |
 | `experimental9.png` | 4×4; used: row 4 column 3, "ERROR" on its visor and a tear (94, `Failed`) |
-| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime94.png` (128×128, base at (64, 128)) and `preview.png` |
+| `experimental10.png` | 3×3; used: row 1 column 1, holding an Easter egg (95, `EasterEgg`) |
+| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime95.png` (128×128, base at (64, 128)) and `preview.png` |
 | `scripts/chest.py` | Swaps the square on its chest for a speech bubble (or the Arch logo, for your own copy only: it is Arch Linux's trademark) |
 | `scripts/measure.py` | Checks that Robo is the same size in every frame (by its visor); run it after adding images |
 | `scripts/cutout.py` | `robo.png` → `robo-cutout.png` |
@@ -38,7 +39,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
   **laughing**, eyes shut tight (`Done`). An answer that failed: **"ERROR"** and a tear (`Failed`). A reminder
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks
-  (`Snooze`). An answer waiting to be read: **NEW** on its visor (`NewMessage`).
+  (`Snooze`). An answer waiting to be read: **NEW** on its visor (`NewMessage`). Clicked quickly many times:
+  it holds up an **Easter egg** (`EasterEgg`).
 - Now and then on the floor: a hologram cube, tinkering, its notepad, opening its chest,
   giggling, winking, meditating. Drawn but not used yet (they need events of their own): singing
   (while music plays), nervous,

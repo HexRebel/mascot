@@ -881,6 +881,13 @@ held; a client showing a conversation for it will usually hide it, and close it 
 ended. A window that unmaps while the button is still down makes Hyprland send the daemon a
 false release (the drag ends at once), so close windows here rather than on `dragged`.
 
+### egg
+
+`{"event":"egg","mascot":N}`: mascot N was tapped quickly many times (6 within 3 seconds) and plays
+its `EasterEgg` behaviour instead of that tap. It is no longer held: close the bubble at it. Only sent
+when the prototype has an `EasterEgg` behaviour and the mascot is on the floor; otherwise that tap is
+a `tap` like the others. While it plays, taps on that mascot send nothing (they would end it).
+
 ### prototypes
 
 `{"event":"prototypes","names":["Shimeji","Example"]}`: answer to `list`, sent only to the

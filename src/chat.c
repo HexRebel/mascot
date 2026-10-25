@@ -575,8 +575,42 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
     return delivered;
 }
 
+// Tapped EGG_TAPS times within EGG_SECONDS: its easter egg instead of the tap
+#define EGG_TAPS 6 // the bubble takes the pointer for a moment as it opens: one tap is lost
+#define EGG_SECONDS 3.0
+
+// Whether this tap is the one that shows the mascot's easter egg (EasterEgg);
+// then the bubble is told to close ({"event":"egg"}) and the mascot is let go
+static bool chat_easter_egg(struct mascot* mascot)
+{
+    static int64_t mascot_id = -1;
+    static int taps = 0;
+    static struct timespec first;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double since = (now.tv_sec - first.tv_sec) + (now.tv_nsec - first.tv_nsec) / 1e9;
+    if (mascot_id != (int64_t)mascot->id || since > EGG_SECONDS) {
+        mascot_id = mascot->id;
+        taps = 0;
+        first = now;
+    }
+    if (++taps < EGG_TAPS) return false;
+    taps = 0;
+    // Released directly, as for a drag: this runs in the middle of a Wayland dispatch
+    if (!mascot_easter_egg(mascot)) return false;
+    if (mascot->id == held_mascot_id) held_mascot_id = -1;
+    INFO("<Mascot:%s:%u> Shows its easter egg", mascot->prototype->name, mascot->id);
+
+    char line[64];
+    int len = snprintf(line, sizeof(line), "{\"event\":\"egg\",\"mascot\":%u}\n", mascot->id);
+    chat_broadcast(line, len);
+    return true;
+}
+
 bool chat_announce_tap(struct mascot* mascot, environment_t* env, int32_t pointer_x, int32_t pointer_y)
 {
+    // The taps that come after the easter egg do not end it
+    if (mascot_easter_egg_playing(mascot) || chat_easter_egg(mascot)) return true;
     return chat_announce(mascot, env, pointer_x, pointer_y, chat_tap);
 }
 

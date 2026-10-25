@@ -217,6 +217,8 @@ PanelWindow {
             + ` H ${r + p} A ${r} ${r} 0 0 1 ${p} ${t + h - r} V ${t + r} A ${r} ${r} 0 0 1 ${r + p} ${t} Z`;
     }
 
+    property real tappedAt: 0 // the last tap's time, see openFor()
+
     function openFor(e: var): void {
         if (e.remark) {
             bubble.remark(e);
@@ -226,9 +228,14 @@ PanelWindow {
         bubble.reminding = false;
         bubble.keepKeyboard = bubble.fromKey;
         bubble.fromKey = false;
-        // Double clicks arrive as two taps: keep the open conversation
+        // Double clicks arrive as two taps: keep the open conversation. Taken again
+        // only after a while: while it is Exclusive Hyprland gives it the pointer too,
+        // and quick taps (the easter egg) would miss the mascot every other time
+        const quick = Date.now() - bubble.tappedAt < 1000;
+        bubble.tappedAt = Date.now();
         if (bubble.visible && bubble.event && bubble.event.mascot === e.mascot) {
-            bubble.grabKeyboard();
+            if (!quick)
+                bubble.grabKeyboard();
             input.forceActiveFocus();
             runPending();
             return;

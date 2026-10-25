@@ -54,6 +54,8 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs); when the answer
   failed, `Failed` (Robo's "ERROR" and a tear). A
   reminder that is due plays `Alarm` (Robo's yellow "!").
+- A figure can hide an easter egg: an `EasterEgg` behavior (frequency 0, so it is never picked) plays
+  once when the mascot is clicked quickly many times on the floor. Robo has one; try it.
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
   `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
   then the import picks a pose that lies still instead (the first part of that `Sleep`, or an action

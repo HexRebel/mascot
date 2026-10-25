@@ -1,8 +1,8 @@
 """Adds Chatter (talk: thinking), Snooze (sleep) and NewMessage (answered) to a converted Robo .wlshm,
 seven things it does now and then on the floor (Hologram, Tinker, Notepad, OpenChest, Giggle, Wink,
 Meditate), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System,
-Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed) and Alarm
-(a reminder that is due),
+Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed), Alarm
+(a reminder that is due) and EasterEgg (tapped quickly many times),
 makes it hover (Walk/Run/Dash/Creep lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off), no pulling
 itself up, look straight ahead when it stands still (60), dangle whenever it is held up, and its personality (prompt.md)"""
 import io
@@ -70,7 +70,8 @@ for a in actions:
 FUN = {"Hologram": 64, "Tinker": 65, "Notepad": 66, "OpenChest": 67, "Giggle": 74, "Wink": 81, "Meditate": 72}
 # Singing (73) only while music plays: experimental, not yet (Mascot has to see that music plays, MPRIS)
 # Poses only for a tool
-POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94}  # the magnifying glass (78): kept for later
+POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94,  # the magnifying glass (78): kept for later
+         "Egg": 95}
 READABLE = {89, 94}  # the "?" and "ERROR": not mirrored facing right
 actions += [action(name, "Animate", [frame(n, 100, n in READABLE)]) for name, n in {**FUN, **POSES}.items()]
 behaviors = json.load(source.extractfile("behaviors.json"))
@@ -92,7 +93,8 @@ floor["next_behavior_list_count"] = len(floor["next_behavior_list"])
 # While a tool runs for its answer, it shows what it does (see mascot_chat_doing())
 TOOLS = {"Todo": "Notepad", "Reminder": "Salute", "Weather": "Globe", "Files": "Hologram", "Image": "Hologram",
          "Search": "Hologram", "Shell": "Gears", "Sleepy": "Meditate", "System": "OpenChest", "Machine": "Inspect",
-         "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff"}
+         "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff",
+         "EasterEgg": "Egg"}  # tapped quickly many times (see chat_easter_egg())
 for name, act in TOOLS.items():
     behavior(name, act, 0, True)
 # Pulling itself up: Robo has no images for it, so the glide jumped aside (anchors 96, 32) and shot off 60 px,

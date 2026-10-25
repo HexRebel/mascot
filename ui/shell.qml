@@ -54,6 +54,9 @@ ShellRoot {
             bubble.closeFor(event.mascot);
             if (menu.event?.mascot === event.mascot)
                 menu.close();
+        } else if (event.event === "egg") {
+            // Tapped quickly many times: the mascot shows its easter egg, without the bubble
+            bubble.closeFor(event.mascot);
         } else if (event.event === "prototypes") {
             // Asked for by the menu's "Change mascot", or by .mascots
             if (menu.waiting)

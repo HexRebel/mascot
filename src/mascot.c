@@ -1036,6 +1036,31 @@ bool mascot_chat_answered(struct mascot *mascot) {
   return behavior != NULL;
 }
 
+bool mascot_easter_egg(struct mascot *mascot) {
+  pthread_mutex_lock(&mascot->tick_lock);
+  const struct mascot_behavior *egg =
+      mascot_prototype_behavior_by_name(mascot->prototype, "EasterEgg");
+  bool shown = egg && !mascot->dragged &&
+               mascot_get_border_type(mascot) == environment_border_type_floor;
+  if (shown) {
+    // Then behaviors are picked as usual (or it sleeps, or stays, again)
+    mascot->chat_behavior = NULL;
+    mascot->chat_talking = false;
+    mascot_set_behavior(mascot, egg);
+  }
+  pthread_mutex_unlock(&mascot->tick_lock);
+  return shown;
+}
+
+bool mascot_easter_egg_playing(struct mascot *mascot) {
+  pthread_mutex_lock(&mascot->tick_lock);
+  const struct mascot_behavior *egg =
+      mascot_prototype_behavior_by_name(mascot->prototype, "EasterEgg");
+  bool playing = egg && mascot->current_behavior == egg;
+  pthread_mutex_unlock(&mascot->tick_lock);
+  return playing;
+}
+
 bool mascot_sleep(struct mascot *mascot, bool asleep, bool quiet) {
   static const char *const names[] = {"Quiet", "Asleep", "Sleep", "LieDown",
                                       "SitDown"};

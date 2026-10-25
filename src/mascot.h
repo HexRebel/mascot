@@ -547,6 +547,12 @@ bool mascot_chat_doing(struct mascot* mascot, const char* tool);
 // held mascot repeats its "Answered" behavior (otherwise it sits) until the
 // next tap holds it again. Returns false if the mascot is not held
 bool mascot_chat_answered(struct mascot* mascot);
+// Tapped quickly many times: plays the prototype's hidden "EasterEgg" behavior
+// once, on the floor, and lets go of a chat hold. Returns false if it has none
+// (or is not on the floor)
+bool mascot_easter_egg(struct mascot* mascot);
+// Whether it is playing its EasterEgg behavior now
+bool mascot_easter_egg_playing(struct mascot* mascot);
 // Puts the mascot to sleep: repeats the first of the behaviors "Asleep",
 // "Sleep", "LieDown" and "SitDown" the prototype has, on the floor and not
 // while held for chat; quiet (asleep for a while, e.g. the menu's Quiet) tries
