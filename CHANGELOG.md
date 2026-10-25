@@ -3,6 +3,13 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- `.info` (and the menu's Info) starts with Mascot's version: the running one's, so it shows when Mascot wants
+  a restart after an update. `mascot --version` shows the installed one's.
+- A dot command's output (`.info`, `.help all`, `.todo` ...) is read from the top: the bubble no longer scrolls
+  past the command's line. Answers still follow the bottom.
+
 ## 0.4.0 (2026-10-25)
 
 The mascot can look at the machine itself (temperatures, fans, memory, disks), Robo laughs, meditates and shows

@@ -106,6 +106,7 @@ PanelWindow {
             // command output), each drawn in its own pywal colour
             property ListModel entries: ListModel {}
             property int streaming: -1 // entry the running command writes into
+            property int readFrom: -1 // the latest dot command's line: its output is read from the top
             property var job: null // the running command, see run()
             property bool replying: false // job answers a message, not a dot command
             property string doing: "" // what a tool is doing while it waits, see doingOf()
@@ -571,7 +572,7 @@ PanelWindow {
         "Right-click a mascot for its menu. Select text and press Ctrl+C to copy it."
     ].join("\n")
     readonly property string helpText: [
-        ".info                  show aichat's settings",
+        ".info                  show Mascot's version and aichat's settings",
         ".models / .roles / .sessions   list them",
         ".models <search>       find models on OpenRouter, e.g. .models gemini",
         ".model <name>          switch model (e.g. openrouter:…)",
@@ -900,6 +901,7 @@ PanelWindow {
     // and todo tools read never goes to it
     function ask(text: string, kind: string): void {
         const c = bubble.current;
+        c.readFrom = -1;
         const command = bubble.event?.command || "aichat";
         if (c.session) {
             sessionKind(c, command, ok => ok && askWithTools(text, kind, c, command));
@@ -1232,6 +1234,7 @@ PanelWindow {
     }
 
     function dotCommand(text: string): void {
+        bubble.current.readFrom = bubble.entries.count - 1;
         const [name, ...rest] = text.split(/\s+/);
         const arg = rest.join(" ");
         switch (name) {
@@ -1244,6 +1247,8 @@ PanelWindow {
                 // in a .session aichat sums up itself, past its compress_threshold
                 const c = bubble.current;
                 const command = bubble.event?.command || "aichat";
+                // The running mascotd's: an older one wants a restart after an update
+                c.entries.append({ kind: "system", body: `Mascot ${bubble.event?.version || "(restart Mascot to see its version)"}` });
                 if (c.session) {
                     lookup([], c, command, (info, ok) => {
                         const threshold = ok ? (info.match(/^compress_threshold:?\s+(\d+)/m) ?? [])[1] : null;
@@ -1836,10 +1841,16 @@ PanelWindow {
                 width: scroller.width
                 spacing: 8
 
-                // Follow the streamed answer
-                onImplicitHeightChanged: scroller.contentY = Math.max(0, implicitHeight - scroller.height)
+                // Follow the streamed answer; a dot command's output (.info, .help all …)
+                // is read from the top, so never past its line
+                onImplicitHeightChanged: {
+                    const from = entryItems.itemAt(bubble.current?.readFrom ?? -1);
+                    scroller.contentY = Math.max(0, Math.min(implicitHeight - scroller.height, from ? from.y : Infinity));
+                }
 
                 Repeater {
+                    id: entryItems
+
                     model: bubble.entries
 
                     TextEdit {

@@ -547,7 +547,7 @@ static bool chat_announce(struct mascot* mascot, environment_t* env, int32_t poi
         "\"anchor\":{\"x\":%d,\"y\":%d},\"looking_right\":%s,"
         "\"sprite\":%s,"
         "\"surface\":{\"width\":%d,\"height\":%d},"
-        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s,\"prompt\":%s,\"language\":%s%s}\n",
+        "\"command\":%s,\"role\":%s,\"memory\":%d,\"tools\":%s,\"dotfiles\":%s,\"prompt\":%s,\"language\":%s,\"version\":\"" MASCOTD_VERSION "\"%s}\n",
         kind == chat_menu ? "menu" : "tap", mascot->id, prototype, output,
         pointer_x, pointer_y,
         mascot->X->value.i, environment_workarea_height(env) - mascot->Y->value.i,

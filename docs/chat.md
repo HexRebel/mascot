@@ -76,7 +76,7 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | Command | Effect |
 |---|---|
 | `.help` | The commands most people need; `.help all` lists every one |
-| `.info` | Show aichat's settings |
+| `.info` | Show Mascot's version (the running one's: restart Mascot after an update) and aichat's settings |
 | `.models`, `.roles`, `.sessions` | List them |
 | `.models <search>` | Find models on OpenRouter, newest first, with price, context and whether they can use tools, e.g. `.models gemini flash` |
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |

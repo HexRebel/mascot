@@ -2205,6 +2205,17 @@ def local_config_handler(arguments: argparse.Namespace, parser):
             parser.print_help()
             exit(1)
 
+def installed_version() -> str:
+    """mascotd's version: the one installed next to this script, else the first in PATH
+    (the version lives in one place, MASCOTD_VERSION)"""
+    beside = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "mascotd")
+    command = beside if os.access(beside, os.X_OK) else "mascotd"
+    try:
+        return subprocess.run([command, "--version"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"Cannot ask mascotd for its version: {e}", file=sys.stderr)
+        exit(1)
+
 def plugins_handler(arguments, client, plugins_category):
     if plugins_category == "restore-windows":
         packet = PluginRestoreWindows()
@@ -2218,6 +2229,7 @@ if __name__ == "__main__":
     argparser.add_argument("-cr", "--config-root", help="Path to the mascotd config root directory")
     argparser.add_argument("--do-not-start", action="store_true", help="Do not start the overlay")
     argparser.add_argument("--do-start", action="store_true", help="Start the overlay")
+    argparser.add_argument("--version", action="store_true", help="Show Mascot's version (the installed mascotd's)")
 
     category = argparser.add_subparsers(dest="category", help="")
 
@@ -2397,6 +2409,9 @@ if __name__ == "__main__":
     prototype_list.add_argument("-d", "--detailed", action="store_true", help="Show detailed information about the prototypes")
 
     arguments = argparser.parse_args()
+    if arguments.version:
+        print(installed_version())
+        exit(0)
     if arguments.category is None:
         argparser.print_help()
         exit(1)
