@@ -96,10 +96,14 @@ TOOLS = {"Todo": "Notepad", "Reminder": "Salute", "Weather": "Globe", "Files": "
          "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff"}
 for name, act in TOOLS.items():
     behavior(name, act, 0, True)
-# Pulling itself up: Robo has no images for it, so the glide jumped aside (anchors 96, 32) and shot off 60 px
+# Pulling itself up: Robo has no images for it, so the glide jumped aside (anchors 96, 32) and shot off 60 px,
+# then fell, dizzy. mascotd picks by the frequency in the list that names it, not the definition's
 for d in defs:
     if d["name"] == "PullUpShimeji":
         d["frequency"] = 0
+    for ref in d["next_behavior_list"]:
+        if ref["name"] == "PullUpShimeji":
+            ref["frequency"] = 0
 manifest = json.load(source.extractfile("manifest.json"))
 manifest["description"] = "Robo, Mascot's own mascot: a small hovering robot. Made with Google Gemini from a text prompt; CC0."
 manifest["artist"] = "HexRebel (made with Google Gemini)"
