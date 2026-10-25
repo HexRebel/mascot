@@ -66,7 +66,7 @@ PanelWindow {
     }
 
     function lingers(pose: string): bool {
-        return pose === "unsure" || pose === "done" || pose === "failed" || pose === "fullpower";
+        return pose === "unsure" || pose === "done" || pose === "failed" || pose === "fullpower" || pose === "love";
     }
 
     function linger(pose: string): void {
@@ -121,6 +121,7 @@ PanelWindow {
             property bool found: false
             property bool ticked: false // remove_todo took an item off: the mascot is glad ("done")
             property bool fullPower: false // check_system saw the CPU set to performance ("fullpower")
+            property bool loved: false // the message is only thanks or a compliment ("love"), see compliment()
             property int mascot: -1 // whose conversation it is
             // Closed while answering: the mascot stays sitting (and talking)
             // until the answer is read, see close()
@@ -928,6 +929,8 @@ PanelWindow {
     function ask(text: string, kind: string): void {
         const c = bubble.current;
         c.readFrom = -1;
+        // Not after an answer that failed: "great" then is not praise
+        c.loved = kind === "reply" && !c.error && bubble.compliment(text);
         const command = bubble.event?.command || "aichat";
         if (c.session) {
             sessionKind(c, command, ok => ok && askWithTools(text, kind, c, command));
@@ -1144,6 +1147,8 @@ PanelWindow {
             c.streaming = -1;
         }
         c.replying = reply;
+        if (!reply)
+            c.loved = false;
         c.doing = "";
         c.doingIcon = "";
         c.toolKind = "";
@@ -1174,6 +1179,50 @@ PanelWindow {
         ?? Qt.fontFamilies().find(f => /Nerd Font$/.test(f)) ?? ""
 
     // An icon by name: a Nerd Font (Font Awesome) glyph, else an emoji
+    // Thanks and compliments, in the common languages: a message made of nothing but these (and the
+    // words in complimentFill, the mascot's name, hearts and smileys) makes the mascot happy ("love").
+    // One word that is not here and it is not: "great, you deleted it all" is not praise
+    readonly property var complimentPhrases: [
+        "tak", "mange tak", "tusind tak", "tak skal du have", "tak for hjælpen", "tak for det", "tak for svaret",
+        "godt klaret", "flot klaret", "godt gået", "flot", "super", "sejt", "fedt", "dejligt", "perfekt", "fantastisk",
+        "du er sød", "du er sej", "du er god", "du er den bedste", "du er fantastisk", "jeg elsker dig", "elsker dig",
+        "thanks", "thank you", "thx", "ty", "cheers", "good job", "great job", "nice job", "well done", "nice", "great",
+        "awesome", "perfect", "amazing", "you're the best", "you are the best", "you're awesome", "you are awesome",
+        "you're great", "you're sweet", "you rock", "love you", "i love you", "good bot", "good robot",
+        "danke", "danke schön", "danke sehr", "vielen dank", "gut gemacht", "toll", "klasse", "du bist super",
+        "du bist toll", "tack", "tack så mycket", "tusen tack", "bra jobbat", "snyggt", "takk", "tusen takk",
+        "takk skal du ha", "bra jobba", "flott", "merci", "merci beaucoup", "bien joué", "bravo", "génial",
+        "gracias", "muchas gracias", "bien hecho", "genial"
+    ].map(p => p.split(" ")).sort((a, b) => b.length - a.length)
+    readonly property var complimentFill: [
+        "min ven", "min gode ven", "makker", "min makker", "min gode makker", "buddy", "mate", "friend", "my friend",
+        "so", "so much", "very much", "really", "virkelig", "rigtig", "meget", "så", "så meget", "igen", "again",
+        "også", "og", "and", "oh", "åh", "wow", "yay", "hey", "hej"
+    ].map(p => p.split(" ")).sort((a, b) => b.length - a.length)
+
+    function compliment(text: string): bool {
+        let t = text.toLowerCase().replace(/[’`]/g, "'");
+        if (t.includes("?"))
+            return false;
+        const hearts = /<3|❤️|❤|♥|💙|💜|💚|💛|🧡|🩷|🥰|😍|😘/g;
+        let praised = hearts.test(t);
+        t = t.replace(hearts, " ").replace(/:-?\)|:-?d\b|[😊🙂☺😀😃😄😁🤗🙏👍✨!.,…~*]/gu, " ");
+        const words = t.split(/\s+/).filter(w => w);
+        const name = String(bubble.event?.prototype ?? "").toLowerCase().split(/\s+/).filter(w => w);
+        const at = (i, phrase) => phrase.every((w, k) => words[i + k] === w);
+        if (!words.length || words.length > 8)
+            return praised && !words.length;
+        for (let i = 0; i < words.length;) {
+            const phrase = bubble.complimentPhrases.find(p => at(i, p));
+            const fill = phrase ? null : bubble.complimentFill.find(p => at(i, p)) ?? (name.length && at(i, name) ? name : null);
+            if (!phrase && !fill)
+                return false;
+            praised = praised || !!phrase;
+            i += (phrase ?? fill).length;
+        }
+        return praised;
+    }
+
     function icon(name: string): string {
         const icons = {
             weather: ["\uf0c2", "☁"], folder: ["\uf07c", "📁"], file: ["\uf15c", "📄"], search: ["\uf002", "🔍"],
@@ -1692,9 +1741,10 @@ PanelWindow {
                         job.output += data;
                     else if (c.streaming < c.entries.count)
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
-                    if (c.toolKind && c.streaming >= 0 && c.streaming < c.entries.count
+                    if ((c.toolKind || c.loved) && c.streaming >= 0 && c.streaming < c.entries.count
                             && bubble.answerOf(c.entries.get(c.streaming).body))
-                        c.toolKind = c.unsure && !c.found ? "unsure" : c.ticked ? "done" : c.fullPower ? "fullpower" : "";
+                        c.toolKind = c.unsure && !c.found ? "unsure" : c.ticked ? "done" : c.fullPower ? "fullpower"
+                            : c.loved ? "love" : "";
                 }
             }
             // Line by line, so what a tool starts doing shows while it runs

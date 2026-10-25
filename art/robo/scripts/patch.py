@@ -2,8 +2,8 @@
 twelve things it does now and then on the floor (Hologram, Tinker, Notepad, OpenChest, Giggle, Wink,
 Meditate, Wave, Shades, Hearts, Wonder, Binoculars), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System,
 Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed), Alarm
-(a reminder that is due), EasterEgg (tapped quickly many times), Power (checking how the CPU runs) and FullPower
-(it runs on performance),
+(a reminder that is due), EasterEgg (tapped quickly many times), Power (checking how the CPU runs), FullPower
+(it runs on performance) and Love (thanks or a compliment),
 makes it hover (Walk/Run/Dash/Creep lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off), no pulling
 itself up, look straight ahead when it stands still (60), dangle whenever it is held up, and its personality (prompt.md)"""
 import io
@@ -74,7 +74,8 @@ LONGER = {"Meditate": 300}  # ticks (a pose is 100, about 4 s): a meditation tak
 # Singing (73) only while music plays: experimental, not yet (Mascot has to see that music plays, MPRIS)
 # Poses only for a tool
 POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94,  # the magnifying glass (78): kept for later
-         "Egg": 95, "Scan": 99, "Charged": 100}
+         "Egg": 95, "Scan": 99, "Charged": 100,
+         "HeartEyes": 83}
 READABLE = {89, 94, 100}  # the "?", "ERROR" and "FULL POWER": not mirrored facing right
 actions += [action(name, "Animate", [frame(n, LONGER.get(name, 100), n in READABLE)])
             for name, n in {**FUN, **POSES}.items()]
@@ -97,7 +98,7 @@ floor["next_behavior_list_count"] = len(floor["next_behavior_list"])
 # While a tool runs for its answer, it shows what it does (see mascot_chat_doing())
 TOOLS = {"Todo": "Notepad", "Reminder": "Salute", "Weather": "Globe", "Files": "Hologram", "Image": "Hologram",
          "Search": "Hologram", "Shell": "Gears", "Sleepy": "Meditate", "System": "OpenChest", "Machine": "Inspect",
-         "Power": "Scan", "FullPower": "Charged",
+         "Power": "Scan", "FullPower": "Charged", "Love": "HeartEyes",
          "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff",
          "EasterEgg": "Egg"}  # tapped quickly many times (see chat_easter_egg())
 for name, act in TOOLS.items():

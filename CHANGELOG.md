@@ -20,6 +20,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   preference, speed and boost, and the power profile (platform_profile, power-profiles-daemon, tuned) and battery,
   read from `/sys`. Ask "which governor is my CPU on?". Robo holds up a magnifying glass while it checks, and shows
   "100% FULL POWER" when the governor or the profile is on performance (two new images).
+- Thank Robo or praise him ("thanks!", "well done", "tusind tak ❤") and he gets heart eyes (`Love`). Only when
+  the message is nothing but that, in the common languages: "thanks, but that was wrong" does not.
 - An easter egg: click Robo quickly many times. Other figures can have one too (`EasterEgg`).
 
 ## 0.4.0 (2026-10-25)

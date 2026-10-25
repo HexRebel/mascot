@@ -39,7 +39,7 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 - While the bubble answers: **thinks** (`Chatter`, three ways of thinking in turn). While a tool runs for the answer it shows what it
   does (see `mascot_chat_doing()`): the **notepad** for the todo list, a **salute** for reminders, the **globe** for the
   weather, the **hologram cube** for files, images and searching a file, its
-  **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. When that found
+  **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. Thanked or praised: **heart eyes** (`Love`). When that found
   nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
   **laughing**, eyes shut tight (`Done`). An answer that failed: **"ERROR"** and a tear (`Failed`). A reminder
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks
@@ -49,7 +49,7 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   giggling, winking, meditating (longer than the others), waving, sunglasses, heart eyes, wondering, looking through
   binoculars. Drawn but not used yet (they need events of their own): singing
   (while music plays), nervous,
-  cheering, grumpy, heart eyes, shrugging, sweating, worried with a drop of sweat, a tear, the magnifying
+  cheering, grumpy, shrugging, sweating, worried with a drop of sweat, a tear, the magnifying
   glass (kept for something else).
 - **Never used** (the user's choice): laughing and shaking (`experimental5.png` row 1 column 3, frame 82 until
   0.4.0), the two with legs (`experimental7.png` row 3 column 2, heart eyes sitting; `experimental8.png` row 2
