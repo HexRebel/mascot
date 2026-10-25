@@ -32,7 +32,7 @@ def visor(im):
 
 
 pack = sys.argv[1]
-frames = [int(n) for n in sys.argv[2].split(",")] if len(sys.argv) > 2 else range(1, 99)
+frames = [int(n) for n in sys.argv[2].split(",")] if len(sys.argv) > 2 else range(1, 101)
 ref = visor(Image.open(f"{pack}/shime60.png"))[0]
 print(f"frame 60 (standing still): visor {ref} px wide")
 for n in frames:

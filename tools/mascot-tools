@@ -958,7 +958,7 @@ def sleep_mode(args):
 # sudo. Every answer says what could not be seen, so the model has no gap to
 # guess into, and tells the bubble whether it found anything ("mascot-found"),
 # or not ("mascot-unsure": the mascot shows it does not know)
-SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine")
+SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine", "power")
 LOG_LINES = 60  # lines of the log read_log shows, the newest
 LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
 SECRET_VALUE = re.compile(r"((?:pass(?:wd|word)?|secret|token|api[_-]?key|apikey|auth[_-]?key|bearer|credential)"
@@ -1465,6 +1465,94 @@ def check_machine(args):
     return found, lines, missing
 
 
+def ghz(khz):
+    return f"{int(khz) / 1e6:.1f} GHz" if str(khz or "").isdigit() else "?"
+
+
+def check_power(args):
+    """How the CPU is set to run: its frequency driver, governor and energy preference (cpufreq in /sys),
+    boost, and the power profile (platform_profile, power-profiles-daemon, tuned) and power supply when
+    there is one. The mascot shows "FULL POWER" when the governor or the profile is on performance
+    ("mascot-full-power")"""
+    lines, missing = [], []
+    base = at("/sys/devices/system/cpu/cpufreq")
+    policies = sorted((p for p in os.listdir(base) if re.fullmatch(r"policy\d+", p)), key=lambda p: int(p[6:])) \
+        if os.path.isdir(base) else []
+    performance = False
+    if policies:
+        def each(name):
+            """{value: how many policies have it}, for this file in every policy"""
+            seen = {}
+            for p in policies:
+                value = read_text(f"{base}/{p}/{name}")
+                if value is not None:
+                    seen[value] = seen.get(value, 0) + 1
+            return seen
+
+        def shown(seen):
+            if len(seen) == 1:
+                return next(iter(seen))
+            return ", ".join(f"{v} on {n} of {len(policies)}" for v, n in seen.items())
+
+        governors = each("scaling_governor")
+        driver = shown(each("scaling_driver")) or "?"
+        lines.append(f"CPU frequency driver: {driver}")
+        if governors:
+            lines.append(f"CPU governor: {shown(governors)} (could be: {read_text(f'{base}/{policies[0]}/scaling_available_governors') or '?'})")
+            performance |= "performance" in governors
+        else:
+            missing.append("the CPU governor (scaling_governor)")
+        epp = each("energy_performance_preference")
+        if epp:
+            lines.append(f"Energy preference (EPP, what the CPU leans to within the governor): {shown(epp)} (could be: "
+                         f"{read_text(f'{base}/{policies[0]}/energy_performance_available_preferences') or '?'})")
+        if "pstate" in driver and "powersave" in governors:
+            lines.append(f"With {driver}, \"powersave\" does not mean slow: the CPU still speeds up when it is busy; "
+                         "the energy preference says how eagerly.")
+        now = [read_text(f"{base}/{p}/scaling_cur_freq") for p in policies]
+        now = [int(n) for n in now if n and n.isdigit()]
+        first = f"{base}/{policies[0]}"
+        if now:
+            lines.append(f"Speed now: {ghz(min(now))} to {ghz(max(now))} (allowed {ghz(read_text(first + '/scaling_min_freq'))}"
+                         f" to {ghz(read_text(first + '/scaling_max_freq'))}, the CPU's top {ghz(read_text(first + '/cpuinfo_max_freq'))})")
+        boost = read_text(f"{base}/boost")
+        no_turbo = read_text(at("/sys/devices/system/cpu/intel_pstate/no_turbo"))
+        if boost in ("0", "1"):
+            lines.append("Boost: " + ("on" if boost == "1" else "off"))
+        elif no_turbo in ("0", "1"):
+            lines.append("Turbo boost: " + ("off" if no_turbo == "1" else "on"))
+    else:
+        missing.append("the CPU's frequency settings (no cpufreq in /sys: a virtual machine, or no driver)")
+    # The power profile, from what there is to ask
+    profile = read_text(at("/sys/firmware/acpi/platform_profile"))
+    if profile:
+        lines.append(f"Platform profile (the firmware's): {profile} (could be: "
+                     f"{read_text(at('/sys/firmware/acpi/platform_profile_choices')) or '?'})")
+        performance |= profile == "performance"
+    if not MACHINE_ROOT:  # the fake machines have no programs to ask
+        out, _ = run("powerprofilesctl", "get", timeout=4)
+        if out and out.strip():
+            lines.append(f"Power profile (power-profiles-daemon): {out.strip()} (could be: performance, balanced, power-saver)")
+            performance |= out.strip() == "performance"
+        out, _ = run("tuned-adm", "active", timeout=4)
+        if out and ":" in out:
+            active = out.split(":", 1)[1].strip()
+            lines.append(f"Tuned profile: {active}")
+            performance |= "performance" in active
+    # On a laptop: plugged in or on its battery
+    supplies = at("/sys/class/power_supply")
+    for name in sorted(os.listdir(supplies)) if os.path.isdir(supplies) else []:
+        kind = read_text(f"{supplies}/{name}/type")
+        if kind == "Mains" and read_text(f"{supplies}/{name}/online") in ("0", "1"):
+            lines.append("Plugged in" if read_text(f"{supplies}/{name}/online") == "1" else "On battery")
+        elif kind == "Battery" and read_text(f"{supplies}/{name}/scope") != "Device":
+            lines.append(f"Battery: {read_text(f'{supplies}/{name}/capacity') or '?'}%, "
+                         f"{(read_text(f'{supplies}/{name}/status') or '?').lower()}")
+    if performance:
+        print("mascot-full-power", file=sys.stderr)  # the mascot shows it runs at full power
+    return bool(lines), lines, missing
+
+
 def sure(found):
     """Tells the bubble whether the tool found something to go on"""
     print("mascot-found" if found else "mascot-unsure", file=sys.stderr)
@@ -1477,16 +1565,19 @@ def check_system(args):
     if area not in SYSTEM_AREAS:
         raise ToolError("area must be one of " + ", ".join(SYSTEM_AREAS))
     found, lines, missing = {"network": check_network, "sound": check_sound, "crashes": check_crashes,
-                             "services": check_services, "machine": check_machine}[area](args)
+                             "services": check_services, "machine": check_machine, "power": check_power}[area](args)
     # The machine's readings are something to go on, even when none of them is a problem
-    sure(found or (area == "machine" and lines))
+    sure(found or (area in ("machine", "power") and lines))
     result = [f"What the system says about {area} (read without sudo):"] + lines
     if missing:
         result.append("Could not see: " + "; ".join(missing) + ".")
-    if area == "machine":  # a model likes to answer a later question from these (a time made it think them fresh)
+    if area in ("machine", "power"):  # a model likes to answer a later question from these (a time made it think them fresh)
         result.append("These are only true right now: for the next question about the machine, call check_system "
                       "again instead of answering from these.")
-    if not found and area == "machine":
+    if area == "power":
+        result.append("These are only what the CPU is set to. To change them the user runs the command (e.g. "
+                      "`powerprofilesctl set performance`, or `sudo cpupower frequency-set -g performance`); you cannot.")
+    elif not found and area == "machine":
         result.append("Nothing here is near its limit (temperatures, memory, disks). Answer from these readings; "
                       "if the user asked what is wrong, say nothing here shows it, and do not guess.")
     elif not found:

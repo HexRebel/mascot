@@ -18,12 +18,13 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `experimental5.png`, `experimental6.png` | 3×3 each; a few used (see `scripts/compose.py`, frames 78–88) |
 | `experimental7.png` | 3×3; used: row 3 column 1, a "?" on its visor, hand on its chin (89, `Unsure`) |
 | `experimental8.png` | 3×3; used: row 3 column 1, laughing with its eyes shut tight, "><" (91, `Done`); row 3 column 3, a magnifying glass over a graph (92, `Machine`); row 2 column 3, worried and sweating (93, not used yet) |
-| `experimental9.png` | 4×4; used: row 4 column 3, "ERROR" on its visor and a tear (94, `Failed`) |
+| `experimental9.png` | 4×4; used: row 4 column 3, "ERROR" on its visor and a tear (94, `Failed`); row 4 column 1, "100% FULL POWER" (100, `FullPower`) |
 | `experimental10.png` | 3×3; used: row 1 column 1, holding an Easter egg (95, `EasterEgg`) |
 | `full.png` | 3×3, the first sheet before its legs were taken off; used: row 3 column 3, waving (96) |
 | `experimental4.png` | 3×3; used: row 2 column 1, glowing heart eyes (98) |
 | `experimental11.png` | 3×3; used: row 2 column 3, sunglasses (97) |
-| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime98.png` (128×128, base at (64, 128)) and `preview.png` |
+| `experimental12.png` | 3×3; used: row 2 column 1, a magnifying glass (99, `Power`) |
+| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime100.png` (128×128, base at (64, 128)) and `preview.png` |
 | `scripts/chest.py` | Swaps the square on its chest for a speech bubble (or the Arch logo, for your own copy only: it is Arch Linux's trademark) |
 | `scripts/measure.py` | Checks that Robo is the same size in every frame (by its visor); run it after adding images |
 | `scripts/cutout.py` | `robo.png` → `robo-cutout.png` |
@@ -38,7 +39,7 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 - While the bubble answers: **thinks** (`Chatter`, three ways of thinking in turn). While a tool runs for the answer it shows what it
   does (see `mascot_chat_doing()`): the **notepad** for the todo list, a **salute** for reminders, the **globe** for the
   weather, the **hologram cube** for files, images and searching a file, its
-  **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine. When that found
+  **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. When that found
   nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
   **laughing**, eyes shut tight (`Done`). An answer that failed: **"ERROR"** and a tear (`Failed`). A reminder
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks

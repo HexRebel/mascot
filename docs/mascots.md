@@ -48,11 +48,12 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
 - While a tool runs for the answer, a mascot can show what it does: it plays its behavior for that
   tool instead of `Talk`, if it has one, until the answer starts. `Todo` and `Reminder` (the todo list
   and reminders), `Weather`, `Files` (a folder or file), `Search` (in a file), `Image`, `Shell` (your
-  last commands), `Sleepy` (the sleep tool), `System` (troubleshooting), `Machine` (checking the machine). Robo writes in its notepad,
+  last commands), `Sleepy` (the sleep tool), `System` (troubleshooting), `Machine` (checking the machine), `Power` (checking how the CPU runs). Robo writes in its notepad,
   holds up the globe, opens its head while it reads your commands, opens its chest while it checks
   your system... When the system tools found nothing to go on, it plays `Unsure` while it answers
   (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs); when the answer
-  failed, `Failed` (Robo's "ERROR" and a tear). A
+  failed, `Failed` (Robo's "ERROR" and a tear); when the CPU runs on performance, `FullPower` (Robo's "100% FULL
+  POWER"). A
   reminder that is due plays `Alarm` (Robo's yellow "!").
 - A figure can hide an easter egg: an `EasterEgg` behavior (frequency 0, so it is never picked) plays
   once when the mascot is clicked quickly many times on the floor. Robo has one; try it.

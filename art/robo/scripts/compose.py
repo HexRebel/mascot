@@ -7,7 +7,7 @@ Next to it: robo-cutout.png (looking straight ahead) and experimental.png (3x3; 
 thinking, tinkering; row 3: notepad, -, opening its chest) and experimental3.png (3x3: pondering, nervous,
 cheering; grumpy, gears, singing; giggling, globe, meditating), and a few of experimental5.png and
 experimental6.png, the "?" of experimental7.png, a few of experimental8.png and experimental9.png (4x4), the Easter egg of
-experimental10.png and one each of full.png, experimental11.png and experimental4.png
+experimental10.png and one each of full.png, experimental11.png, experimental4.png and experimental12.png
 """
 import os
 import sys
@@ -224,6 +224,16 @@ def unpinked(im):
     return Image.fromarray(a)
 
 
+def clear_glass(im):
+    """A lens that shows the magenta background through it, tinted lilac: the same light cyan as the rest of its
+    glass (red and green swapped), after the magenta itself is made see-through (unpinked())"""
+    a = np.asarray(unpinked(im)).copy()
+    r, g, b = (a[..., i].astype(int) for i in range(3))
+    lilac = (r - g > 35) & (b - g > 35) & (a[..., 3] > 0)
+    a[lilac, 0], a[lilac, 1] = a[lilac, 1], a[lilac, 0]
+    return Image.fromarray(a)
+
+
 # experimental5.png and experimental6.png (3x3 each): a few each
 def cells_of(name, wanted, top=(), grid=3, left=None):
     """The wanted (row, column) cells of a grid x grid sheet, cut out, chest swapped, resized to the sheet;
@@ -247,12 +257,13 @@ five = cells_of("experimental5.png", [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)], t
 six = cells_of("experimental6.png", [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1)])
 seven = cells_of("experimental7.png", [(2, 0)])
 eight = cells_of("experimental8.png", [(1, 2), (2, 0), (2, 2)], left={(2, 2): 0.06})  # confetti
-nine = cells_of("experimental9.png", [(3, 2)], grid=4)
+nine = cells_of("experimental9.png", [(3, 0), (3, 2)], grid=4)
 ten = cells_of("experimental10.png", [(0, 0)])
 # Three more things it does on the floor (the user's choice, 25 Oct)
 waving = cells_of("full.png", [(2, 2)])
 eleven = cells_of("experimental11.png", [(1, 2)])
 four = cells_of("experimental4.png", [(1, 0)])
+twelve = cells_of("experimental12.png", [(1, 0)])
 eight[2, 2] = resized(unpinked(eight[2, 2]), 0.87)  # the graph on its visor: measured by its height (100 px, like 60)
 still = stand(0, im=hanging)  # front.png: standing still and sitting
 frames = {
@@ -315,6 +326,8 @@ frames = {
     96: stand(0, im=waving[2, 2]),  # waving, eyes smiling
     97: stand(0, im=eleven[1, 2]),  # sunglasses
     98: stand(0, im=four[1, 0]),    # heart eyes, glowing
+    99: stand(0, im=clear_glass(twelve[1, 0])),  # a magnifying glass: checking how the CPU runs (Power)
+    100: stand(0, im=nine[3, 0]),   # "100% FULL POWER" on its visor, flexing: the CPU on performance (FullPower)
     90: dangle(0, im=hanging),    # held up and still: hanging straight down (Pinched, Resisting)
 }
 for n in (12, 13, 14, 23, 24, 25, 38, 39, 40, 41, 42, 43, 44, 45, 46, 49, 50, 51, 52, 53, 54, 55):

@@ -66,7 +66,7 @@ PanelWindow {
     }
 
     function lingers(pose: string): bool {
-        return pose === "unsure" || pose === "done" || pose === "failed";
+        return pose === "unsure" || pose === "done" || pose === "failed" || pose === "fullpower";
     }
 
     function linger(pose: string): void {
@@ -120,6 +120,7 @@ PanelWindow {
             property bool unsure: false
             property bool found: false
             property bool ticked: false // remove_todo took an item off: the mascot is glad ("done")
+            property bool fullPower: false // check_system saw the CPU set to performance ("fullpower")
             property int mascot: -1 // whose conversation it is
             // Closed while answering: the mascot stays sitting (and talking)
             // until the answer is read, see close()
@@ -879,7 +880,8 @@ PanelWindow {
                 // It may only look: the user runs the fix
                 const system = env.AICHAT_USE_TOOLS.includes("check_system") ? "\n\nWhen the user asks why something "
                     + "on their computer does not work (the network, a game's LAN, sound, a program that crashes, a "
-                    + "service), or how their machine is doing (hot, loud, slow, memory or disks full: area machine), call "
+                    + "service), or how their machine is doing (hot, loud, slow, memory or disks full: area machine), or how the "
+                    + "CPU is set to run (its governor, power profile: area power), call "
                     + "check_system for that area first, and read_log to dig further. The machine's readings change all "
                     + "the time: call check_system again for every new question about it, even right after the last. Base your answer "
                     + "only on what they show: say what you found, and when they found nothing that explains it, or "
@@ -1148,6 +1150,7 @@ PanelWindow {
         c.unsure = false;
         c.found = false;
         c.ticked = false;
+        c.fullPower = false;
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -1175,7 +1178,7 @@ PanelWindow {
         const icons = {
             weather: ["\uf0c2", "☁"], folder: ["\uf07c", "📁"], file: ["\uf15c", "📄"], search: ["\uf002", "🔍"],
             image: ["\uf03e", "🖼"], todo: ["\uf0ae", "📝"], reminder: ["\uf017", "⏰"], shell: ["\uf120", "⌨"],
-            sleep: ["\uf186", "💤"], system: ["\uf2db", "🔧"], machine: ["\uf080", "📊"], check: ["\uf00c", "✓"]
+            sleep: ["\uf186", "💤"], system: ["\uf2db", "🔧"], machine: ["\uf080", "📊"], power: ["\uf0e7", "⚡"], check: ["\uf00c", "✓"]
         };
         return (icons[name] ?? ["", ""])[bubble.nerdFont ? 0 : 1];
     }
@@ -1220,6 +1223,8 @@ PanelWindow {
         case "check_system":
             if (a.area === "machine")
                 return ["machine", "checking the machine…"];
+            if (a.area === "power")
+                return ["power", "checking how the CPU runs…"];
             return ["system", { network: "checking the network…", sound: "checking the sound…",
                 crashes: "looking for crashes…", services: "checking the services…" }[a.area] ?? "checking the system…"];
         case "read_log":
@@ -1689,7 +1694,7 @@ PanelWindow {
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
                     if (c.toolKind && c.streaming >= 0 && c.streaming < c.entries.count
                             && bubble.answerOf(c.entries.get(c.streaming).body))
-                        c.toolKind = c.unsure && !c.found ? "unsure" : c.ticked ? "done" : "";
+                        c.toolKind = c.unsure && !c.found ? "unsure" : c.ticked ? "done" : c.fullPower ? "fullpower" : "";
                 }
             }
             // Line by line, so what a tool starts doing shows while it runs
@@ -1707,6 +1712,8 @@ PanelWindow {
                         c.found = true;
                     } else if (c?.job === job && line === "mascot-done") {
                         c.ticked = true;
+                    } else if (c?.job === job && line === "mascot-full-power") {
+                        c.fullPower = true;
                     }
                 }
             }
