@@ -276,7 +276,8 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   last commands), `Sleepy` (the sleep tool), `System` (troubleshooting). Robo writes in its notepad,
   holds up the globe, opens its head while it reads your commands, opens its chest while it checks
   your system... When the system tools found nothing to go on, it plays `Unsure` while it answers
-  (Robo's "?"). A reminder that is due plays `Alarm` (Robo's yellow "!").
+  (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs). A
+  reminder that is due plays `Alarm` (Robo's yellow "!").
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
   `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
   then the import picks a pose that lies still instead (the first part of that `Sleep`, or an action

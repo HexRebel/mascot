@@ -590,6 +590,7 @@ def remove_todo(args):
             del lines[index]
         for _, text in found:
             changed(f"todo: removed {text}")
+        print("mascot-done", file=sys.stderr)  # the mascot is glad it is done
         return "removed: " + "; ".join(text for _, text in found) + "\n\n" + todo_listing(lines)
     return todo_change(change)
 

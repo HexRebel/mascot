@@ -3,6 +3,14 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- Robo laughs, eyes shut tight, when a todo is done (`Done`, a new image): when the mascot takes an item off
+  the todo list, and after `.todo done`. Other mascots can have a `Done` behaviour of their own.
+- Robo also meditates now and then while it hovers about, to look a bit more alive.
+- The "?" (`Unsure`) and the laugh stay a few seconds after the answer, as meant: the end of the answer
+  stopped them at once.
+
 ## 0.3.0 (2026-10-24)
 
 The mascot can troubleshoot your computer, Mascot installs on Debian 13, and a handful of fixes.

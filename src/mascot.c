@@ -982,7 +982,8 @@ bool mascot_chat_doing(struct mascot *mascot, const char *tool) {
       {"image", "Image"},   {"shell", "Shell"},       {"sleep", "Sleepy"},
       {"system", "System"},
       {"alarm", "Alarm"},    // a reminder is due (not a tool)
-      {"unsure", "Unsure"}}; // check_system/read_log found nothing to go on
+      {"unsure", "Unsure"},  // check_system/read_log found nothing to go on
+      {"done", "Done"}};     // remove_todo took an item off the todo list
 
   pthread_mutex_lock(&mascot->tick_lock);
   if (!mascot->chat_behavior) {

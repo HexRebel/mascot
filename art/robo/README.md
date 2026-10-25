@@ -17,7 +17,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `experimental3.png` | 3×3: pondering, nervous, cheering · grumpy, gears in its open head, singing · giggling, globe, meditating |
 | `experimental5.png`, `experimental6.png` | 3×3 each; a few used (see `scripts/compose.py`, frames 78–88) |
 | `experimental7.png` | 3×3; used: row 3 column 1, a "?" on its visor, hand on its chin (89, `Unsure`) |
-| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime90.png` (128×128, base at (64, 128)) and `preview.png` |
+| `experimental8.png` | 3×3; used: row 3 column 1, laughing with its eyes shut tight, "><" (91, `Done`) |
+| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime91.png` (128×128, base at (64, 128)) and `preview.png` |
 | `scripts/chest.py` | Swaps the square on its chest for a speech bubble (or the Arch logo, for your own copy only: it is Arch Linux's trademark) |
 | `scripts/measure.py` | Checks that Robo is the same size in every frame (by its visor); run it after adding images |
 | `scripts/cutout.py` | `robo.png` → `robo-cutout.png` |
@@ -33,11 +34,12 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   does (see `mascot_chat_doing()`): the **notepad** for the todo list, a **salute** for reminders, the **globe** for the
   weather, the **hologram cube** for files, images and searching a file, its
   **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system. When that found
-  nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A reminder
+  nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
+  **laughing**, eyes shut tight (`Done`). A reminder
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks
   (`Snooze`). An answer waiting to be read: **NEW** on its visor (`NewMessage`).
 - Now and then on the floor: a hologram cube, tinkering, its notepad, opening its chest,
-  giggling, winking, laughing. Drawn but not used yet (they need events of their own): singing
+  giggling, winking, laughing, meditating. Drawn but not used yet (they need events of their own): singing
   (while music plays), nervous,
   cheering, grumpy, heart eyes, shrugging, sweating, a tear, the magnifying glass (kept for something
   else).

@@ -49,21 +49,30 @@ PanelWindow {
     onToolPoseChanged: {
         if (!bubble.event)
             return;
-        // A short answer would end the "?" (Unsure) at once: it stays a few seconds,
-        // set again after the daemon has sat the mascot down for the end of the answer
-        if (bubble.shownPose === "unsure" && !bubble.toolPose && !bubble.talking) {
-            const mascot = bubble.event.mascot;
-            Qt.callLater(() => bubble.toolUsed(mascot, "unsure"));
-            unsureTimer.restart();
+        // A short answer would end the "?" (Unsure) or the joy of a todo done at once:
+        // they stay a few seconds, set again after the daemon has sat the mascot down
+        // for the end of the answer
+        if (bubble.lingers(bubble.shownPose) && !bubble.toolPose && !bubble.talking) {
+            bubble.linger(bubble.shownPose);
         } else {
-            unsureTimer.stop();
+            lingerTimer.stop();
             bubble.toolUsed(bubble.event.mascot, bubble.toolPose);
         }
         bubble.shownPose = bubble.toolPose;
     }
 
+    function lingers(pose: string): bool {
+        return pose === "unsure" || pose === "done";
+    }
+
+    function linger(pose: string): void {
+        const mascot = bubble.event.mascot;
+        Qt.callLater(() => bubble.toolUsed(mascot, pose));
+        lingerTimer.restart();
+    }
+
     Timer {
-        id: unsureTimer
+        id: lingerTimer
 
         interval: 5000
         onTriggered: if (bubble.event)
@@ -105,6 +114,7 @@ PanelWindow {
             // the mascot shows it does not know ("unsure") while it answers
             property bool unsure: false
             property bool found: false
+            property bool ticked: false // remove_todo took an item off: the mascot is glad ("done")
             property int mascot: -1 // whose conversation it is
             // Closed while answering: the mascot stays sitting (and talking)
             // until the answer is read, see close()
@@ -1105,6 +1115,7 @@ PanelWindow {
         c.toolKind = "";
         c.unsure = false;
         c.found = false;
+        c.ticked = false;
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -1634,7 +1645,7 @@ PanelWindow {
                         c.entries.setProperty(c.streaming, "body", c.entries.get(c.streaming).body + data);
                     if (c.toolKind && c.streaming >= 0 && c.streaming < c.entries.count
                             && bubble.answerOf(c.entries.get(c.streaming).body))
-                        c.toolKind = c.unsure && !c.found ? "unsure" : "";
+                        c.toolKind = c.unsure && !c.found ? "unsure" : c.ticked ? "done" : "";
                 }
             }
             // Line by line, so what a tool starts doing shows while it runs
@@ -1650,6 +1661,8 @@ PanelWindow {
                         c.unsure = true;
                     } else if (c?.job === job && line === "mascot-found") {
                         c.found = true;
+                    } else if (c?.job === job && line === "mascot-done") {
+                        c.ticked = true;
                     }
                 }
             }
@@ -1657,7 +1670,6 @@ PanelWindow {
             onExited: (exitCode, exitStatus) => {
                 const c = job.conv;
                 if (c?.job === job) { // not stopped
-                    c.toolKind = "";
                     if (exitCode !== 0 && !job.done)
                         c.error = bubble.explained(job.errors.trim()) || `The command failed (exit ${exitCode})`;
                     if (exitCode === 0 && c.replying && c.model)
@@ -1668,6 +1680,9 @@ PanelWindow {
                         c.memoryChars += bubble.answerOf(c.entries.get(c.streaming).body).length;
                     if (c.replying)
                         bubble.answered(c);
+                    // .todo done (no answer to start): glad for a few seconds all the same
+                    else if (c.ticked && bubble.visible && bubble.event && c === bubble.current)
+                        bubble.linger("done");
                     // What Mascot's tools really changed (they say so on stderr),
                     // whatever the reply claims
                     if (c.replying) {
@@ -1706,7 +1721,10 @@ PanelWindow {
                         }
                     }
                     reminderView.reload();
+                    // The job first, so the "?" or the joy of a todo done ends with
+                    // the answer and lingers (see onToolPoseChanged)
                     c.job = null;
+                    c.toolKind = "";
                     if (job.done)
                         job.done(job.output, exitCode === 0);
                 }

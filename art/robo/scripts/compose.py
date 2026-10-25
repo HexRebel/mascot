@@ -1,4 +1,4 @@
-"""complete.png (3x3 sheet) -> <pack>/shime1..90.png (128x128, base at (64,128)) + preview.png
+"""complete.png (3x3 sheet) -> <pack>/shime1..91.png (128x128, base at (64,128)) + preview.png
 
     compose.py complete.png <pack> [bubble|arch|square]   (the chest symbol, see chest.py; bubble by default)
 
@@ -6,7 +6,7 @@ Cells: 1 glide (drawn facing right) · 2 dangle left · 3 dangle right · 4 fall
 Next to it: robo-cutout.png (looking straight ahead) and experimental.png (3x3; row 2: hologram,
 thinking, tinkering; row 3: notepad, -, opening its chest) and experimental3.png (3x3: pondering, nervous,
 cheering; grumpy, gears, singing; giggling, globe, meditating), and a few of experimental5.png and
-experimental6.png, and the "?" of experimental7.png
+experimental6.png, the "?" of experimental7.png and the laughing of experimental8.png
 """
 import os
 import sys
@@ -233,6 +233,7 @@ def cells_of(name, wanted, top=()):
 five = cells_of("experimental5.png", [(0, 0), (0, 2), (1, 0), (1, 1), (2, 1), (2, 2)], top=[(0, 0)])
 six = cells_of("experimental6.png", [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1)])
 seven = cells_of("experimental7.png", [(2, 0)])
+eight = cells_of("experimental8.png", [(2, 0)])
 still = stand(0, im=hanging)  # front.png: standing still and sitting
 frames = {
     # Hovering: the same pose bobbing up and down (Walk/Run/Dash use 1, 2, 3, 2)
@@ -287,12 +288,13 @@ frames = {
     87: stand(0, im=five[1, 0]),  # a tear (not used yet: sent away)
     88: stand(0, im=six[2, 0]),   # a yellow "!" bulb: a reminder is due (Alarm)
     89: stand(0, im=seven[2, 0]), # a "?" on the visor, hand on the chin: a system tool found nothing (Unsure)
+    91: stand(0, im=eight[2, 0]), # laughing, eyes shut tight ("><"): a todo is done (Done)
     90: dangle(0, im=hanging),    # held up and still: hanging straight down (Pinched, Resisting)
 }
 for n in (12, 13, 14, 23, 24, 25, 38, 39, 40, 41, 42, 43, 44, 45, 46, 49, 50, 51, 52, 53, 54, 55):
     frames[n] = glide  # climbing, pulling up, dividing, all fours: not used
 
-preview = Image.new("RGBA", (S * 8, S * 9), (60, 60, 70, 255))
+preview = Image.new("RGBA", (S * 8, S * ((len(frames) + 7) // 8)), (60, 60, 70, 255))
 d = ImageDraw.Draw(preview)
 for i, n in enumerate(sorted(frames)):
     im = frames[n].convert("RGBA")
