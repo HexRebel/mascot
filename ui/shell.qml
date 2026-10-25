@@ -50,6 +50,7 @@ ShellRoot {
             // button is down makes Hyprland end the drag with a false release
             bubble.hideFor(event.mascot);
         } else if (event.event === "dropped") {
+            bubble.dropped(event.mascot);
             bubble.closeFor(event.mascot);
             if (menu.event?.mascot === event.mascot)
                 menu.close();
@@ -115,6 +116,7 @@ ShellRoot {
         onTalked: (mascot, active) => root.send({ event: "talking", mascot: mascot, active: active })
         onToolUsed: (mascot, tool) => root.send({ event: "doing", mascot: mascot, tool: tool })
         onAnswerWaits: mascot => root.send({ event: "answered", mascot: mascot })
+        onHeldAgain: mascot => root.send({ event: "hold", mascot: mascot })
         onListRequested: root.send({ event: "list" })
         onSwapRequested: (mascot, prototype) => root.send({ event: "swap", mascot: mascot, prototype: prototype })
         onOpenRequested: mascot => root.send({ event: "open", mascot: mascot })

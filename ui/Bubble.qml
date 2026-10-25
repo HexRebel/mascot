@@ -38,6 +38,9 @@ PanelWindow {
     // Closed while it answered, the mascot has written its answer: it plays its
     // Answered behaviour until it is clicked (see close())
     signal answerWaits(int mascot)
+    // Dragging lets go of a mascot; one that waits with an answer is held again
+    // when it is dropped (see dropped())
+    signal heldAgain(int mascot)
     readonly property bool talking: visible && !!current?.job && current.replying
     onTalkingChanged: if (bubble.event)
         bubble.talked(bubble.event.mascot, bubble.talking)
@@ -464,6 +467,20 @@ PanelWindow {
     function hideFor(mascot: int): void {
         if (bubble.visible && bubble.event?.mascot === mascot)
             bubble.hiddenForDrag = true;
+    }
+
+    // A mascot waiting with its answer was dragged: hold it again, so it goes
+    // on talking, or shows it has answered (NEW), once it lands
+    function dropped(mascot: int): void {
+        const c = bubble.conversations[mascot];
+        // Open at another mascot: that one is held now (only one is)
+        if (!c?.waiting || bubble.visible)
+            return;
+        bubble.heldAgain(mascot);
+        if (c.job)
+            bubble.talked(mascot, true);
+        else
+            bubble.answerWaits(mascot);
     }
 
     function closeFor(mascot: int): void {
