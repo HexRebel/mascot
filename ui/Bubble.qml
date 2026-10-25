@@ -49,7 +49,8 @@ PanelWindow {
     onToolPoseChanged: {
         if (!bubble.event)
             return;
-        // A short answer would end the "?" (Unsure) or the joy of a todo done at once:
+        // A short answer would end the "?" (Unsure), the joy of a todo done or the
+        // tear of a failed answer at once:
         // they stay a few seconds, set again after the daemon has sat the mascot down
         // for the end of the answer
         if (bubble.lingers(bubble.shownPose) && !bubble.toolPose && !bubble.talking) {
@@ -62,7 +63,7 @@ PanelWindow {
     }
 
     function lingers(pose: string): bool {
-        return pose === "unsure" || pose === "done";
+        return pose === "unsure" || pose === "done" || pose === "failed";
     }
 
     function linger(pose: string): void {
@@ -173,7 +174,8 @@ PanelWindow {
     readonly property real stroke: 1.5
     readonly property real inset: stroke / 2
 
-    readonly property int bodyHeight: Math.min(content.implicitHeight + 2 * padding, 360)
+    readonly property int maxBodyHeight: 360
+    readonly property int bodyHeight: Math.min(content.implicitHeight + 2 * padding, maxBodyHeight)
     readonly property int totalHeight: bodyHeight + tailHeight
 
     // Point the tail aims at: top-centre of the sprite (falls back to the pointer)
@@ -723,6 +725,8 @@ PanelWindow {
             MASCOT_DOTFILES: bubble.event?.dotfiles ?? "",
             MASCOT_TODO_FILE: bubble.todoFile,
             MASCOT_REMINDER_FILE: bubble.reminderFile,
+            // CHAT_LANGUAGE: each tool's answer ends with it (gemma4 drifted to Norwegian after one)
+            MASCOT_LANGUAGE: bubble.event?.language ?? "",
             // For sleep_mode, which tells the daemon
             MASCOT_CHAT_SOCKET: bubble.chatSocket
         };
@@ -850,7 +854,9 @@ PanelWindow {
                 // It may only look: the user runs the fix
                 const system = env.AICHAT_USE_TOOLS.includes("check_system") ? "\n\nWhen the user asks why something "
                     + "on their computer does not work (the network, a game's LAN, sound, a program that crashes, a "
-                    + "service), call check_system for that area first, and read_log to dig further. Base your answer "
+                    + "service), or how their machine is doing (hot, loud, slow, memory or disks full: area machine), call "
+                    + "check_system for that area first, and read_log to dig further. The machine's readings change all "
+                    + "the time: call check_system again for every new question about it, even right after the last. Base your answer "
                     + "only on what they show: say what you found, and when they found nothing that explains it, or "
                     + "could not see something, say so plainly instead of guessing. You cannot change anything: give "
                     + "the exact command that fixes it (with sudo when it needs it), and never say you ran it." : "";
@@ -1143,7 +1149,7 @@ PanelWindow {
         const icons = {
             weather: ["\uf0c2", "☁"], folder: ["\uf07c", "📁"], file: ["\uf15c", "📄"], search: ["\uf002", "🔍"],
             image: ["\uf03e", "🖼"], todo: ["\uf0ae", "📝"], reminder: ["\uf017", "⏰"], shell: ["\uf120", "⌨"],
-            sleep: ["\uf186", "💤"], system: ["\uf2db", "🔧"], check: ["\uf00c", "✓"]
+            sleep: ["\uf186", "💤"], system: ["\uf2db", "🔧"], machine: ["\uf080", "📊"], check: ["\uf00c", "✓"]
         };
         return (icons[name] ?? ["", ""])[bubble.nerdFont ? 0 : 1];
     }
@@ -1186,6 +1192,8 @@ PanelWindow {
         case "sleep_mode":
             return ["sleep", "getting sleepy…"];
         case "check_system":
+            if (a.area === "machine")
+                return ["machine", "checking the machine…"];
             return ["system", { network: "checking the network…", sound: "checking the sound…",
                 crashes: "looking for crashes…", services: "checking the services…" }[a.area] ?? "checking the system…"];
         case "read_log":
@@ -1584,27 +1592,34 @@ PanelWindow {
     // aichat's error, with what to do about the ones that need it
     // What went wrong, said so that someone new to aichat knows what to do (the
     // error itself follows)
+    // aichat's "Error: what\n\nCaused by:\n    why" on one line ("what: why"), so it fits the bubble
+    function compact(error: string): string {
+        return error.split("\n").map(l => l.trim()).filter(l => l && l !== "Caused by:")
+            .map(l => l.replace(/^Error:\s*/, "").replace(/^\d+:\s*/, "")).join(": ");
+    }
+
     function explained(error: string): string {
+        error = bubble.compact(error);
         const gone = error.match(/No endpoints found for ([^".]+)/);
         if (gone)
             return `OpenRouter has no model ${gone[1]} (any more) - pick another under Settings › Model, or find one `
-                + `on openrouter.ai/models and use .model openrouter:<name>\n\n${error}`;
+                + `on openrouter.ai/models and use .model openrouter:<name>\n${error}`;
         if (/Failed to load config/.test(error))
             return "aichat is not set up yet, so there is no model to answer with. See \"Getting started\" in "
-                + `Mascot's README: a free local model with Ollama, or a hosted one with OpenRouter.\n\n${error}`;
+                + `Mascot's README: a free local model with Ollama, or a hosted one with OpenRouter.\n${error}`;
         if (/aichat: (command )?not found/.test(error))
             return `aichat is not installed: install it (on Arch: pacman -S aichat), then set it up as `
-                + `"Getting started" in Mascot's README says.\n\n${error}`;
+                + `"Getting started" in Mascot's README says.\n${error}`;
         const missing = error.match(/model '([^']+)' not found/);
         if (missing)
             return `The model ${missing[1]} is not there - if it is a local one, download it with: ollama pull `
-                + `${missing[1].replace(/^ollama:/, "")}\n\n${error}`;
+                + `${missing[1].replace(/^ollama:/, "")}\n${error}`;
         const unreachable = error.match(/error sending request for url \((https?:\/\/[^/)]+)/);
         if (unreachable)
             return (/:11434$/.test(unreachable[1])
                 ? "Ollama does not answer - is it running? Start it with: systemctl start ollama"
                 : `Nothing answers at ${unreachable[1]} - check your network, or the address in aichat's config`)
-                + `\n\n${error}`;
+                + `\n${error}`;
         return error;
     }
 
@@ -1725,6 +1740,9 @@ PanelWindow {
                     // the answer and lingers (see onToolPoseChanged)
                     c.job = null;
                     c.toolKind = "";
+                    // The answer failed (no Ollama, no model...): the mascot is sad for a few seconds
+                    if (exitCode !== 0 && !job.done && c.replying && bubble.visible && bubble.event && c === bubble.current)
+                        bubble.linger("failed");
                     if (job.done)
                         job.done(job.output, exitCode === 0);
                 }
@@ -1797,7 +1815,10 @@ PanelWindow {
             id: scroller
 
             width: parent.width
-            height: Math.min(log.implicitHeight, 220)
+            // Gives way to an error, so it and the input stay inside the bubble
+            height: Math.max(0, Math.min(log.implicitHeight, 220, bubble.maxBodyHeight - 2 * bubble.padding
+                - title.implicitHeight - inputBox.height - content.spacing * (errorText.visible ? 3 : 2)
+                - (errorText.visible ? errorText.height : 0)))
             visible: (bubble.entries?.count ?? 0) > 0
             contentHeight: log.implicitHeight
             clip: true
@@ -1915,15 +1936,21 @@ PanelWindow {
         }
 
         Text {
+            id: errorText
+
             width: parent.width
             visible: !!bubble.current?.error
             text: bubble.current?.error ?? ""
             wrapMode: Text.Wrap
+            maximumLineCount: 6
+            elide: Text.ElideRight
             color: "#f38ba8"
             font.pixelSize: 12
         }
 
         Rectangle {
+            id: inputBox
+
             width: parent.width
             height: input.implicitHeight + 14
             radius: 8

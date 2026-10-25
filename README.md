@@ -273,10 +273,11 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
 - While a tool runs for the answer, a mascot can show what it does: it plays its behavior for that
   tool instead of `Talk`, if it has one, until the answer starts. `Todo` and `Reminder` (the todo list
   and reminders), `Weather`, `Files` (a folder or file), `Search` (in a file), `Image`, `Shell` (your
-  last commands), `Sleepy` (the sleep tool), `System` (troubleshooting). Robo writes in its notepad,
+  last commands), `Sleepy` (the sleep tool), `System` (troubleshooting), `Machine` (checking the machine). Robo writes in its notepad,
   holds up the globe, opens its head while it reads your commands, opens its chest while it checks
   your system... When the system tools found nothing to go on, it plays `Unsure` while it answers
-  (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs). A
+  (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs); when the answer
+  failed, `Failed` (Robo's "ERROR" and a tear). A
   reminder that is due plays `Alarm` (Robo's yellow "!").
 - Asleep (`mascot sleep`, a middle click), the mascot repeats its own `Sleep` behavior, else
   `LieDown` or `SitDown`. Many packs' `Sleep` gets up again at the end, or rolls along the floor;
@@ -621,7 +622,7 @@ writes, deletes or runs anything else:
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |
 | `sleep` | `sleep_mode` | "I need to focus, sleep for an hour": all mascots sleep until then (see *Putting mascots to sleep*); "wake up" wakes them early |
 | `shell` | `last_commands` | Your last commands in the terminal (5, or up to 10), to explain one: "what did my last command do?", "explain the git command I just ran" |
-| `system` | `check_system`, `read_log` | Troubleshoot your computer when you ask: "why can't my game find the others on the LAN?", "why is there no sound?", "why does Steam keep crashing?". It looks at the network (and firewall), sound, crashes or services, and searches the system log; it tells you what it found and the command that fixes it, and never runs it |
+| `system` | `check_system`, `read_log` | Troubleshoot your computer when you ask: "why can't my game find the others on the LAN?", "why is there no sound?", "why does Steam keep crashing?", "why is my computer so loud?". It looks at the network (and firewall), sound, crashes, services or the machine (temperatures and fans, CPU and graphics card, memory, disks, the programs using the most), and searches the system log; it tells you what it found and the command that fixes it, and never runs it |
 
 `CHAT_TOOLS` is `time,weather` by default; add `files` to let the mascot see your files, `todo`
 for the todo list, `reminders` for reminders, `shell` for your last commands, `sleep` to let the
@@ -683,7 +684,8 @@ The file, todo, reminder, shell and system tools keep to what is yours to share:
   `PROMPT_COMMAND="history -a"`; otherwise the mascot sees a terminal's commands only after it closes.
 - System: `check_system` and `read_log` only read, as you, without `sudo`: the journal
   (`journalctl`; all of it if you are in the `wheel`, `adm` or `systemd-journal` group, else only your
-  own), `coredumpctl`, `systemctl`, `ip`, `pactl`/`wpctl` and the firewall's rule files (ufw's in
+  own), `coredumpctl`, `systemctl`, `ip`, `pactl`/`wpctl`, `/proc` and `/sys` (the machine's sensors,
+  memory and disks) and the firewall's rule files (ufw's in
   `/etc/ufw`; firewalld and nftables need root, so it says it cannot see them). Every answer from them
   says what they could not see, and the mascot is told to say so rather than guess, and to give you
   the command to run yourself (with `sudo` when it needs it), never to say it ran it. Log lines are
@@ -735,7 +737,7 @@ models call tools more reliably than others; one that does not just answers with
 | `CHAT_ROLES` | empty | A role per mascot, `<mascot>=<role>;…`, used instead of `CHAT_ROLE` for those mascots; an empty role means Mascot's prompt. Takes effect from the next tap. |
 | `CHAT_TOOLS` | `time,weather` | What the mascot can use: `time`, `weather`, `files`, `todo`, `reminders`, `shell` and/or `sleep`, comma-separated; empty turns the tools off (see *Tools*). Takes effect from the next tap. |
 | `CHAT_DOTFILES` | *(empty)* | The hidden files and directories the file tools may see, `;`-separated, e.g. `~/.zshrc;~/.config/hypr`; empty: none (see *Tools*). Takes effect from the next tap. |
-| `CHAT_LANGUAGE` | *(empty)* | Your language, e.g. `Danish`: with a mascot's or Mascot's prompt (not your own roles) the model answers in it unless you write in another, and remarks use it. Empty: the mascot follows your messages, and remarks use your locale's language (e.g. English for `en_DK`). Takes effect from the next tap. |
+| `CHAT_LANGUAGE` | *(empty)* | Your language, e.g. `Danish`: with a mascot's or Mascot's prompt (not your own roles) the model answers in it unless you write in another, and remarks use it. With tools, each tool's answer ends with a note to answer in it (also with your own roles). Empty: the mascot follows your messages, and remarks use your locale's language (e.g. English for `en_DK`). Takes effect from the next tap. |
 | `BUBBLE_ENABLED` | `true` | Whether mascotd starts the bubble. Read when mascotd starts. |
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 

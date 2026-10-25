@@ -34,6 +34,7 @@ with sudo, with what looks like a password or key in a log line hidden."""
 
 import base64
 import fcntl
+import glob
 import ipaddress
 import json
 import os
@@ -957,7 +958,7 @@ def sleep_mode(args):
 # sudo. Every answer says what could not be seen, so the model has no gap to
 # guess into, and tells the bubble whether it found anything ("mascot-found"),
 # or not ("mascot-unsure": the mascot shows it does not know)
-SYSTEM_AREAS = ("network", "sound", "crashes", "services")
+SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine")
 LOG_LINES = 60  # lines of the log read_log shows, the newest
 LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
 SECRET_VALUE = re.compile(r"((?:pass(?:wd|word)?|secret|token|api[_-]?key|apikey|auth[_-]?key|bearer|credential)"
@@ -1268,6 +1269,202 @@ def check_services(args):
     return found, lines, missing
 
 
+HOT = 90  # °C, for a sensor that gives no critical temperature of its own
+# Only for testing: a made-up /proc and /sys to read instead (other hardware)
+MACHINE_ROOT = os.environ.get("MASCOT_MACHINE_ROOT", "").rstrip("/")
+CPU_SENSORS = ("k10temp", "coretemp", "zenpower", "cpu_thermal")
+CPU_ZONES = ("x86_pkg_temp", "cpu", "soc", "pkg", "tcpu")  # thermal zones that are the CPU
+DISK_FS = {"ext2", "ext3", "ext4", "btrfs", "xfs", "f2fs", "zfs", "bcachefs", "jfs", "reiserfs", "vfat", "exfat",
+           "ntfs", "ntfs3", "fuseblk"}
+
+
+# What a hwmon driver's sensors are, for a model that does not know the names
+SENSOR_KINDS = (("k10temp", "the CPU"), ("coretemp", "the CPU"), ("zenpower", "the CPU"), ("cpu_thermal", "the CPU"),
+                ("amdgpu", "a graphics card"), ("nouveau", "a graphics card"), ("i915", "a graphics card"),
+                ("xe", "a graphics card"), ("nvme", "an SSD"), ("drivetemp", "a disk"), ("spd5118", "a RAM module"),
+                ("jc42", "a RAM module"), ("nct", "the mainboard"), ("it8", "the mainboard"), ("asus", "the mainboard"),
+                ("acpitz", "an ACPI sensor, often by the CPU"), ("prom", "the chipset, AMD Promontory; its USB part"),
+                ("xhci", "a USB controller"), ("r8169", "the network card"),
+                ("igc", "the network card"), ("ath", "the Wi-Fi card"), ("iwlwifi", "the Wi-Fi card"),
+                ("mt7", "the Wi-Fi card"), ("thinkpad", "the laptop"), ("dell", "the laptop"), ("BAT", "the battery"))
+
+
+# What a sensor's label means, where the name says little
+SENSOR_LABELS = {"edge": "edge = the chip", "junction": "junction = the chip's hottest spot",
+                 "mem": "mem = its video memory (hotter than the chip, normally: give the chip's temperature, and this only "
+                        "when it is near its limit or the user asks about the graphics card itself)", "Tctl": "Tctl = the CPU, what the fans follow",
+                 "Tdie": "Tdie = the CPU", "Composite": "Composite = the SSD"}
+
+
+def at(path):
+    """Where to read /proc or /sys from (see MACHINE_ROOT)"""
+    return MACHINE_ROOT + path
+
+
+def read_text(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return file.read().strip()
+    except OSError:
+        return None
+
+
+def cpu_times():
+    """{pid: (name, ticks)} of the running programs, and the CPU's busy and total ticks"""
+    procs = {}
+    for pid in os.listdir(at("/proc")):
+        stat = read_text(at(f"/proc/{pid}/stat")) if pid.isdigit() else None
+        if stat and ")" in stat:
+            fields = stat.rsplit(")", 1)[1].split()
+            if int(fields[6]) & 0x200000:  # a kernel thread (PF_KTHREAD), not a program
+                continue
+            procs[pid] = (stat[stat.find("(") + 1:stat.rfind(")")], int(fields[11]) + int(fields[12]))
+    ticks = [int(n) for n in (read_text(at("/proc/stat")) or "cpu 0").splitlines()[0].split()[1:]]
+    return procs, sum(ticks) - sum(ticks[3:5]), sum(ticks)
+
+
+def check_machine(args):
+    """Temperatures and fans (hwmon), how busy the CPU and graphics card are, memory, disks, and the
+    programs that use the most: from /proc and /sys, which every Linux has"""
+    found, lines, missing = 0, [], []
+    before, busy0, total0 = cpu_times()
+    time.sleep(0.5)
+    after, busy1, total1 = cpu_times()
+    cores = os.cpu_count() or 1
+    load = (read_text(at("/proc/loadavg")) or "").split()[:3]
+    if total1 > total0:
+        used = round(100 * (busy1 - busy0) / (total1 - total0))
+        lines.append(f"CPU: {used}% busy now, {cores} threads" + (f", load {' '.join(load)} (1, 5, 15 min)" if load else ""))
+        found += used >= 90
+    else:
+        missing.append("how busy the CPU is (/proc/stat)")
+    # Temperatures, fans and power, by device (nct*, it87: the mainboard; k10temp, coretemp: the CPU)
+    hot, any_fan = [], False
+    for hwmon in sorted(glob.glob(at("/sys/class/hwmon/hwmon*"))):
+        name = read_text(f"{hwmon}/name") or "?"
+        temps, fans = [], []
+        for path in sorted(glob.glob(f"{hwmon}/temp*_input")):
+            base = path[:-len("_input")]
+            value, crit = read_text(path), read_text(base + "_crit")
+            if not value or not value.lstrip("-").isdigit() or int(value) <= 0:
+                continue
+            c = int(value) / 1000
+            limit = int(crit) / 1000 if crit and crit.isdigit() and 0 < int(crit) < 200000 else None
+            label = read_text(base + "_label") or os.path.basename(base)
+            temps.append(f"{SENSOR_LABELS.get(label, label)} {c:.0f}°C" + (f" (critical {limit:.0f})" if limit else ""))
+            if c >= (limit - 5 if limit else HOT):
+                hot.append(f"{name} {label} {c:.0f}°C")
+        for path in sorted(glob.glob(f"{hwmon}/fan*_input")):
+            value = read_text(path)
+            if value and value.isdigit() and int(value) > 0:
+                fans.append(f"{read_text(path[:-len('_input')] + '_label') or os.path.basename(path)[:-6]} {value} rpm")
+            any_fan = any_fan or bool(value and value.isdigit())  # 0 rpm is a fan standing still
+        power = read_text(f"{hwmon}/power1_average") or read_text(f"{hwmon}/power1_input")
+        watts = [f"{int(power) / 1e6:.0f} W"] if power and power.isdigit() and int(power) > 0 else []
+        kind = next((k for prefix, k in SENSOR_KINDS
+                     if name.startswith(prefix) or prefix == "xhci" and prefix in name), None)
+        # amdgpu: how busy it is and its memory; built into the CPU when it has little memory of its own
+        dev = f"{hwmon}/device"
+        gpu, used, total = (read_text(f"{dev}/{f}") for f in ("gpu_busy_percent", "mem_info_vram_used",
+                                                              "mem_info_vram_total"))
+        if total and total.isdigit():
+            kind = "the graphics card" if int(total) > 2 * 2**30 else "the graphics built into the CPU"
+            if gpu and gpu.isdigit():
+                watts.append(f"{gpu}% busy")
+            if used and used.isdigit():
+                watts.append(f"video memory {int(used) / 2**30:.1f} of {int(total) / 2**30:.1f} GiB used")
+        if temps or fans:
+            lines.append(f"{name}{f' ({kind})' if kind else ''}: " + ", ".join(temps + fans + watts))
+    # Laptops and ARM boards may only have thermal zones (ACPI, the SoC): only when hwmon has no CPU
+    cpu_seen = any(l.startswith(CPU_SENSORS) for l in lines)
+    if not cpu_seen:
+        zones = []
+        for zone in sorted(glob.glob(at("/sys/class/thermal/thermal_zone*"))):
+            kind, value = read_text(f"{zone}/type") or "?", read_text(f"{zone}/temp")
+            if not value or not value.lstrip("-").isdigit() or int(value) <= 0:
+                continue
+            c = int(value) / 1000
+            cpu = kind.lower().startswith(CPU_ZONES) or "cpu" in kind.lower()
+            cpu_seen = cpu_seen or cpu
+            zones.append(f"{kind}{' (the CPU)' if cpu else ''} {c:.0f}°C")
+            if c >= HOT:
+                hot.append(f"thermal zone {kind} {c:.0f}°C")
+        if zones:
+            lines.append("Thermal zones: " + ", ".join(zones))
+    if not cpu_seen:
+        missing.append("the CPU's temperature (no sensor driver for it: lm_sensors' sensors-detect finds one)")
+    if hot:
+        found += 1
+        lines.append("Hot (near its critical temperature, or over " + str(HOT) + "°C): " + ", ".join(hot))
+    # NVIDIA's driver only through nvidia-smi
+    if os.path.exists(at("/proc/driver/nvidia")):
+        out, err = run("nvidia-smi", "--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,fan.speed",
+                       "--format=csv,noheader")
+        if out:
+            lines += [f"NVIDIA (name, °C, busy, video memory used, total, fan): {l.strip()}"
+                      for l in out.splitlines() if l.strip()]
+            any_fan = any_fan or bool(re.search(r",\s*\d+ %\s*$", out.strip()))
+        else:
+            missing.append(f"the NVIDIA card ({err.strip() or 'nvidia-smi said nothing'})")
+    if any_fan:  # a model calls 800 rpm "fast" otherwise
+        lines.append("A fan's rpm alone does not say whether it runs fast: fans differ (case fans often 500-1500 rpm, "
+                     "pumps 2000-4000 all the time). Give the numbers; do not call them fast or slow.")
+    else:
+        missing.append("the fans (no sensor for them: on many mainboards that needs a driver of its own, "
+                       "e.g. nct6775, nct6687 or it87; many laptops keep them hidden)")
+    # Memory
+    mem = {}
+    for line in (read_text(at("/proc/meminfo")) or "").splitlines():
+        key, _, value = line.partition(":")
+        if value.split() and value.split()[0].isdigit():
+            mem[key] = int(value.split()[0]) * 1024
+    if mem.get("MemTotal"):
+        avail, swap = mem.get("MemAvailable", 0), mem.get("SwapTotal", 0) - mem.get("SwapFree", 0)
+        lines.append(f"Memory: {(mem['MemTotal'] - avail) / 2**30:.1f} of {mem['MemTotal'] / 2**30:.1f} GiB used, "
+                     f"{avail / 2**30:.1f} available" + (f"; swap {swap / 2**30:.1f} of "
+                     f"{mem['SwapTotal'] / 2**30:.1f} GiB used" if mem.get("SwapTotal") else "; no swap"))
+        found += avail < mem["MemTotal"] * 0.1
+    else:
+        missing.append("the memory (/proc/meminfo)")
+    # Disks: each file system once
+    seen, disks = set(), []
+    for line in (read_text(at("/proc/self/mounts")) or "").splitlines():
+        parts = line.split()
+        if len(parts) < 3 or parts[2] not in DISK_FS:
+            continue
+        where = parts[1].replace("\\040", " ")
+        try:
+            st = os.statvfs(at(where))
+            key = os.stat(at(where)).st_dev if parts[2] != "btrfs" else parts[0]
+        except OSError:
+            continue
+        if key in seen or not st.f_blocks:
+            continue
+        seen.add(key)
+        size, free = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
+        full = round(100 * (size - free) / size)
+        digits = 1 if size < 10 * 2**30 else 0
+        disks.append(f"{where} {full}% full, {free / 2**30:.{digits}f} of {size / 2**30:.{digits}f} GiB free")
+        found += full >= 90
+    lines.append("Disks: " + ("; ".join(disks) if disks else "none found"))
+    # The programs using the most now (CPU over the half second above; memory), by name
+    cpu, ram = {}, {}
+    page = os.sysconf("SC_PAGE_SIZE")
+    for pid, (name, ticks) in after.items():
+        if pid in before and before[pid][0] == name:
+            cpu[name] = cpu.get(name, 0) + ticks - before[pid][1]
+        rss = (read_text(at(f"/proc/{pid}/statm")) or "0 0").split()
+        if len(rss) > 1 and rss[1].isdigit():
+            ram[name] = ram.get(name, 0) + int(rss[1]) * page
+    hz = os.sysconf("SC_CLK_TCK")
+    top = [f"{n} {100 * t / hz / 0.5:.0f}%" for n, t in sorted(cpu.items(), key=lambda kv: -kv[1])[:6] if t > 0]
+    if total1 > total0:  # else it could not tell
+        lines.append("Most CPU now (100% = one thread): " + (", ".join(top) if top else "nothing busy"))
+    lines.append("Most memory: " + ", ".join(f"{n} {b / 2**30:.1f} GiB" for n, b in
+                                              sorted(ram.items(), key=lambda kv: -kv[1])[:6]))
+    return found, lines, missing
+
+
 def sure(found):
     """Tells the bubble whether the tool found something to go on"""
     print("mascot-found" if found else "mascot-unsure", file=sys.stderr)
@@ -1280,12 +1477,19 @@ def check_system(args):
     if area not in SYSTEM_AREAS:
         raise ToolError("area must be one of " + ", ".join(SYSTEM_AREAS))
     found, lines, missing = {"network": check_network, "sound": check_sound, "crashes": check_crashes,
-                             "services": check_services}[area](args)
-    sure(found)
+                             "services": check_services, "machine": check_machine}[area](args)
+    # The machine's readings are something to go on, even when none of them is a problem
+    sure(found or (area == "machine" and lines))
     result = [f"What the system says about {area} (read without sudo):"] + lines
     if missing:
         result.append("Could not see: " + "; ".join(missing) + ".")
-    if not found:
+    if area == "machine":  # a model likes to answer a later question from these (a time made it think them fresh)
+        result.append("These are only true right now: for the next question about the machine, call check_system "
+                      "again instead of answering from these.")
+    if not found and area == "machine":
+        result.append("Nothing here is near its limit (temperatures, memory, disks). Answer from these readings; "
+                      "if the user asked what is wrong, say nothing here shows it, and do not guess.")
+    elif not found:
         result.append(f"Nothing here points to a problem with {area}. Say so, and that you cannot tell the cause "
                       "from this; do not guess one.")
     return "\n".join(result)[:read_limit()]
@@ -1350,6 +1554,10 @@ def main():
     except ToolError as e:
         result = f"error: {e}"  # for the model, which can tell the user
     output = os.environ.get("LLM_OUTPUT")
+    language = " ".join(os.environ.get("MASCOT_LANGUAGE", "").split())[:40]
+    if output and language:  # the last thing the model reads before it answers: a small one drifts otherwise
+        result += (f"\n\n(Answer the user in {language}, not in a language close to it, unless the user writes in "
+                   "another language.)")
     if output:
         with open(output, "a", encoding="utf-8") as file:
             file.write(result + "\n")

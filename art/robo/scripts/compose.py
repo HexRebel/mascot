@@ -1,4 +1,4 @@
-"""complete.png (3x3 sheet) -> <pack>/shime1..91.png (128x128, base at (64,128)) + preview.png
+"""complete.png (3x3 sheet) -> <pack>/shime1..94.png (128x128, base at (64,128)) + preview.png
 
     compose.py complete.png <pack> [bubble|arch|square]   (the chest symbol, see chest.py; bubble by default)
 
@@ -6,7 +6,7 @@ Cells: 1 glide (drawn facing right) · 2 dangle left · 3 dangle right · 4 fall
 Next to it: robo-cutout.png (looking straight ahead) and experimental.png (3x3; row 2: hologram,
 thinking, tinkering; row 3: notepad, -, opening its chest) and experimental3.png (3x3: pondering, nervous,
 cheering; grumpy, gears, singing; giggling, globe, meditating), and a few of experimental5.png and
-experimental6.png, the "?" of experimental7.png and the laughing of experimental8.png
+experimental6.png, the "?" of experimental7.png and a few of experimental8.png and experimental9.png (4x4)
 """
 import os
 import sys
@@ -213,17 +213,27 @@ def resized(im, f):
 
 more[1, 2] = resized(more[1, 2], 0.96)
 more[1, 1] = resized(more[1, 1], 1.12)
-hanging = resized(hanging, 1.04)  # front.png: its body a little shorter than the others
+hanging = resized(hanging, 1.09)  # front.png: drawn smaller than the sheet (by area, against 1-10: 1.04 was too little)
+
+def unpinked(im):
+    """The magenta left in a gap the outline closes in (between a handle and the head): see-through"""
+    a = np.asarray(im.convert("RGBA")).copy()
+    r, g, b = (a[..., i].astype(int) for i in range(3))
+    a[(r > 170) & (b > 170) & (g < 100), 3] = 0
+    return Image.fromarray(a)
+
 
 # experimental5.png and experimental6.png (3x3 each): a few each
-def cells_of(name, wanted, top=()):
-    """The wanted (row, column) cells of a 3x3 sheet, cut out, chest swapped, resized to the sheet;
-    the ones in top have a bubble above the head, moved down (see bubble_down())"""
+def cells_of(name, wanted, top=(), grid=3, left=None):
+    """The wanted (row, column) cells of a grid x grid sheet, cut out, chest swapped, resized to the sheet;
+    the ones in top have a bubble above the head, moved down (see bubble_down()); left: {cell: share of
+    its width} to leave out on the left (what pokes in from the cell next to it)"""
     sheet = Image.open(os.path.join(here, name))
-    w = sheet.width // 3
+    w = sheet.width // grid
     out = {}
     for r, c in wanted:
-        im = rechest(cutout(sheet.crop((c * w, r * w, (c + 1) * w, (r + 1) * w))), CHEST)
+        x = c * w + round(w * (left or {}).get((r, c), 0))
+        im = rechest(cutout(sheet.crop((x, r * w, (c + 1) * w, (r + 1) * w))), CHEST)
         if (r, c) in top:
             im = bubble_down(im, round((S - 2) / scale * visor(im) / VISOR))
         out[r, c] = matched(im)
@@ -233,7 +243,9 @@ def cells_of(name, wanted, top=()):
 five = cells_of("experimental5.png", [(0, 0), (0, 2), (1, 0), (1, 1), (2, 1), (2, 2)], top=[(0, 0)])
 six = cells_of("experimental6.png", [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1)])
 seven = cells_of("experimental7.png", [(2, 0)])
-eight = cells_of("experimental8.png", [(2, 0)])
+eight = cells_of("experimental8.png", [(1, 2), (2, 0), (2, 2)], left={(2, 2): 0.06})  # confetti
+nine = cells_of("experimental9.png", [(3, 2)], grid=4)
+eight[2, 2] = resized(unpinked(eight[2, 2]), 0.87)  # the graph on its visor: measured by its height (100 px, like 60)
 still = stand(0, im=hanging)  # front.png: standing still and sitting
 frames = {
     # Hovering: the same pose bobbing up and down (Walk/Run/Dash use 1, 2, 3, 2)
@@ -289,6 +301,9 @@ frames = {
     88: stand(0, im=six[2, 0]),   # a yellow "!" bulb: a reminder is due (Alarm)
     89: stand(0, im=seven[2, 0]), # a "?" on the visor, hand on the chin: a system tool found nothing (Unsure)
     91: stand(0, im=eight[2, 0]), # laughing, eyes shut tight ("><"): a todo is done (Done)
+    92: stand(0, im=eight[2, 2]), # a magnifying glass over a graph on its visor: checking the machine (Machine)
+    93: stand(0, im=eight[1, 2]), # worried, a drop of sweat (not used yet: kept for something else)
+    94: stand(0, im=nine[3, 2]),  # "ERROR" on its visor, a tear: an answer failed (Failed)
     90: dangle(0, im=hanging),    # held up and still: hanging straight down (Pinched, Resisting)
 }
 for n in (12, 13, 14, 23, 24, 25, 38, 39, 40, 41, 42, 43, 44, 45, 46, 49, 50, 51, 52, 53, 54, 55):

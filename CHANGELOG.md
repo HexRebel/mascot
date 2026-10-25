@@ -7,7 +7,22 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 - Robo laughs, eyes shut tight, when a todo is done (`Done`, a new image): when the mascot takes an item off
   the todo list, and after `.todo done`. Other mascots can have a `Done` behaviour of their own.
+- **The machine:** a new area for `check_system` (in `system`): temperatures and fans, how busy the CPU and
+  graphics card are, memory, disks and the programs using the most, from `/proc` and `/sys` (any distribution;
+  NVIDIA through `nvidia-smi`; laptops and ARM boards through their thermal zones; it says when it cannot see
+  the CPU's temperature or the fans). `scripts/fake_machines.py` shows what it says on other hardware. Ask "why is my computer so loud?" or "is a disk full?". Robo holds up a
+  magnifying glass over a graph while it checks (`Machine`, a new image).
+- When an answer fails (no Ollama, no model...), Robo shows "ERROR" and a tear for a few seconds (`Failed`,
+  a new image).
 - Robo also meditates now and then while it hovers about, to look a bit more alive.
+- Robo is the same size standing still and hanging straight as when it hovers and swings (it was about 5%
+  smaller), and stays dizzy and grumpy a little longer after landing (about 1.5 seconds).
+- Robo no longer jumps aside and shoots off along the floor now and then: it played Shimeji's pulling itself up,
+  which it has no images for.
+- Robo's "?" and "ERROR" read the right way round when it faces right (they were mirrored).
+- With `CHAT_LANGUAGE`, each tool's answer to the model ends with a note to answer in it (gemma4 once drifted
+  to Norwegian after a tool's English).
+- Robo no longer blinks between gliding and a sleepy face when it creeps along the floor: it hovers, as it walks.
 - The "?" (`Unsure`) and the laugh stay a few seconds after the answer, as meant: the end of the answer
   stopped them at once.
 

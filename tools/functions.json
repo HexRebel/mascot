@@ -234,7 +234,7 @@
   },
   {
     "name": "check_system",
-    "description": "Look into why something on the user's computer does not work: what the system's own tools and logs say about one area, read without sudo, and what could not be seen. Use it when the user asks why their network, a game's LAN, sound, a program that crashes or a service does not work. Base your answer only on what it shows.",
+    "description": "Look into why something on the user's computer does not work: what the system's own tools and logs say about one area, read without sudo, and what could not be seen. Use it when the user asks why their network, a game's LAN, sound, a program that crashes or a service does not work, or how their machine is doing (hot, loud, slow, memory or disks full). Base your answer only on what it shows.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -244,9 +244,10 @@
             "network",
             "sound",
             "crashes",
-            "services"
+            "services",
+            "machine"
           ],
-          "description": "network (connections, open ports, the firewall and what it blocked), sound (PipeWire's devices, volume and errors), crashes (programs that crashed) or services (failed services and errors in the log)."
+          "description": "network (connections, open ports, the firewall and what it blocked), sound (PipeWire's devices, volume and errors), crashes (programs that crashed) services (failed services and errors in the log) or machine (temperatures and fans, how busy the CPU and graphics card are, memory, disks, and the programs using the most)."
         },
         "program": {
           "type": "string",

@@ -1,9 +1,10 @@
 """Adds Chatter (talk: thinking), Snooze (sleep) and NewMessage (answered) to a converted Robo .wlshm,
 eight things it does now and then on the floor (Hologram, Tinker, Notepad, OpenChest, Giggle, Wink, Laugh,
-Meditate), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System),
-Unsure (a system tool found nothing to go on), Done (a todo is done) and Alarm (a reminder that is due),
-makes it hover (Walk/Run/Dash lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off)
-look straight ahead when it stands still (60), dangle whenever it is held up, and its personality (prompt.md)"""
+Meditate), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System,
+Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed) and Alarm
+(a reminder that is due),
+makes it hover (Walk/Run/Dash/Creep lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off), no pulling
+itself up, look straight ahead when it stands still (60), dangle whenever it is held up, and its personality (prompt.md)"""
 import io
 import json
 import os
@@ -14,7 +15,7 @@ src, dst = sys.argv[1], sys.argv[2]
 
 
 def frame(n, duration, readable=False):
-    """readable: also facing right it shows this image as it is, not mirrored (text: NEW, the "z")"""
+    """readable: also facing right it shows this image as it is, not mirrored (text: NEW, the "z", "?", ERROR)"""
     return {"type": "Frame", "image": f"shime{n}.qoi", "image_right": f"shime{n}.qoi" if readable else None,
             "image_anchor_x": 64,
             "image_anchor_y": 128, "velocity_x": 0, "velocity_y": 0, "duration": duration}
@@ -45,7 +46,8 @@ actions += [
     # Asleep for a while (Quiet): switched off, grey (see mascot_sleep())
     action("SwitchedOff", "Stay", [frame(86, 250)]),
 ]
-bob = {"Walk": [1, 2, 3, 2], "Run": [1, 2, 3, 2], "Dash": [1, 2, 3, 2]}  # it leans in the glide, bobbing
+# It leans in the glide, bobbing; creeping too (else it blinked between the glide and the sleepy rest, 20/21)
+bob = {"Walk": [1, 2, 3, 2], "Run": [1, 2, 3, 2], "Dash": [1, 2, 3, 2], "Creep": [1, 2, 3, 2]}
 for a in actions:
     if a["name"] == "Stand" and a["content"] and "frames" in a["content"][0]:
         for f in a["content"][0]["frames"]:
@@ -60,13 +62,18 @@ for a in actions:
     if a["name"] in bob and a["content"] and "frames" in a["content"][0]:
         for i, f in enumerate(a["content"][0]["frames"]):
             f["image"] = f"shime{bob[a['name']][i % 4]}.qoi"
+    # Landed: dizzy, then grumpy, long enough to be seen (4 ticks each was a third of a second)
+    if a["name"] == "Bouncing" and a["content"] and "frames" in a["content"][0]:
+        for f in a["content"][0]["frames"]:
+            f["duration"] = {"shime18.qoi": 13, "shime19.qoi": 25}.get(f["image"], f["duration"])
 # Things it does now and then on the floor
 FUN = {"Hologram": 64, "Tinker": 65, "Notepad": 66, "OpenChest": 67, "Giggle": 74, "Wink": 81, "Laugh": 82,
        "Meditate": 72}
 # Singing (73) only while music plays: experimental, not yet (Mascot has to see that music plays, MPRIS)
 # Poses only for a tool
-POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91}  # the magnifying glass (78): kept for later
-actions += [action(name, "Animate", [frame(n, 100)]) for name, n in {**FUN, **POSES}.items()]
+POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94}  # the magnifying glass (78): kept for later
+READABLE = {89, 94}  # the "?" and "ERROR": not mirrored facing right
+actions += [action(name, "Animate", [frame(n, 100, n in READABLE)]) for name, n in {**FUN, **POSES}.items()]
 behaviors = json.load(source.extractfile("behaviors.json"))
 defs = behaviors["definitions"]
 floor = next(d for d in defs if d["name"] == "___CONDITION_0")  # on the floor: StandUp, SitDown...
@@ -85,10 +92,14 @@ for name in FUN:
 floor["next_behavior_list_count"] = len(floor["next_behavior_list"])
 # While a tool runs for its answer, it shows what it does (see mascot_chat_doing())
 TOOLS = {"Todo": "Notepad", "Reminder": "Salute", "Weather": "Globe", "Files": "Hologram", "Image": "Hologram",
-         "Search": "Hologram", "Shell": "Gears", "Sleepy": "Meditate", "System": "OpenChest",
-         "Unsure": "Puzzled", "Done": "Delighted", "Alarm": "Alarm", "Quiet": "SwitchedOff"}
+         "Search": "Hologram", "Shell": "Gears", "Sleepy": "Meditate", "System": "OpenChest", "Machine": "Inspect",
+         "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff"}
 for name, act in TOOLS.items():
     behavior(name, act, 0, True)
+# Pulling itself up: Robo has no images for it, so the glide jumped aside (anchors 96, 32) and shot off 60 px
+for d in defs:
+    if d["name"] == "PullUpShimeji":
+        d["frequency"] = 0
 manifest = json.load(source.extractfile("manifest.json"))
 manifest["description"] = "Robo, Mascot's own mascot: a small hovering robot. Made with Google Gemini from a text prompt; CC0."
 manifest["artist"] = "HexRebel (made with Google Gemini)"
