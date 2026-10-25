@@ -3,7 +3,10 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.4.0 (2026-10-25)
+
+The mascot can look at the machine itself (temperatures, fans, memory, disks), Robo laughs, meditates and shows
+ERROR, and the README is a short front page.
 
 - Robo laughs, eyes shut tight, when a todo is done (`Done`, a new image): when the mascot takes an item off
   the todo list, and after `.todo done`. Other mascots can have a `Done` behaviour of their own.
@@ -25,6 +28,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Robo no longer blinks between gliding and a sleepy face when it creeps along the floor: it hovers, as it walks.
 - The "?" (`Unsure`) and the laugh stay a few seconds after the answer, as meant: the end of the answer
   stopped them at once.
+- The README is a short front page; the rest moved unchanged to `docs/` (the chat bubble, mascots, building,
+  upstream).
 
 ## 0.3.0 (2026-10-24)
 
