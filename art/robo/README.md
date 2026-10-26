@@ -24,7 +24,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `experimental4.png` | 3×3; used: row 2 column 1, glowing heart eyes (98) |
 | `experimental11.png` | 3×3; used: row 2 column 3, sunglasses (97) |
 | `experimental12.png` | 3×3; used: row 2 column 1, a magnifying glass (99, `Power`); row 1 column 1, wondering (101); row 2 column 3, binoculars (102) |
-| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime102.png` (128×128, base at (64, 128)) and `preview.png` |
+| `experimental13.png` | 3×3; used: row 3 column 1, wrapped in a blanket, freezing (103, `Cold`) |
+| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime103.png` (128×128, base at (64, 128)) and `preview.png` |
 | `scripts/chest.py` | Swaps the square on its chest for a speech bubble (or the Arch logo, for your own copy only: it is Arch Linux's trademark) |
 | `scripts/measure.py` | Checks that Robo is the same size in every frame (by its visor); run it after adding images |
 | `scripts/cutout.py` | `robo.png` → `robo-cutout.png` |
@@ -39,7 +40,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 - While the bubble answers: **thinks** (`Chatter`, three ways of thinking in turn). While a tool runs for the answer it shows what it
   does (see `mascot_chat_doing()`): the **notepad** for the todo list, a **salute** for reminders, the **globe** for the
   weather, the **hologram cube** for files, images and searching a file, its
-  **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. Thanked or praised: **heart eyes** (`Love`). When that found
+  **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. The weather feels like 0 °C or colder: wrapped in a
+  **blanket**, freezing (`Cold`). Thanked or praised: **heart eyes** (`Love`). When that found
   nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
   **laughing**, eyes shut tight (`Done`). An answer that failed: **"ERROR"** and a tear (`Failed`). A reminder
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks

@@ -66,7 +66,8 @@ PanelWindow {
     }
 
     function lingers(pose: string): bool {
-        return pose === "unsure" || pose === "done" || pose === "failed" || pose === "fullpower" || pose === "love";
+        return pose === "unsure" || pose === "done" || pose === "failed" || pose === "fullpower" || pose === "love"
+            || pose === "cold";
     }
 
     function linger(pose: string): void {
@@ -121,6 +122,7 @@ PanelWindow {
             property bool found: false
             property bool ticked: false // remove_todo took an item off: the mascot is glad ("done")
             property bool fullPower: false // check_system saw the CPU set to performance ("fullpower")
+            property bool cold: false // the weather feels like 0 °C or colder: the mascot is freezing ("cold")
             property bool loved: false // the message is only thanks or a compliment ("love"), see compliment()
             property int mascot: -1 // whose conversation it is
             // Closed while answering: the mascot stays sitting (and talking)
@@ -1158,6 +1160,7 @@ PanelWindow {
         c.found = false;
         c.ticked = false;
         c.fullPower = false;
+        c.cold = false;
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
@@ -1746,7 +1749,7 @@ PanelWindow {
                     if ((c.toolKind || c.loved) && c.streaming >= 0 && c.streaming < c.entries.count
                             && bubble.answerOf(c.entries.get(c.streaming).body))
                         c.toolKind = c.unsure && !c.found ? "unsure" : c.ticked ? "done" : c.fullPower ? "fullpower"
-                            : c.loved ? "love" : "";
+                            : c.cold ? "cold" : c.loved ? "love" : "";
                 }
             }
             // Line by line, so what a tool starts doing shows while it runs
@@ -1766,6 +1769,8 @@ PanelWindow {
                         c.ticked = true;
                     } else if (c?.job === job && line === "mascot-full-power") {
                         c.fullPower = true;
+                    } else if (c?.job === job && line === "mascot-cold") {
+                        c.cold = true;
                     }
                 }
             }

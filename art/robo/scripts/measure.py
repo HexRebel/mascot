@@ -7,6 +7,8 @@ compose.py resizes them by the visor; run this after adding images, and look at 
 Frames that hold something navy-ish or hide part of the visor (the open head, the microphone) can measure
 wrong: check those by eye.
 """
+import os
+import re
 import sys
 
 import numpy as np
@@ -32,7 +34,8 @@ def visor(im):
 
 
 pack = sys.argv[1]
-frames = [int(n) for n in sys.argv[2].split(",")] if len(sys.argv) > 2 else range(1, 103)
+frames = [int(n) for n in sys.argv[2].split(",")] if len(sys.argv) > 2 else \
+    sorted(int(m[1]) for m in map(re.compile(r"shime(\d+)\.png").fullmatch, os.listdir(sys.argv[1])) if m)
 ref = visor(Image.open(f"{pack}/shime60.png"))[0]
 print(f"frame 60 (standing still): visor {ref} px wide")
 for n in frames:

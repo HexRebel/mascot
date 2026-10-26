@@ -5,6 +5,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- Ask about the weather when it feels like 0 °C or colder, and Robo wraps himself in a blanket while he
+  answers (`Cold`, one new image). Other figures can have one too.
 - Turn the screen off and on again (or unplug it), and Robo comes back: when the last screen goes away, mascotd
   keeps running and summons the mascots again on the next screen, instead of sending them away. They come back
   awake, and the bubble starts a new conversation, as after a restart.

@@ -7,7 +7,8 @@ Next to it: robo-cutout.png (looking straight ahead) and experimental.png (3x3; 
 thinking, tinkering; row 3: notepad, -, opening its chest) and experimental3.png (3x3: pondering, nervous,
 cheering; grumpy, gears, singing; giggling, globe, meditating), and a few of experimental5.png and
 experimental6.png, the "?" of experimental7.png, a few of experimental8.png and experimental9.png (4x4), the Easter egg of
-experimental10.png and one each of full.png, experimental11.png, experimental4.png and three of experimental12.png
+experimental10.png and one each of full.png, experimental11.png, experimental4.png, three of experimental12.png and
+the blanket of experimental13.png
 """
 import os
 import sys
@@ -264,6 +265,7 @@ waving = cells_of("full.png", [(2, 2)])
 eleven = cells_of("experimental11.png", [(1, 2)])
 four = cells_of("experimental4.png", [(1, 0)])
 twelve = cells_of("experimental12.png", [(0, 0), (1, 0), (1, 2)])
+thirteen = cells_of("experimental13.png", [(2, 0)])
 eight[2, 2] = resized(unpinked(eight[2, 2]), 0.87)  # the graph on its visor: measured by its height (100 px, like 60)
 still = stand(0, im=hanging)  # front.png: standing still and sitting
 frames = {
@@ -329,6 +331,7 @@ frames = {
     99: stand(0, im=clear_glass(twelve[1, 0])),  # a magnifying glass: checking how the CPU runs (Power)
     101: stand(0, im=twelve[0, 0]),  # wondering, a hand on its cheek
     102: stand(0, im=twelve[1, 2]),  # looking through binoculars
+    103: stand(0, im=thirteen[2, 0]),  # wrapped in a blanket, freezing: the weather feels like 0 °C or colder (Cold)
     100: stand(0, im=nine[3, 0]),   # "100% FULL POWER" on its visor, flexing: the CPU on performance (FullPower)
     90: dangle(0, im=hanging),    # held up and still: hanging straight down (Pinched, Resisting)
 }

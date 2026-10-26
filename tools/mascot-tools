@@ -111,9 +111,13 @@ def get_current_weather(args):
     request = urllib.request.Request(url, headers={"User-Agent": "curl/8"})  # plain text, not HTML
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
-            return response.read(4096).decode("utf-8", "replace").strip()
+            weather = response.read(4096).decode("utf-8", "replace").strip()
     except OSError as e:
         raise ToolError(f"could not get the weather: {e}")
+    feels = re.search(r"feels like ([+-]?\d+)°C", weather)
+    if feels and int(feels.group(1)) <= 0:
+        print("mascot-cold", file=sys.stderr)  # the mascot wraps itself in a blanket
+    return weather
 
 
 def allowed_dotfiles():
