@@ -281,11 +281,18 @@ PanelWindow {
             bubble.pendingText = "";
         }
         const command = bubble.pendingCommand;
-        bubble.pendingCommand = "";
+        // Busy: the first time the bubble opens, warmUp() asks aichat about the model;
+        // the command waits for it (onBusyChanged) instead of being lost
         if (!command || bubble.busy)
             return;
+        bubble.pendingCommand = "";
         bubble.entries.append({ kind: "you", body: command });
         dotCommand(command);
+    }
+
+    onBusyChanged: {
+        if (!bubble.busy && bubble.visible)
+            runPending();
     }
 
     // CHAT_REMARKS: the mascot says something on its own. The bubble opens
@@ -528,6 +535,7 @@ PanelWindow {
     // running reply carries on into its conversation
     function dismiss(): void {
         bubble.visible = false;
+        bubble.pendingCommand = ""; // one still waiting (runPending()) is not for the next opening
         bubble.hiddenForDrag = false;
         coolDown();
         bubble.remarking = false; // after hiding, or OnDemand would take the keyboard first

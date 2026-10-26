@@ -3,6 +3,12 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- Fixed: a menu item that opens the bubble with a command (Info, Todo list, Reminders, Help, Tools, a model,
+  role or session) did nothing but open the bubble the first time after Mascot started. The command now waits
+  until the bubble has asked aichat about the model.
+
 ## 0.6.0 (2026-10-26)
 
 Robo comes back when the screen is turned on again and peeks out of a hole in the floor when he is summoned,
