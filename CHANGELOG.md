@@ -3,6 +3,12 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- Fixed (upstream bug): mascotd kept the screen's description, make and model as pointers into text Wayland
+  frees, and sent the freed description to `mascot` at start and whenever a screen changed. Found with
+  AddressSanitizer; it never crashed, but could give garbled text or a crash.
+
 ## 0.5.0 (2026-10-25)
 
 The mascot can tell how the CPU is set to run, Robo gets heart eyes when you thank him, five new things to do on

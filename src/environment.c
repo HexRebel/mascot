@@ -123,10 +123,11 @@ struct environment_callbacks {
 struct output_info {
   struct wl_output *output;
 
-  const char *name;
-  const char *make;
-  const char *model;
-  const char *desc;
+  // Own copies (keep_string()): Wayland frees event strings after the handler
+  char *name;
+  char *make;
+  char *model;
+  char *desc;
   uint32_t id;
   uint32_t width;
   uint32_t height;
@@ -915,6 +916,11 @@ static void on_format(void *data, struct wl_shm *shm, uint32_t format) {
 
 static const struct wl_shm_listener wl_shm_listener_cb = {.format = on_format};
 
+static void keep_string(char **slot, const char *value) {
+  free(*slot);
+  *slot = value ? strdup(value) : NULL;
+}
+
 static void on_output_geometry(void *data, struct wl_output *output, int32_t x,
                                int32_t y, int32_t physical_width,
                                int32_t physical_height, int32_t subpixel,
@@ -927,8 +933,8 @@ static void on_output_geometry(void *data, struct wl_output *output, int32_t x,
   env->output.pwidth = physical_width;
   env->output.pheight = physical_height;
   env->output.subpixel = subpixel;
-  env->output.make = make;
-  env->output.model = model;
+  keep_string(&env->output.make, make);
+  keep_string(&env->output.model, model);
   env->output.transform = transform;
 }
 
@@ -981,14 +987,14 @@ static void on_output_name(void *data, struct wl_output *output,
                            const char *name) {
   UNUSED(output);
   environment_t *env = (environment_t *)data;
-  env->output.name = strdup(name);
+  keep_string(&env->output.name, name);
 }
 
 static void on_output_description(void *data, struct wl_output *output,
                                   const char *desc) {
   UNUSED(output);
   environment_t *env = (environment_t *)data;
-  env->output.desc = desc;
+  keep_string(&env->output.desc, desc);
 }
 
 static const struct wl_output_listener wl_output_listener = {
@@ -2313,7 +2319,7 @@ static void xdg_output_name(void *data, struct zxdg_output_v1 *xdg_output,
   UNUSED(xdg_output);
   environment_t *env = data;
   env->xdg_output_done = false;
-  env->output.name = strdup(name);
+  keep_string(&env->output.name, name);
 }
 
 static void xdg_output_description(void *data,
@@ -2322,7 +2328,7 @@ static void xdg_output_description(void *data,
   UNUSED(xdg_output);
   environment_t *env = data;
   env->xdg_output_done = false;
-  env->output.desc = strdup(description);
+  keep_string(&env->output.desc, description);
 }
 
 static void xdg_output_done(void *data, struct zxdg_output_v1 *xdg_output) {
@@ -2643,6 +2649,10 @@ void environment_unlink(environment_t *env) {
   if (env->output.output) {
     wl_output_destroy(env->output.output);
   }
+  free(env->output.name);
+  free(env->output.make);
+  free(env->output.model);
+  free(env->output.desc);
   free(env);
   wl_display_flush(display);
 }
