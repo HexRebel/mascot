@@ -1659,8 +1659,10 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 random_env: Environment = random.choice(envs) if envs else random.choice(list(environments.values()))
                 if xpos == -1:
                     xpos = 64 + random.randint(0, random_env.width - 128)
+                # Nowhere in particular: the figure appears on the floor, if it can (Robo peeks out of a hole)
+                behavior = arguments.behavior or ("Appear" if arguments.position is None and arguments.y is None else "")
 
-                packet = Spawn(prototype.id, random_env.id, xpos, ypos, arguments.behavior)
+                packet = Spawn(prototype.id, random_env.id, xpos, ypos, behavior)
                 client.queue_packet(packet)
 
             else:

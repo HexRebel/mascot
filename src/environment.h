@@ -191,6 +191,10 @@ void environment_summon_mascot(
     environment_t* environment, struct mascot_prototype* prototype,
     int32_t x, int32_t y, void(*callback)(struct mascot*, void*), void* data
 );
+// Summoned without a place: on the floor at x, playing the figure's "Appear" (Robo peeks out of a hole); a figure
+// without one falls from y, as environment_summon_mascot() does
+void environment_summon_mascot_appearing(environment_t* environment, struct mascot_prototype* prototype,
+                                         int32_t x, int32_t y);
 void environment_remove_mascot(environment_t* environment, struct mascot* mascot);
 void environment_set_prototype_store(environment_t* environment, mascot_prototype_store* store);
 uint32_t environment_tick(environment_t* environment, uint32_t tick);

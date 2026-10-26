@@ -292,7 +292,7 @@ static void summon_waiting_mascots(void)
                 INFO("<%s> Screen is back, summoned again", waiting_mascots[i]);
                 int x = rand() % environment_workarea_width(env);
                 int y = environment_workarea_height(env) - 256;
-                environment_summon_mascot(env, proto, x, y, NULL, NULL);
+                environment_summon_mascot_appearing(env, proto, x, y);
             } else {
                 WARN("<%s> Screen is back, but the mascot is gone", waiting_mascots[i]);
             }
@@ -843,7 +843,7 @@ int main(int argc, const char** argv)
             }
             int x = rand() % environment_workarea_width(env);
             int y = environment_workarea_height(env) - 256;
-            environment_summon_mascot(env, proto, x, y, NULL, NULL);
+            environment_summon_mascot_appearing(env, proto, x, y);
         }
     }
 

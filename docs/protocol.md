@@ -537,7 +537,7 @@ Spawn mascot by prototype ID. Any errors reported via Notice Warning with Alert 
 | Environment ID | uint32 | ID of environment to spawn in | |
 | X | uint32 | X coordinate | |
 | Y | uint32 | Y coordinate | |
-| Spawn behavior | string | Spawn behavior | Can be empty for default behavior |
+| Spawn behavior | string | Spawn behavior | Can be empty for default behavior. `Appear` (Mascot; `mascot summon` without `-x`/`-y`/`--position`/`--select`/`--behavior`): on the floor at X, playing the prototype's `Appear` behavior; one without it falls from Y as usual. Any other is ignored |
 
 # mascot->dismiss() - 0x2B
 

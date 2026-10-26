@@ -692,6 +692,17 @@ static void block_until_synced() { wl_display_roundtrip(display); }
 //     ;
 // }
 
+// A mascot on the floor or the ceiling falls again when the screen changes size. Not while it appears
+// (environment_summon_mascot_appearing()): it stands on the floor already, and a new screen gets its size right
+// after it is ready, which cut the appearance short
+static bool refalls(environment_t *env, struct mascot *mascot) {
+  if (mascot->current_behavior &&
+      !strcmp(mascot->current_behavior->name, "Appear"))
+    return false;
+  return mascot->Y->value.i == 0 ||
+         mascot->Y->value.i == env->advertised_geometry.height;
+}
+
 static void environment_dimensions_changed_callback(uint32_t width,
                                                     uint32_t height,
                                                     void *data) {
@@ -705,8 +716,7 @@ static void environment_dimensions_changed_callback(uint32_t width,
        i++) {
     struct mascot *mascot = list_get(env->mascot_manager.referenced_mascots, i);
     if (mascot) {
-      if (mascot->Y->value.i == 0 ||
-          mascot->Y->value.i == env->advertised_geometry.height) {
+      if (refalls(env, mascot)) {
         mascot_set_behavior(mascot, mascot->prototype->fall_behavior);
       }
     }
@@ -958,8 +968,7 @@ static void on_output_done(void *data, struct wl_output *output) {
        i++) {
     struct mascot *mascot = list_get(env->mascot_manager.referenced_mascots, i);
     if (mascot) {
-      if (mascot->Y->value.i == 0 ||
-          mascot->Y->value.i == env->advertised_geometry.height) {
+      if (refalls(env, mascot)) {
         mascot_set_behavior(mascot, mascot->prototype->fall_behavior);
       }
     }
@@ -2340,8 +2349,7 @@ static void xdg_output_done(void *data, struct zxdg_output_v1 *xdg_output) {
        i++) {
     struct mascot *mascot = list_get(env->mascot_manager.referenced_mascots, i);
     if (mascot) {
-      if (mascot->Y->value.i == 0 ||
-          mascot->Y->value.i == env->advertised_geometry.height) {
+      if (refalls(env, mascot)) {
         mascot_set_behavior(mascot, mascot->prototype->fall_behavior);
       }
     }
@@ -4178,17 +4186,17 @@ uint32_t environment_mascot_count(environment_t *environment) {
   return list_count(environment->mascot_manager.referenced_mascots);
 }
 
-void environment_summon_mascot(environment_t *environment,
-                               struct mascot_prototype *prototype, int32_t x,
-                               int32_t y,
-                               void (*callback)(struct mascot *, void *),
-                               void *data) {
+static void summon_mascot(environment_t *environment,
+                          struct mascot_prototype *prototype,
+                          const char *behavior, int32_t x, int32_t y,
+                          void (*callback)(struct mascot *, void *),
+                          void *data) {
   if (!environment)
     return;
   if (!prototype)
     return;
-  struct mascot *mascot = mascot_new(prototype, NULL, 0, 0, x, y, 2.0, 0.05,
-                                     0.1, false, environment);
+  struct mascot *mascot = mascot_new(prototype, behavior, 0, 0, x, y, 2.0,
+                                     0.05, 0.1, false, environment);
   if (!mascot) {
     if (callback)
       callback(mascot, data);
@@ -4207,6 +4215,28 @@ void environment_summon_mascot(environment_t *environment,
 
   if (callback)
     callback(mascot, data);
+}
+
+void environment_summon_mascot(environment_t *environment,
+                               struct mascot_prototype *prototype, int32_t x,
+                               int32_t y,
+                               void (*callback)(struct mascot *, void *),
+                               void *data) {
+  summon_mascot(environment, prototype, NULL, x, y, callback, data);
+}
+
+void environment_summon_mascot_appearing(environment_t *environment,
+                                         struct mascot_prototype *prototype,
+                                         int32_t x, int32_t y) {
+  if (!prototype)
+    return;
+  for (uint16_t i = 0; i < prototype->behavior_count; i++) {
+    if (!strcmp(prototype->behavior_definitions[i]->name, "Appear")) {
+      summon_mascot(environment, prototype, "Appear", x, 0, NULL, NULL); // Y 0: the floor
+      return;
+    }
+  }
+  summon_mascot(environment, prototype, NULL, x, y, NULL, NULL);
 }
 
 void environment_set_global_coordinates_searcher(

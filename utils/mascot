@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import enum
-import tarfile
-import zipfile
-from dataclasses import dataclass, field
-import re
-import sys
-import subprocess
 import shutil
-import xml.etree.ElementTree as ET
-import argparse
-import html
-import json
 import struct
+import xml.etree.ElementTree as ET
+import pathlib
+import xml
+import logging
+import errno
+from dataclasses import dataclass, field
+import enum
+import io
+import random
+from typing import Callable, Any
+import zipfile
+from typing import Dict, Optional
 import stat
 import socket
-from xml.etree import ElementTree
-import errno
-import logging
-import io
-import xml
-from typing import Callable, Any
-import random
-from dataclasses import dataclass
-import os
-import time
-from PIL import Image
+import subprocess
 import tempfile
+import json
+import argparse
+import tarfile
+import sys
+import html
+import time
+from xml.etree import ElementTree
+from PIL import Image
+from dataclasses import dataclass
+import re
+import os
 import base64
-import pathlib
-from typing import Dict, Optional
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -4326,8 +4326,11 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 random_env: Environment = random.choice(envs) if envs else random.choice(list(environments.values()))
                 if xpos == -1:
                     xpos = 64 + random.randint(0, random_env.width - 128)
+                # Nowhere in particular: the figure appears on the floor, if it can (Robo peeks out of a hole)
+                # Nowhere in particular: the figure appears on the floor, if it can (Robo peeks out of a hole)
+                behavior = arguments.behavior or ("Appear" if arguments.position is None and arguments.y is None else "")
 
-                packet = Spawn(prototype.id, random_env.id, xpos, ypos, arguments.behavior)
+                packet = Spawn(prototype.id, random_env.id, xpos, ypos, behavior)
                 client.queue_packet(packet)
 
             else:

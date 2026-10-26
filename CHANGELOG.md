@@ -5,6 +5,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- Summon Robo (`mascot summon Robo`, or back after the screen was off) and he peeks out of a hole in the floor
+  for a moment instead of dropping from the top (`Appear`, one new image). Other figures can have one too;
+  without it they fall as before. `-x`/`-y`/`--position` still put him where you say.
 - Ask about the weather when it feels like 0 °C or colder, and Robo wraps himself in a blanket while he
   answers (`Cold`, one new image). Other figures can have one too.
 - Turn the screen off and on again (or unplug it), and Robo comes back: when the last screen goes away, mascotd

@@ -808,7 +808,9 @@ bool protocol_handler_spawn(struct protocol_client* client, ipc_packet_t* packet
     if (!target_environment) warning = protocol_builder_notice(NOTICE_SEVERITY_WARNING, "spawn.error.environment.not_found", NULL, 0, true);
 
     if (prototype && target_environment) {
-        environment_summon_mascot(target_environment, prototype, x, y, NULL, NULL);
+        // "Appear": summoned without a place (mascot summon <name>), see environment_summon_mascot_appearing()
+        if (!strcmp(summon_behavior, "Appear")) environment_summon_mascot_appearing(target_environment, prototype, x, y);
+        else environment_summon_mascot(target_environment, prototype, x, y, NULL, NULL);
     }
 
     if (warning) ipc_connector_send(client->connector, warning);
