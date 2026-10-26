@@ -3,7 +3,10 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.6.0 (2026-10-26)
+
+Robo comes back when the screen is turned on again and peeks out of a hole in the floor when he is summoned,
+wraps himself in a blanket when it is freezing, blushes when you thank him, and two upstream bugs are fixed.
 
 - Thank or praise Robo and he blushes (`Love`; was heart eyes, which he still makes now and then on the floor).
 - Robo no longer takes out his notepad on his own while he walks around; only for the todo list.
