@@ -12,7 +12,7 @@
 #define MASTER_HEADER
 
 // Mascot's own version (upstream wl_shimeji was 0.0.2 when it forked)
-#define MASCOTD_VERSION "0.6.0"
+#define MASCOTD_VERSION "0.6.1"
 #define MASCOTD_MASCOT_MIN_VER "0.0.1"
 #define MASCOTD_MASCOT_CUR_VER "0.0.1"
 

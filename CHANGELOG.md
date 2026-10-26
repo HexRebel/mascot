@@ -3,7 +3,9 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.6.1 (2026-10-26)
+
+One fix: the menu's Info, Todo list and the rest work the first time.
 
 - Fixed: a menu item that opens the bubble with a command (Info, Todo list, Reminders, Help, Tools, a model,
   role or session) did nothing but open the bubble the first time after Mascot started. The command now waits
