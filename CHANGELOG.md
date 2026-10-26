@@ -5,6 +5,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- Thank or praise Robo and he blushes (`Love`; was heart eyes, which he still makes now and then on the floor).
+- Robo no longer takes out his notepad on his own while he walks around; only for the todo list.
 - Summon Robo (`mascot summon Robo`, or back after the screen was off) and he peeks out of a hole in the floor
   for a moment instead of dropping from the top (`Appear`, one new image). Other figures can have one too;
   without it they fall as before. `-x`/`-y`/`--position` still put him where you say.

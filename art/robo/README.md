@@ -22,6 +22,7 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `experimental10.png` | 3×3; used: row 1 column 1, holding an Easter egg (95, `EasterEgg`) |
 | `full.png` | 3×3, the first sheet before its legs were taken off; used: row 3 column 3, waving (96) |
 | `experimental4.png` | 3×3; used: row 2 column 1, glowing heart eyes (98) |
+| `blush.png` | One image: blushing, smiling (83, `Love`) |
 | `experimental11.png` | 3×3; used: row 2 column 3, sunglasses (97) |
 | `experimental12.png` | 3×3; used: row 2 column 1, a magnifying glass (99, `Power`); row 1 column 1, wondering (101); row 2 column 3, binoculars (102) |
 | `experimental13.png` | 3×3; used: row 3 column 1, wrapped in a blanket, freezing (103, `Cold`); row 3 column 3, peeking out of a hole in the floor (104, `Appear`) |
@@ -42,13 +43,13 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   weather, the **hologram cube** for files, images and searching a file, its
   **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. The weather feels like 0 °C or colder: wrapped in a
   **blanket**, freezing (`Cold`). Summoned (or back after the screen was off): it **peeks out of a hole** in the
-  floor for about 1.5 s (`Appear`). Thanked or praised: **heart eyes** (`Love`). When that found
+  floor for about 1.5 s (`Appear`). Thanked or praised: it **blushes** (`Love`). When that found
   nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
   **laughing**, eyes shut tight (`Done`). An answer that failed: **"ERROR"** and a tear (`Failed`). A reminder
   that is due: a yellow **"!"** bulb (`Alarm`). Asleep: the "z" on its visor rises and sinks
   (`Snooze`). An answer waiting to be read: **NEW** on its visor (`NewMessage`). Clicked quickly many times:
   it holds up an **Easter egg** (`EasterEgg`).
-- Now and then on the floor: a hologram cube, tinkering, its notepad, opening its chest,
+- Now and then on the floor: a hologram cube, tinkering, opening its chest,
   giggling, winking, meditating (longer than the others), waving, sunglasses, heart eyes, wondering, looking through
   binoculars. Drawn but not used yet (they need events of their own): singing
   (while music plays), nervous,

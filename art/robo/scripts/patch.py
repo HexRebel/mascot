@@ -1,5 +1,5 @@
 """Adds Chatter (talk: thinking), Snooze (sleep) and NewMessage (answered) to a converted Robo .wlshm,
-twelve things it does now and then on the floor (Hologram, Tinker, Notepad, OpenChest, Giggle, Wink,
+eleven things it does now and then on the floor (Hologram, Tinker, OpenChest, Giggle, Wink,
 Meditate, Wave, Shades, Hearts, Wonder, Binoculars), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System,
 Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed), Alarm
 (a reminder that is due), EasterEgg (tapped quickly many times), Power (checking how the CPU runs), FullPower
@@ -68,7 +68,7 @@ for a in actions:
         for f in a["content"][0]["frames"]:
             f["duration"] = {"shime18.qoi": 13, "shime19.qoi": 25}.get(f["image"], f["duration"])
 # Things it does now and then on the floor
-FUN = {"Hologram": 64, "Tinker": 65, "Notepad": 66, "OpenChest": 67, "Giggle": 74, "Wink": 81, "Meditate": 72,
+FUN = {"Hologram": 64, "Tinker": 65, "OpenChest": 67, "Giggle": 74, "Wink": 81, "Meditate": 72,
        "Wave": 96, "Shades": 97, "Hearts": 98, "Wonder": 101, "Binoculars": 102}
 LONGER = {"Meditate": 300,  # ticks (a pose is 100, about 4 s): a meditation takes a while
           "PeekOut": 38}  # out of the hole, about 1.5 s (the user's choice)
@@ -76,7 +76,8 @@ LONGER = {"Meditate": 300,  # ticks (a pose is 100, about 4 s): a meditation tak
 # Poses only for a tool
 POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94,  # the magnifying glass (78): kept for later
          "Egg": 95, "Scan": 99, "Charged": 100, "Shiver": 103, "PeekOut": 104,
-         "HeartEyes": 83}
+         "Notepad": 66,  # only for the todo list (the user's choice, 26 Oct: not while it walks around)
+         "Blush": 83}
 READABLE = {89, 94, 100}  # the "?", "ERROR" and "FULL POWER": not mirrored facing right
 actions += [action(name, "Animate", [frame(n, LONGER.get(name, 100), n in READABLE)])
             for name, n in {**FUN, **POSES}.items()]
@@ -99,7 +100,7 @@ floor["next_behavior_list_count"] = len(floor["next_behavior_list"])
 # While a tool runs for its answer, it shows what it does (see mascot_chat_doing())
 TOOLS = {"Todo": "Notepad", "Reminder": "Salute", "Weather": "Globe", "Files": "Hologram", "Image": "Hologram",
          "Search": "Hologram", "Shell": "Gears", "Sleepy": "Meditate", "System": "OpenChest", "Machine": "Inspect",
-         "Power": "Scan", "FullPower": "Charged", "Cold": "Shiver", "Appear": "PeekOut", "Love": "HeartEyes",
+         "Power": "Scan", "FullPower": "Charged", "Cold": "Shiver", "Appear": "PeekOut", "Love": "Blush",
          "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff",
          "EasterEgg": "Egg"}  # tapped quickly many times (see chat_easter_egg())
 for name, act in TOOLS.items():

@@ -255,7 +255,8 @@ def cells_of(name, wanted, top=(), grid=3, left=None):
 # Never used (the user's choice, 25 Oct): experimental5 row 1 column 3 (laughing, shaking; was 82), experimental7
 # row 3 column 2 and experimental8 row 2 column 2 (it has legs), experimental row 3 column 2 (standing on a plate)
 five = cells_of("experimental5.png", [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)], top=[(0, 0)])
-six = cells_of("experimental6.png", [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1)])
+six = cells_of("experimental6.png", [(0, 0), (1, 1), (2, 0), (2, 1)])
+blush = cells_of("blush.png", [(0, 0)], grid=1)
 seven = cells_of("experimental7.png", [(2, 0)])
 eight = cells_of("experimental8.png", [(1, 2), (2, 0), (2, 2)], left={(2, 2): 0.06})  # confetti
 nine = cells_of("experimental9.png", [(3, 0), (3, 2)], grid=4)
@@ -314,7 +315,7 @@ frames = {
     79: stand(0, im=five[0, 0]),  # thinking, a light bulb in a bubble (Chatter)
     80: stand(0, im=five[2, 2]),  # saluting: a reminder
     81: stand(0, im=five[2, 1]),  # winking
-    83: stand(0, im=six[1, 0]),   # heart eyes: thanks or a compliment (Love)
+    83: stand(0, im=blush[0, 0]),   # blushing, smiling: thanks or a compliment (Love; was heart eyes, experimental6 row 2 column 1)
     84: stand(0, im=six[1, 1]),   # shrugging (not used yet: an answer that failed, or it does not know)
     85: stand(0, im=six[2, 1]),   # sweating (not used yet)
     86: stand(0, im=five[1, 1]),  # switched off, grey: Quiet

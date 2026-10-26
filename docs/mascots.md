@@ -54,7 +54,7 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs); when the answer
   failed, `Failed` (Robo's "ERROR" and a tear); when the CPU runs on performance, `FullPower` (Robo's "100% FULL
   POWER"); when the weather feels like 0 °C or colder, `Cold` (Robo wraps himself in a blanket); when your message is nothing but thanks or a compliment ("thanks!", "well done", "tusind tak ❤"),
-  `Love` (Robo's heart eyes). One word that is not thanks or praise and it does not: "great, you deleted it all". A
+  `Love` (Robo blushes). One word that is not thanks or praise and it does not: "great, you deleted it all". A
   reminder that is due plays `Alarm` (Robo's yellow "!").
 - A figure with an `Appear` behavior (frequency 0) starts on the floor and plays it when it is summoned
   without a place (`mascot summon Robo`, Super+M) or comes back after the screen was off: Robo peeks out of a
