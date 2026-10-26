@@ -231,6 +231,12 @@ void* env_interpolation_thread(void* data)
     return NULL;
 }
 
+// Mascots whose last screen went away (turned off or unplugged), by prototype name. They come back when a
+// screen is ready again (summon_waiting_mascots()), and mascotd keeps running meanwhile. Under environment_mutex.
+#define WAITING_MASCOTS_MAX 64
+static char* waiting_mascots[WAITING_MASCOTS_MAX];
+static uint32_t waiting_mascots_count = 0;
+
 static void orphaned_mascot(struct mascot* mascot) {
     // Find new environment for mascot
     pthread_mutex_lock(&server_state.environment_mutex);
@@ -240,6 +246,9 @@ static void orphaned_mascot(struct mascot* mascot) {
         environment_t* environment = list_get(server_state.environments, i);
         if (!environment) continue;
         c--;
+        // A screen that was just added has no surface yet: moving there crashed (Hyprland swaps its FALLBACK
+        // screen for the real one when the screen is turned on again)
+        if (!environment_is_ready(environment)) continue;
         float r = drand48();
         if (r > env_score) {
             env = environment;
@@ -247,7 +256,12 @@ static void orphaned_mascot(struct mascot* mascot) {
         }
     }
     if (!env) {
-        WARN("No environment found for orphaned mascot");
+        if (waiting_mascots_count < WAITING_MASCOTS_MAX) {
+            INFO("<Mascot:%s:%u> No screen left, waits for one", mascot->prototype->name, mascot->id);
+            waiting_mascots[waiting_mascots_count++] = strdup(mascot->prototype->name);
+        } else {
+            WARN("No environment found for orphaned mascot");
+        }
         mascot_unlink(mascot);
         pthread_mutex_unlock(&server_state.environment_mutex);
         return;
@@ -255,6 +269,38 @@ static void orphaned_mascot(struct mascot* mascot) {
     mascot_environment_changed(mascot, env);
     pthread_mutex_unlock(&server_state.environment_mutex);
 
+}
+
+// A new screen is announced before its surface exists, so this waits for one that is ready
+static void summon_waiting_mascots(void)
+{
+    pthread_mutex_lock(&server_state.environment_mutex);
+    environment_t* env = NULL;
+    for (uint32_t i = 0, c = list_count(server_state.environments); waiting_mascots_count && i < list_size(server_state.environments) && c; i++) {
+        environment_t* environment = list_get(server_state.environments, i);
+        if (!environment) continue;
+        c--;
+        if (environment_is_ready(environment) && environment_workarea_width(environment) > 0) {
+            env = environment;
+            break;
+        }
+    }
+    if (env) {
+        for (uint32_t i = 0; i < waiting_mascots_count; i++) {
+            struct mascot_prototype* proto = mascot_prototype_store_get(server_state.prototypes, waiting_mascots[i]);
+            if (proto) {
+                INFO("<%s> Screen is back, summoned again", waiting_mascots[i]);
+                int x = rand() % environment_workarea_width(env);
+                int y = environment_workarea_height(env) - 256;
+                environment_summon_mascot(env, proto, x, y, NULL, NULL);
+            } else {
+                WARN("<%s> Screen is back, but the mascot is gone", waiting_mascots[i]);
+            }
+            free(waiting_mascots[i]);
+        }
+        waiting_mascots_count = 0;
+    }
+    pthread_mutex_unlock(&server_state.environment_mutex);
 }
 
 static void broadcast_input_enabled_listener(bool enabled)
@@ -999,8 +1045,9 @@ int main(int argc, const char** argv)
         }
         bubble_tick();
         chat_tick();
+        summon_waiting_mascots();
 
-        if (!fds_count && !mascot_total_count) {
+        if (!fds_count && !mascot_total_count && !waiting_mascots_count) {
             break;
         }
     }

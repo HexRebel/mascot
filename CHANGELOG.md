@@ -5,6 +5,11 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- Turn the screen off and on again (or unplug it), and Robo comes back: when the last screen goes away, mascotd
+  keeps running and summons the mascots again on the next screen, instead of sending them away. They come back
+  awake, and the bubble starts a new conversation, as after a restart.
+- Fixed (upstream bug): a mascot moved to a screen that had just been added, before it was ready, crashed
+  mascotd (Hyprland swaps its stand-in screen for the real one when a screen is turned on again).
 - Fixed (upstream bug): mascotd kept the screen's description, make and model as pointers into text Wayland
   frees, and sent the freed description to `mascot` at start and whenever a screen changed. Found with
   AddressSanitizer; it never crashed, but could give garbled text or a crash.
