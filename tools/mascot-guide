@@ -100,7 +100,7 @@ def config_text(default, models):
         lines.append(f"      - name: {m['name']}")
         # Only where Ollama says the model can: one that cannot fails with "does not support tools"
         if m["tools"]:
-            lines.append("          supports_function_calling: true")
+            lines.append("        supports_function_calling: true")
     return "\n".join(lines) + "\n"
 
 

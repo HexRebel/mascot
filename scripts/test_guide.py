@@ -10,6 +10,7 @@ import http.server
 import importlib.util
 import json
 import os
+import shutil
 import socket
 import stat
 import subprocess
@@ -165,11 +166,25 @@ class Guide(unittest.TestCase):
             text = f.read()
         self.assertIn("model: ollama:llama2:7b\n", text)
         self.assertIn(f"api_base: http://127.0.0.1:{self.port}/v1\n", text)
-        self.assertIn("- name: gemma4:latest\n          supports_function_calling: true\n", text)
+        self.assertIn("      - name: gemma4:latest\n        supports_function_calling: true\n", text)
         self.assertRegex(text, r"- name: llama2:7b\n(?!\s*supports_function_calling)")
         self.assertNotIn("nomic", text)
         self.assertEqual(os.listdir(os.path.dirname(path)), ["config.yaml"])  # no temporary file left
         self.assertEqual(self.status()["state"], "mascot")
+
+    @unittest.skipUnless(shutil.which("aichat"), "needs the real aichat")
+    def test_write_loads_in_aichat(self):
+        """aichat itself reads the config: all chat models, the chosen one the default"""
+        self.choose_models()
+        self.assertEqual(self.guide("write", "llama2:7b").returncode, 0)
+        env = {**self.env, "PATH": os.environ["PATH"], "AICHAT_CONFIG_DIR": os.path.join(self.data, "aichat")}
+        models = subprocess.run(["aichat", "--list-models"], env=env, capture_output=True, text=True, timeout=30,
+                                stdin=subprocess.DEVNULL)
+        self.assertEqual(models.returncode, 0, models.stderr)
+        self.assertEqual(models.stdout.split(), ["ollama:gemma4:latest", "ollama:llama2:7b"])
+        info = subprocess.run(["aichat", "--info"], env=env, capture_output=True, text=True, timeout=30,
+                              stdin=subprocess.DEVNULL)
+        self.assertRegex(info.stdout, r"(?m)^model\s+ollama:llama2:7b$")
 
     def test_write_never_overwrites(self):
         self.choose_models()

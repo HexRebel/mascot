@@ -982,6 +982,12 @@ PanelWindow {
     readonly property string mascotAichatDir: `${bubble.dataDir}/aichat`
     readonly property string guideCommand: `'${`${bubble.toolsDir}/mascot-guide`.replace(/'/g, "'\\''")}'`
 
+    // A path as the user would write it, with ~ for the home directory
+    function tilde(path: string): string {
+        const home = Quickshell.env("HOME");
+        return home && path.startsWith(home + "/") ? "~" + path.slice(home.length) : path;
+    }
+
     function chatReady(command: string): bool {
         return !!command || bubble.chatSetup === "own" || bubble.chatSetup === "mascot";
     }
@@ -1031,7 +1037,7 @@ PanelWindow {
                     + "computer: install Ollama (on Arch: pacman -S ollama, or ollama-cuda for NVIDIA, ollama-rocm "
                     + "for AMD; elsewhere: ollama.com/download), start it (systemctl enable --now ollama), download "
                     + "a model (ollama pull <model>, see ollama.com/library), then write again. For a hosted one "
-                    + `instead: "Getting started" in Mascot's README, with the config in ${bubble.mascotAichatDir}/config.yaml`);
+                    + `instead: "Getting started" in Mascot's README, with the config in ${tilde(bubble.mascotAichatDir)}/config.yaml`);
             } else {
                 say("Ollama is running, but has no model to chat with. Download one (ollama pull <model>, see "
                     + "ollama.com/library), then write again.");
@@ -1062,7 +1068,7 @@ PanelWindow {
             bubble.guideModels = [];
             bubble.chatSetup = "mascot";
             bubble.lookups = {};
-            c.entries.append({ kind: "system", body: `Made Mascot's aichat config with ${m.name}: ${out.trim()}/config.yaml` });
+            c.entries.append({ kind: "system", body: `Made Mascot's aichat config with ${m.name}: ${tilde(out.trim())}/config.yaml` });
             const pending = bubble.guidePending;
             bubble.guidePending = "";
             if (pending)
@@ -1817,7 +1823,7 @@ PanelWindow {
                 + `on openrouter.ai/models and use .model openrouter:<name>\n${error}`;
         if (/Failed to load config/.test(error))
             return "aichat could not load its config, so there is no model to answer with. Fix the config (or remove "
-                + `Mascot's own in ${bubble.mascotAichatDir} and write again to set it up anew).\n${error}`;
+                + `Mascot's own in ${bubble.tilde(bubble.mascotAichatDir)} and write again to set it up anew).\n${error}`;
         if (/aichat: (command )?not found/.test(error))
             return `aichat is not installed: install it (on Arch: pacman -S aichat; elsewhere: `
                 + `github.com/sigoden/aichat/releases), then write again.\n${error}`;
