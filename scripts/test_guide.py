@@ -22,7 +22,7 @@ import unittest
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 GUIDE = os.path.join(ROOT, "tools", "mascot-guide")
 
-# name -> capabilities, or None: /api/show fails for it
+# name -> capabilities, "old": /api/show has none (old Ollama), or None: /api/show fails for it
 MODELS = {}
 
 
@@ -47,7 +47,9 @@ class FakeOllama(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])) or "{}")
         caps = MODELS.get(body.get("model") or body.get("name"))
-        if self.path == "/api/show" and caps is not None:
+        if self.path == "/api/show" and caps == "old":
+            self.reply(200, {"details": {}})  # no capabilities: Ollama before 0.6.4
+        elif self.path == "/api/show" and caps is not None:
             self.reply(200, {"capabilities": caps})
         else:
             self.reply(500, {"error": "no"})
@@ -185,6 +187,21 @@ class Guide(unittest.TestCase):
         info = subprocess.run(["aichat", "--info"], env=env, capture_output=True, text=True, timeout=30,
                               stdin=subprocess.DEVNULL)
         self.assertRegex(info.stdout, r"(?m)^model\s+ollama:llama2:7b$")
+
+    def test_write_refuses_with_own_config(self):
+        """The user's own config came while the list was shown: it wins, nothing is written"""
+        self.choose_models()
+        self.touch(os.path.join(self.home, ".config", "aichat", "config.yaml"))
+        out = self.guide("write", "llama2:7b")
+        self.assertEqual(out.returncode, 1)
+        self.assertFalse(os.path.exists(self.mascot_config()))
+
+    def test_old_ollama_without_capabilities(self):
+        """An Ollama too old to say what a model can: every model can chat, none says tools"""
+        MODELS.update({"llama2:7b": "old"})
+        s = self.status()
+        self.assertEqual(s["state"], "choose")
+        self.assertEqual(s["models"], [{"name": "llama2:7b", "tools": False}])
 
     def test_write_never_overwrites(self):
         self.choose_models()

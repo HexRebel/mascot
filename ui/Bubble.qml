@@ -134,6 +134,8 @@ PanelWindow {
             property int waits: 0 // which close() a timer belongs to
             property string error: ""
             property string memory: "" // the aichat session that remembers it
+            property var guideModels: [] // Mascot's guide: the list shown, waiting for a number
+            property string guidePending: "" // ...and the message to send once the config is made
             property string persona: "" // the role flags that session started with
             property int memoryChars: 0 // roughly what that session holds, see ask()
             // .model/.role/.session for this mascot only; see dotCommand()
@@ -977,8 +979,6 @@ PanelWindow {
     // from. Asked when the bubble starts and with each message until a config
     // is there, so "start Ollama, then write again" works
     property string chatSetup: ""
-    property var guideModels: [] // the list shown, waiting for a number
-    property string guidePending: "" // the message to send once the config is made
     readonly property string mascotAichatDir: `${bubble.dataDir}/aichat`
     readonly property string guideCommand: `'${`${bubble.toolsDir}/mascot-guide`.replace(/'/g, "'\\''")}'`
 
@@ -1024,10 +1024,11 @@ PanelWindow {
             bubble.chatSetup = s.state;
             if (s.state === "own" || s.state === "mascot") {
                 bubble.lookups = {};
-                ask(text, kind);
+                if (c === bubble.current) // ask() answers in the conversation shown
+                    ask(text, kind);
             } else if (s.state === "choose") {
-                bubble.guidePending = text;
-                bubble.guideModels = s.models;
+                c.guidePending = text;
+                c.guideModels = s.models;
                 showModels(c);
             } else if (s.state === "no-aichat") {
                 say("Mascot chats through aichat, which is not installed. Install it (on Arch: pacman -S aichat; "
@@ -1046,32 +1047,34 @@ PanelWindow {
     }
 
     function showModels(c: QtObject): void {
-        const list = bubble.guideModels.map((m, i) => `${i + 1}. ${m.name}${m.tools ? "" : " (no tools)"}`);
+        const list = c.guideModels.map((m, i) => `${i + 1}. ${m.name}${m.tools ? "" : " (no tools)"}`);
         c.entries.append({ kind: "system", body: "Mascot needs a language model to chat. Ollama has these - write a "
             + "number to use one:\n" + list.join("\n") });
     }
 
     // While the list is shown: a number or a model's name makes Mascot's config
-    // with it, then sends the message that waited; anything else shows the list again
+    // with it, then sends the message that waited; anything else shows the list
+    // again. When it cannot be made (a config came meanwhile), guide() looks again
     function guideChoice(c: QtObject, text: string): void {
-        const models = bubble.guideModels;
+        const models = c.guideModels;
         const m = /^\d+$/.test(text) ? models[parseInt(text) - 1] : models.find(m => m.name === text);
         if (!m) {
             showModels(c);
             return;
         }
         run(["write", m.name], false, "", (out, ok, errors) => {
+            const pending = c.guidePending;
+            c.guideModels = [];
+            c.guidePending = "";
             if (!ok) {
-                c.entries.append({ kind: "system", body: `Could not make the config: ${errors.trim()}` });
+                c.entries.append({ kind: "system", body: `Could not make the config: ${tilde(errors.trim())}` });
+                guide(c, pending, "reply");
                 return;
             }
-            bubble.guideModels = [];
             bubble.chatSetup = "mascot";
             bubble.lookups = {};
             c.entries.append({ kind: "system", body: `Made Mascot's aichat config with ${m.name}: ${tilde(out.trim())}/config.yaml` });
-            const pending = bubble.guidePending;
-            bubble.guidePending = "";
-            if (pending)
+            if (c === bubble.current)
                 ask(pending, "reply");
         }, c, bubble.guideCommand);
     }
@@ -1633,7 +1636,7 @@ PanelWindow {
         input.text = "";
         if (text.startsWith("."))
             dotCommand(text);
-        else if (bubble.guideModels.length)
+        else if (bubble.current.guideModels.length)
             guideChoice(bubble.current, text);
         else
             ask(text, "reply");
@@ -1821,6 +1824,8 @@ PanelWindow {
         if (gone)
             return `OpenRouter has no model ${gone[1]} (any more) - pick another under Settings › Model, or find one `
                 + `on openrouter.ai/models and use .model openrouter:<name>\n${error}`;
+        if (/Failed to load config/.test(error) && !bubble.chatReady(bubble.event?.command ?? ""))
+            return `Chat is not set up yet: write to the mascot to set it up.\n${error}`;
         if (/Failed to load config/.test(error))
             return "aichat could not load its config, so there is no model to answer with. Fix the config (or remove "
                 + `Mascot's own in ${bubble.tilde(bubble.mascotAichatDir)} and write again to set it up anew).\n${error}`;

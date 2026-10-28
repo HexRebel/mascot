@@ -70,9 +70,12 @@ def chat_models():
     models = []
     for name in names:
         try:
-            caps = ollama("/api/show", {"model": name}).get("capabilities") or []
+            caps = ollama("/api/show", {"model": name}).get("capabilities")
         except (OSError, ValueError):
             continue
+        # Ollama before 0.6.4 does not say: then any model can chat, and none is known to use tools
+        if caps is None:
+            caps = ["completion"]
         if "completion" in caps:
             models.append({"name": name, "tools": "tools" in caps})
     return models
@@ -109,6 +112,9 @@ def write(model):
     path = os.path.join(directory, "config.yaml")
     if os.path.exists(path):
         sys.exit(f"{path} is there already")
+    # Made while the list was shown: the user's own config always wins
+    if os.path.isfile(own_config()):
+        sys.exit(f"{own_config()} is there now, and is used instead")
     models = chat_models()
     if models is None:
         sys.exit(f"Ollama does not answer at {ollama_url()}")
