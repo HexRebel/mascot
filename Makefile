@@ -147,6 +147,7 @@ install: all
 	install -m644 ui/*.qml ui/prompt.md $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/
 	install -m755 tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/
+	install -m755 tools/mascot-guide $(DESTDIR)$(PREFIX)/share/mascot/tools/
 	install -m644 tools/functions.json $(DESTDIR)$(PREFIX)/share/mascot/tools/
 	for tool in $(TOOLS); do ln -sfn ../mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/prototypes/
@@ -169,7 +170,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Menu.qml
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/prompt.md
-	rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/functions.json
+	rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-guide $(DESTDIR)$(PREFIX)/share/mascot/tools/functions.json
 	for tool in $(TOOLS); do rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done
 	rm -rf $(DESTDIR)$(PREFIX)/share/mascot/prototypes
 	rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \

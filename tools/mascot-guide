@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+#   mascot-guide - whether the chat is set up, and Mascot's own aichat config
+#
+#   Copyright (C) 2026  HexRebel
+#
+#   This program is free software; you can redistribute it and/or
+#   modify it under the terms of the GNU General Public License
+#   as published by the Free Software Foundation; either version 2
+#   of the License, or (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, see <https://www.gnu.org/licenses/>.
+"""The bubble's guide for someone with no aichat config yet (only used when CHAT_COMMAND is empty).
+
+    mascot-guide status         one line of JSON: {"state", "config", "models"}
+    mascot-guide write <model>  writes Mascot's own aichat config with Ollama's models, <model> the default
+
+The user's own aichat config ($AICHAT_CONFIG_DIR, else ~/.config/aichat) always wins and is never read or
+written here, only looked for. The one file this writes is Mascot's own, $MASCOT_DATA_DIR/aichat/config.yaml,
+and never over one that is there. Ollama is only asked which models it has and what they can do.
+"""
+import json
+import os
+import shutil
+import sys
+import tempfile
+import urllib.request
+
+TIMEOUT = 3  # seconds Ollama gets to answer
+
+
+def own_config():
+    """The user's own aichat config file: where aichat looks for it"""
+    base = os.environ.get("AICHAT_CONFIG_DIR") or os.path.join(
+        os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "aichat")
+    return os.path.join(base, "config.yaml")
+
+
+def mascot_dir():
+    """Mascot's own aichat config directory"""
+    data = os.environ.get("MASCOT_DATA_DIR") or os.path.expanduser("~/.local/share/mascot")
+    return os.path.join(data, "aichat")
+
+
+def ollama_url():
+    """Ollama's address, from OLLAMA_HOST like the bubble's ollama() (with or without http://)"""
+    host = os.environ.get("OLLAMA_HOST") or "127.0.0.1:11434"
+    return (host if "://" in host else "http://" + host).rstrip("/")
+
+
+def ollama(path, body=None):
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(ollama_url() + path, data=data, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as answer:
+        return json.load(answer)
+
+
+def chat_models():
+    """Ollama's models that can chat, by name, as [{"name", "tools"}]; None if Ollama does not answer.
+    One whose details cannot be read (e.g. half downloaded) is left out"""
+    try:
+        names = sorted(m["name"] for m in ollama("/api/tags").get("models", []))
+    except (OSError, ValueError):
+        return None
+    models = []
+    for name in names:
+        try:
+            caps = ollama("/api/show", {"model": name}).get("capabilities") or []
+        except (OSError, ValueError):
+            continue
+        if "completion" in caps:
+            models.append({"name": name, "tools": "tools" in caps})
+    return models
+
+
+def status():
+    if os.path.isfile(own_config()):
+        return {"state": "own", "config": own_config(), "models": []}
+    if os.path.isfile(os.path.join(mascot_dir(), "config.yaml")):
+        return {"state": "mascot", "config": mascot_dir(), "models": []}
+    if not shutil.which("aichat"):
+        return {"state": "no-aichat", "config": "", "models": []}
+    models = chat_models()
+    if models is None:
+        return {"state": "no-ollama", "config": "", "models": []}
+    if not models:
+        return {"state": "no-models", "config": "", "models": []}
+    return {"state": "choose", "config": "", "models": models}
+
+
+def config_text(default, models):
+    lines = [f"model: ollama:{default}", "clients:", "  - type: openai-compatible", "    name: ollama",
+             f"    api_base: {ollama_url()}/v1", "    models:"]
+    for m in models:
+        lines.append(f"      - name: {m['name']}")
+        # Only where Ollama says the model can: one that cannot fails with "does not support tools"
+        if m["tools"]:
+            lines.append("          supports_function_calling: true")
+    return "\n".join(lines) + "\n"
+
+
+def write(model):
+    directory = mascot_dir()
+    path = os.path.join(directory, "config.yaml")
+    if os.path.exists(path):
+        sys.exit(f"{path} is there already")
+    models = chat_models()
+    if models is None:
+        sys.exit(f"Ollama does not answer at {ollama_url()}")
+    if model not in [m["name"] for m in models]:
+        sys.exit(f"Ollama has no model {model} to chat with")
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    os.chmod(directory, 0o700)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config.")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(config_text(model, models))
+        # link, not rename: fails if the file came meanwhile, so it is never overwritten
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            sys.exit(f"{path} is there already")
+    finally:
+        os.unlink(tmp)
+    print(directory)
+
+
+def main(argv):
+    if argv[1:2] == ["status"]:
+        print(json.dumps(status()))
+    elif argv[1:2] == ["write"] and len(argv) == 3:
+        write(argv[2])
+    else:
+        sys.exit(__doc__.split("\n\n")[1])
+
+
+if __name__ == "__main__":
+    main(sys.argv)
