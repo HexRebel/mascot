@@ -3,7 +3,9 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.7.0 (2026-10-28)
+
+Mascot sets the chat up for you the first time, and the bubble's sessions move to a folder of Mascot's own.
 
 - New to aichat? Write to the mascot and Mascot's guide sets the chat up: it lists Ollama's models and makes
   Mascot's own aichat config (`~/.local/share/mascot/aichat/config.yaml`) with the one you pick, or says
