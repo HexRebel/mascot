@@ -70,8 +70,8 @@ then clone and build as above. Debian adds `~/.local/bin` to your PATH at login 
 again after the first install.
 
 **2. Give it a language model to talk with.** The chat bubble talks through
-[aichat](https://github.com/sigoden/aichat), which needs a model in its config,
-`~/.config/aichat/config.yaml`. If you already use aichat, skip this. Otherwise pick one:
+[aichat](https://github.com/sigoden/aichat). If you already use aichat, Mascot uses your config as it is;
+skip this. Otherwise pick one:
 
 - **Free and local, with Ollama** (runs on your own computer; a graphics card helps):
 
@@ -81,21 +81,13 @@ again after the first install.
   ollama pull llama3.2             # about 2 GB
   ```
 
-  and put this in `~/.config/aichat/config.yaml`:
-
-  ```yaml
-  model: ollama:llama3.2
-  clients:
-    - type: openai-compatible
-      name: ollama
-      api_base: http://localhost:11434/v1
-      models:
-        - name: llama3.2
-          supports_function_calling: true
-  ```
+  That is all: the first time you write to the mascot (step 3), it lists Ollama's models, and the one you
+  pick becomes Mascot's own aichat config, `~/.local/share/mascot/aichat/config.yaml` (your own aichat
+  config, if you make one later, comes first; Mascot never changes it).
 
 - **Hosted, with [OpenRouter](https://openrouter.ai)** (needs an account and an API key from
-  [openrouter.ai/keys](https://openrouter.ai/keys); you pay per message):
+  [openrouter.ai/keys](https://openrouter.ai/keys); you pay per message): put this in
+  `~/.local/share/mascot/aichat/config.yaml`:
 
   ```yaml
   model: openrouter:anthropic/claude-haiku-5.5
@@ -108,8 +100,6 @@ again after the first install.
         - name: anthropic/claude-haiku-5.5
           supports_function_calling: true
   ```
-
-Check it with `aichat "Hello"` in a terminal: it should answer.
 
 **3. Start Robo**, Mascot's own mascot:
 

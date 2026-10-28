@@ -186,5 +186,52 @@ class Guide(unittest.TestCase):
         self.assertFalse(os.path.exists(self.mascot_config()))
 
 
+class Cli(unittest.TestCase):
+    """client.py's chat_is_set_up: the same rule as mascot-guide's status, for the line `mascot summon` writes"""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "src", "mascotctl"))
+        spec = importlib.util.spec_from_file_location("client", os.path.join(ROOT, "src", "mascotctl", "client.py"))
+        cls.client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.client)
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = self.tmp.name
+        self.root = os.path.join(self.home, ".local", "share", "mascot")
+        os.makedirs(self.root)
+        self.saved = {k: os.environ.get(k) for k in ("HOME", "XDG_CONFIG_HOME", "AICHAT_CONFIG_DIR")}
+        os.environ["HOME"] = self.home
+        os.environ.pop("XDG_CONFIG_HOME", None)
+        os.environ.pop("AICHAT_CONFIG_DIR", None)
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        self.tmp.cleanup()
+
+    def write(self, path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    def test_cli_chat_is_set_up(self):
+        conf = os.path.join(self.root, "mascotd.conf")
+        self.write(conf, "chat_command=\nbreeding=true\n")
+        self.assertFalse(self.client.chat_is_set_up(self.root))
+        self.write(conf, "chat_command=aichat -r x\n")
+        self.assertTrue(self.client.chat_is_set_up(self.root))
+        os.unlink(conf)
+        self.write(os.path.join(self.root, "aichat", "config.yaml"), "model: x\n")
+        self.assertTrue(self.client.chat_is_set_up(self.root))
+        os.unlink(os.path.join(self.root, "aichat", "config.yaml"))
+        self.write(os.path.join(self.home, ".config", "aichat", "config.yaml"), "model: x\n")
+        self.assertTrue(self.client.chat_is_set_up(self.root))
+
+
 if __name__ == "__main__":
     unittest.main()

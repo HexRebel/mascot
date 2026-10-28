@@ -294,7 +294,12 @@ models call tools more reliably than others; one that does not just answers with
 | `BUBBLE_COMMAND` | empty | The command mascotd starts the bubble with; empty means `qs -p $(PREFIX)/share/mascot/ui`. |
 
 The message is appended to `CHAT_COMMAND` as an argument, never parsed by the shell, and stdin is
-closed. An empty `CHAT_COMMAND` means plain `aichat` with your normal config.
+closed. An empty `CHAT_COMMAND` means plain `aichat` with your own config (`~/.config/aichat/config.yaml`,
+or where `AICHAT_CONFIG_DIR` points), and without one, Mascot's own in `~/.local/share/mascot/aichat/`.
+With neither, writing to a mascot starts Mascot's guide: it says what is missing (aichat, Ollama, a model),
+or lists Ollama's models and makes Mascot's config with the one you pick (`supports_function_calling` only
+for models Ollama says can use tools). It never writes your own config, and `mascot summon` says when the
+chat is not set up yet.
 
 The bubble cannot answer aichat's prompts, so give it an aichat config that never waits for one,
 e.g. a copy of yours in `~/.config/aichat-mascot/` (the bubble chooses the tools itself, see *Tools*):

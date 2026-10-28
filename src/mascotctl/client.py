@@ -1107,6 +1107,26 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
     out.seek(0)
     return out, manifest, changes
 
+def chat_is_set_up(config_root: str) -> bool:
+    """Whether the bubble has something to chat with: CHAT_COMMAND, the user's own aichat config or Mascot's
+    own. A small copy of tools/mascot-guide's status (the bubble's guide), whose path the CLI cannot know"""
+    try:
+        with open(os.path.join(config_root, "mascotd.conf")) as f:
+            for line in f:
+                key, _, value = line.partition("=")
+                if key.strip() == "chat_command" and value.strip():
+                    return True
+    except OSError:
+        pass
+    own = os.environ.get("AICHAT_CONFIG_DIR") or os.path.join(
+        os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "aichat")
+    return (os.path.isfile(os.path.join(own, "config.yaml"))
+            or os.path.isfile(os.path.join(config_root, "aichat", "config.yaml")))
+
+
+SETUP_HINT = "Chat is not set up yet; tap the mascot to set it up."
+
+
 def prototype_dir(arguments: argparse.Namespace, path: str) -> tuple[str | None, bool]:
     """The directory of an installed prototype, which the daemon names relative
     to where it loaded it from: PROTOTYPES_LOCATION (<config root>/shimejis by
@@ -1664,6 +1684,8 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
 
                 packet = Spawn(prototype.id, random_env.id, xpos, ypos, behavior)
                 client.queue_packet(packet)
+                if not chat_is_set_up(os.path.expanduser(arguments.config_root or "~/.local/share/mascot")):
+                    print(SETUP_HINT, file=sys.stderr)
 
             else:
                 selection = Selection(envs, client.socket)
@@ -1679,6 +1701,8 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                     spawn_packet = Spawn(prototype.id, env.id, xpos, ypos, arguments.behavior)
                     client.queue_packet(spawn_packet)
                     active_selection = None
+                    if not chat_is_set_up(os.path.expanduser(arguments.config_root or "~/.local/share/mascot")):
+                        print(SETUP_HINT, file=sys.stderr)
 
                 def cancelled2(packet: SelectionCancelled):
                     global active_selection
@@ -2415,6 +2439,8 @@ if __name__ == "__main__":
         print(installed_version())
         exit(0)
     if arguments.category is None:
+        if not chat_is_set_up(os.path.expanduser(arguments.config_root or "~/.local/share/mascot")):
+            print(SETUP_HINT + "\n", file=sys.stderr)
         argparser.print_help()
         exit(1)
 

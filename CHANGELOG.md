@@ -5,6 +5,10 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- New to aichat? Write to the mascot and Mascot's guide sets the chat up: it lists Ollama's models and makes
+  Mascot's own aichat config (`~/.local/share/mascot/aichat/config.yaml`) with the one you pick, or says
+  what is missing first (aichat, Ollama, a model). Your own aichat config always comes first and is never
+  changed. `mascot summon` says when the chat is not set up yet.
 - The bubble's sessions (`.session <name>`) are kept in `~/.local/share/mascot/aichat-sessions` instead of
   aichat's own `sessions_dir`, so aichat in a terminal no longer sees them and cannot go on with a private
   one with a model online. Move the ones you made with the bubble there to keep them, e.g.
