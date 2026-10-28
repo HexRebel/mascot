@@ -97,7 +97,10 @@ PanelWindow {
     readonly property string memoryDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/mascot-memory/`
         + (Quickshell.env("MASCOT_CHAT_SOCKET") || "mascotd-chat").replace(/^.*\//, "").replace(/\.sock$/, "")
 
-    Component.onCompleted: Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir])
+    Component.onCompleted: {
+        Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
+        setupJob.running = true;
+    }
 
     Component {
         id: conversationComponent
@@ -323,8 +326,9 @@ PanelWindow {
             return;
         }
         const c = conversation(e.mascot);
-        // Shown already or still answering: the daemon can let the mascot go
-        if (bubble.visible || c.job) {
+        // Shown already or still answering, or nothing to answer with yet (see
+        // guide()): the daemon can let the mascot go
+        if (bubble.visible || c.job || !bubble.chatReady(e.command ?? "")) {
             bubble.released(e.mascot);
             return;
         }
@@ -940,6 +944,10 @@ PanelWindow {
     // and todo tools read never goes to it
     function ask(text: string, kind: string): void {
         const c = bubble.current;
+        if (!bubble.chatReady(bubble.event?.command ?? "")) {
+            guide(c, text, kind);
+            return;
+        }
         c.readFrom = -1;
         // Not after an answer that failed: "great" then is not praise
         c.loved = kind === "reply" && !c.error && bubble.compliment(text);
@@ -962,6 +970,105 @@ PanelWindow {
     // Where aichat keeps the .sessions, not in its own sessions_dir: a
     // private one there could be opened in a terminal with a model online
     readonly property string sessionsDir: `${bubble.dataDir}/aichat-sessions`
+
+    // Mascot's guide, for someone with no aichat config (only with CHAT_COMMAND
+    // empty): tools/mascot-guide says whether the user's own config or Mascot's
+    // is there, else what is missing, or lists Ollama's models to make Mascot's
+    // from. Asked when the bubble starts and with each message until a config
+    // is there, so "start Ollama, then write again" works
+    property string chatSetup: ""
+    property var guideModels: [] // the list shown, waiting for a number
+    property string guidePending: "" // the message to send once the config is made
+    readonly property string mascotAichatDir: `${bubble.dataDir}/aichat`
+    readonly property string guideCommand: `'${`${bubble.toolsDir}/mascot-guide`.replace(/'/g, "'\\''")}'`
+
+    function chatReady(command: string): bool {
+        return !!command || bubble.chatSetup === "own" || bubble.chatSetup === "mascot";
+    }
+
+    Process {
+        id: setupJob
+
+        property string output: ""
+
+        command: ["sh", "-c", bubble.guideCommand + " status </dev/null"]
+        stdout: SplitParser {
+            splitMarker: ""
+            onRead: data => setupJob.output += data
+        }
+        onExited: {
+            try {
+                if (!bubble.chatSetup)
+                    bubble.chatSetup = JSON.parse(setupJob.output).state;
+            } catch (e) {}
+        }
+    }
+
+    function guide(c: QtObject, text: string, kind: string): void {
+        const say = body => c.entries.append({ kind: "system", body: body });
+        run(["status"], false, "", (out, ok, errors) => {
+            let s = null;
+            try {
+                s = JSON.parse(out);
+            } catch (e) {}
+            if (!ok || !s) {
+                say(`Mascot's guide failed: ${errors.trim() || out.trim()}`);
+                return;
+            }
+            bubble.chatSetup = s.state;
+            if (s.state === "own" || s.state === "mascot") {
+                bubble.lookups = {};
+                ask(text, kind);
+            } else if (s.state === "choose") {
+                bubble.guidePending = text;
+                bubble.guideModels = s.models;
+                showModels(c);
+            } else if (s.state === "no-aichat") {
+                say("Mascot chats through aichat, which is not installed. Install it (on Arch: pacman -S aichat; "
+                    + "elsewhere: github.com/sigoden/aichat/releases), then write again.");
+            } else if (s.state === "no-ollama") {
+                say("Mascot needs a language model to chat, and Ollama is not running. For a free one on this "
+                    + "computer: install Ollama (on Arch: pacman -S ollama, or ollama-cuda for NVIDIA, ollama-rocm "
+                    + "for AMD; elsewhere: ollama.com/download), start it (systemctl enable --now ollama), download "
+                    + "a model (ollama pull <model>, see ollama.com/library), then write again. For a hosted one "
+                    + `instead: "Getting started" in Mascot's README, with the config in ${bubble.mascotAichatDir}/config.yaml`);
+            } else {
+                say("Ollama is running, but has no model to chat with. Download one (ollama pull <model>, see "
+                    + "ollama.com/library), then write again.");
+            }
+        }, c, bubble.guideCommand);
+    }
+
+    function showModels(c: QtObject): void {
+        const list = bubble.guideModels.map((m, i) => `${i + 1}. ${m.name}${m.tools ? "" : " (no tools)"}`);
+        c.entries.append({ kind: "system", body: "Mascot needs a language model to chat. Ollama has these - write a "
+            + "number to use one:\n" + list.join("\n") });
+    }
+
+    // While the list is shown: a number or a model's name makes Mascot's config
+    // with it, then sends the message that waited; anything else shows the list again
+    function guideChoice(c: QtObject, text: string): void {
+        const models = bubble.guideModels;
+        const m = /^\d+$/.test(text) ? models[parseInt(text) - 1] : models.find(m => m.name === text);
+        if (!m) {
+            showModels(c);
+            return;
+        }
+        run(["write", m.name], false, "", (out, ok, errors) => {
+            if (!ok) {
+                c.entries.append({ kind: "system", body: `Could not make the config: ${errors.trim()}` });
+                return;
+            }
+            bubble.guideModels = [];
+            bubble.chatSetup = "mascot";
+            bubble.lookups = {};
+            c.entries.append({ kind: "system", body: `Made Mascot's aichat config with ${m.name}: ${out.trim()}/config.yaml` });
+            const pending = bubble.guidePending;
+            bubble.guidePending = "";
+            if (pending)
+                ask(pending, "reply");
+        }, c, bubble.guideCommand);
+    }
 
     FileView {
         id: sessionKindsView
@@ -1177,8 +1284,10 @@ PanelWindow {
             conv: c,
             done: done,
             // The mascot's memory uses the bubble's memory dir, .sessions and
-            // named sessions Mascot's own (sessionsDir)
-            environment: Object.assign({ AICHAT_SESSIONS_DIR: (reply || !kind) && !c.session ? bubble.memoryDir : bubble.sessionsDir }, env),
+            // named sessions Mascot's own (sessionsDir); Mascot's own aichat
+            // config when that is the one (see guide())
+            environment: Object.assign({ AICHAT_SESSIONS_DIR: (reply || !kind) && !c.session ? bubble.memoryDir : bubble.sessionsDir },
+                                       !bubble.event?.command && bubble.chatSetup === "mascot" ? { AICHAT_CONFIG_DIR: bubble.mascotAichatDir } : {}, env),
             // stdin must be closed: aichat reads a non-tty stdin as extra input
             // and waits forever on the open pipe Process gives it
             command: ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args)
@@ -1518,6 +1627,8 @@ PanelWindow {
         input.text = "";
         if (text.startsWith("."))
             dotCommand(text);
+        else if (bubble.guideModels.length)
+            guideChoice(bubble.current, text);
         else
             ask(text, "reply");
     }
@@ -1705,11 +1816,11 @@ PanelWindow {
             return `OpenRouter has no model ${gone[1]} (any more) - pick another under Settings › Model, or find one `
                 + `on openrouter.ai/models and use .model openrouter:<name>\n${error}`;
         if (/Failed to load config/.test(error))
-            return "aichat is not set up yet, so there is no model to answer with. See \"Getting started\" in "
-                + `Mascot's README: a free local model with Ollama, or a hosted one with OpenRouter.\n${error}`;
+            return "aichat could not load its config, so there is no model to answer with. Fix the config (or remove "
+                + `Mascot's own in ${bubble.mascotAichatDir} and write again to set it up anew).\n${error}`;
         if (/aichat: (command )?not found/.test(error))
-            return `aichat is not installed: install it (on Arch: pacman -S aichat), then set it up as `
-                + `"Getting started" in Mascot's README says.\n${error}`;
+            return `aichat is not installed: install it (on Arch: pacman -S aichat; elsewhere: `
+                + `github.com/sigoden/aichat/releases), then write again.\n${error}`;
         const missing = error.match(/model '([^']+)' not found/);
         if (missing)
             return `The model ${missing[1]} is not there - if it is a local one, download it with: ollama pull `
@@ -1849,7 +1960,7 @@ PanelWindow {
                     if (exitCode !== 0 && !job.done && c.replying && bubble.visible && bubble.event && c === bubble.current)
                         bubble.linger("failed");
                     if (job.done)
-                        job.done(job.output, exitCode === 0);
+                        job.done(job.output, exitCode === 0, job.errors);
                 }
                 job.destroy();
             }
