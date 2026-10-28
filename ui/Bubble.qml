@@ -959,6 +959,10 @@ PanelWindow {
     // Kept in the data directory, as sessions outlive Mascot
     property var sessionKinds: ({})
 
+    // Where aichat keeps the .sessions, not in its own sessions_dir: a
+    // private one there could be opened in a terminal with a model online
+    readonly property string sessionsDir: `${bubble.dataDir}/aichat-sessions`
+
     FileView {
         id: sessionKindsView
 
@@ -1008,8 +1012,8 @@ PanelWindow {
         });
     }
 
-    // .delete session <name>: deletes one of aichat's sessions (it has no
-    // command for it): its file in aichat's sessions_dir, after the menu's
+    // .delete session <name>: deletes one of the sessions (aichat has no
+    // command for it): its file in sessionsDir, after the menu's
     // "Delete session ›" typed it for Enter to confirm
     function deleteSession(name: string): void {
         const c = bubble.current;
@@ -1019,7 +1023,7 @@ PanelWindow {
             say(`no session called ${name}`);
             return;
         }
-        // Not the bubble's memory dir (see run()), aichat's own
+        // Not the bubble's memory dir (see run()), sessionsDir
         run(["--info"], false, "", (info, ok) => {
             const dir = ok ? (info.match(/^sessions_dir:?\s+(\S.*)$/m) ?? [])[1] : null;
             if (!dir) {
@@ -1040,7 +1044,7 @@ PanelWindow {
                         bubble.conversations[id].session = "";
                 say(`deleted session ${name}`);
             }, c, "rm");
-        }, c, command, { AICHAT_SESSIONS_DIR: null });
+        }, c, command, { AICHAT_SESSIONS_DIR: bubble.sessionsDir });
     }
 
     // For .tools: whether the local tools are there in this .session
@@ -1172,9 +1176,9 @@ PanelWindow {
         c.job = jobComponent.createObject(bubble, {
             conv: c,
             done: done,
-            // Only the mascot's memory uses the bubble's memory dir: .sessions
-            // and named sessions stay in aichat's own
-            environment: Object.assign((reply || !kind) && !c.session ? { AICHAT_SESSIONS_DIR: bubble.memoryDir } : {}, env),
+            // The mascot's memory uses the bubble's memory dir, .sessions and
+            // named sessions Mascot's own (sessionsDir)
+            environment: Object.assign({ AICHAT_SESSIONS_DIR: (reply || !kind) && !c.session ? bubble.memoryDir : bubble.sessionsDir }, env),
             // stdin must be closed: aichat reads a non-tty stdin as extra input
             // and waits forever on the open pipe Process gives it
             command: ["sh", "-c", command + ' "$@" </dev/null', "mascot-bubble"].concat(args)

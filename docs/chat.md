@@ -81,8 +81,8 @@ Lines starting with `.` are commands, modelled on aichat's REPL:
 | `.models <search>` | Find models on OpenRouter, newest first, with price, context and whether they can use tools, e.g. `.models gemini flash` |
 | `.model <name>` | Switch model, e.g. `.model openrouter:…` |
 | `.role <name>` | Switch to one of your aichat roles instead of Mascot's prompt |
-| `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved, so it outlives Mascot); started with a local model it is private (see *Tools*) |
-| `.delete session <name>` | Delete one of aichat's sessions for good (its file in aichat's `sessions_dir`) |
+| `.session <name>` | Use a named aichat session instead of the mascot's own memory (it is saved in `~/.local/share/mascot/aichat-sessions`, so it outlives Mascot); started with a local model it is private (see *Tools*) |
+| `.delete session <name>` | Delete one of the sessions for good (its file in `~/.local/share/mascot/aichat-sessions`) |
 | `.exit model\|session` | Go back to the default |
 | `.exit role` | Leave the role, also the one from `CHAT_ROLES`/`CHAT_ROLE` (until `.role` or a restart) |
 | `.mascots` | List the mascots you have installed |
@@ -252,9 +252,9 @@ The file, todo, reminder, shell and system tools keep to what is yours to share:
   refuses to send a model online what it read, and choosing one switches to a local model (the
   default if it is local, else the local one used last). A session started with another model, or one Mascot
   did not start (made in a terminal), has none of them. Mascot keeps which is which in
-  `~/.local/share/mascot/sessions`; aichat itself does not know, so do not open a private session in a
-  terminal with a model online. Sessions are files with all that was said; keep them out of git
-  (e.g. `.config/aichat/sessions/` in a dotfiles repo's `.gitignore`).
+  `~/.local/share/mascot/sessions`, and the sessions themselves in `~/.local/share/mascot/aichat-sessions`,
+  not in aichat's own `sessions_dir`, so aichat in a terminal does not see them (it does not know which
+  are private). Sessions are files with all that was said; keep them out of git.
 
 The bubble always points aichat at these tools, never at your own llm-functions, and turns function
 calling off when `CHAT_TOOLS` is empty, so none of your tools can write or run anything unconfirmed

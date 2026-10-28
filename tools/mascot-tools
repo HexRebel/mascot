@@ -65,7 +65,7 @@ HISTORY_TAIL = 64 * 1024  # bytes read from the end of a shell's history
 SECRET_DIRS = [d.split("/") for d in (
     # keys, passwords, tokens
     ".ssh", ".gnupg", ".password-store", ".local/share/keyrings", ".local/share/kwalletd", ".pki", ".android",
-    ".config/aichat", ".config/aichat-bubble", ".claude", ".local/share/claude", ".config/gh", ".aws", ".kube",
+    ".config/aichat", ".config/aichat-bubble", ".local/share/mascot/aichat-sessions", ".claude", ".local/share/claude", ".config/gh", ".aws", ".kube",
     ".docker", ".qwen", ".config/goa-1.0", ".config/rclone", ".config/hydroxide", ".MakeMKV",
     # browsers, mail, chat and other apps that keep logins
     ".mozilla", ".config/mozilla", ".librewolf", ".thunderbird", ".local/share/qutebrowser", ".config/chromium",

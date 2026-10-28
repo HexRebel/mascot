@@ -3,6 +3,13 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- The bubble's sessions (`.session <name>`) are kept in `~/.local/share/mascot/aichat-sessions` instead of
+  aichat's own `sessions_dir`, so aichat in a terminal no longer sees them and cannot go on with a private
+  one with a model online. Move the ones you made with the bubble there to keep them, e.g.
+  `mv ~/.config/aichat/sessions/<name>.yaml ~/.local/share/mascot/aichat-sessions/`.
+
 ## 0.6.1 (2026-10-26)
 
 One fix: the menu's Info, Todo list and the rest work the first time.
