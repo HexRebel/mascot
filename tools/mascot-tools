@@ -66,7 +66,8 @@ SECRET_DIRS = [d.split("/") for d in (
     # keys, passwords, tokens
     ".ssh", ".gnupg", ".password-store", ".local/share/keyrings", ".local/share/kwalletd", ".pki", ".android",
     ".config/aichat", ".config/aichat-bubble", ".local/share/mascot/aichat", ".local/share/mascot/aichat-sessions",
-    ".claude", ".local/share/claude", ".config/gh", ".aws", ".kube",
+    ".claude", ".local/share/claude", ".config/gh", ".aws", ".kube", ".config/hub", ".config/github-copilot",
+    ".config/gcloud", ".config/sops", ".config/doctl", ".terraform.d", ".config/containers", ".config/Code",
     ".docker", ".qwen", ".config/goa-1.0", ".config/rclone", ".config/hydroxide", ".MakeMKV",
     # browsers, mail, chat and other apps that keep logins
     ".mozilla", ".config/mozilla", ".librewolf", ".thunderbird", ".local/share/qutebrowser", ".config/chromium",
@@ -87,7 +88,7 @@ SECRET_DIRS = [d.split("/") for d in (
 # browsers and Electron apps keep logins and history in
 SECRET_NAMES = re.compile(r"""^(\.env(\..*)?|.*\.env|.*\.(pem|key|p12|pfx|kdbx|keystore|asc|gpg|sqlite3?|db|ldb|vdf|xbel)
     |id_(rsa|dsa|ecdsa|ed25519)(_sk)?(\.pub)?|adbkey(\.pub)?|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.pgpass
-    |\.claude\.json|\.pulse-cookie|credentials(\..*)?|secrets?(\..*)?|token(s)?(\..*)?
+    |\.claude\.json|\.pulse-cookie|credentials(\..*)?|secrets?(\..*)?|token(s)?(\..*)?|auth\.json|fish_variables
     |cookies(\..*)?|login\ data|web\ data|local\ storage|session\ storage|indexeddb|leveldb|logins\.json
     |\.(zsh|bash|python|node_repl|sqlite|mysql|psql|lesshst)_?history|\.histfile|\.viminfo|\.wget-hsts)$""", re.X | re.I)
 
@@ -338,12 +339,13 @@ def read_file(args):
         raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if b"\0" in data[:8192]:
         raise ToolError(f"{shown(asked)} is not a text file")
+    # A key in a dotfile the user let the mascot see (export OPENAI_API_KEY=... in ~/.zshrc) is still not shown
     if len(data) <= limit:
-        return data.decode("utf-8", "replace")
+        return masked(data.decode("utf-8", "replace"))
     size = os.path.getsize(path)
     shown_part = data[:limit]
     shown_part = shown_part[:shown_part.rfind(b"\n") + 1] or shown_part  # whole lines
-    return shown_part.decode("utf-8", "replace") + (
+    return masked(shown_part.decode("utf-8", "replace")) + (
         f"\n... (the file is {size // 1024} KB; only the first {len(shown_part) // 1024} KB are shown. "
         "Use search_file to find something further on)")
 
@@ -398,7 +400,8 @@ def search_file(args):
             if not many:
                 raise ToolError(f"{shown(asked)} is not a text file")
             continue
-        lines = data.decode("utf-8", "replace").splitlines()
+        # Masked before searching, so a search for a key cannot tell what it is one letter at a time
+        lines = [masked(line) for line in data.decode("utf-8", "replace").splitlines()]
         hits = [i for i, line in enumerate(lines) if needle in line.lower()]
         if not hits:
             continue

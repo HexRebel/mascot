@@ -237,9 +237,12 @@ The file, todo, reminder, shell and system tools keep to what is yours to share:
   link: `.ssh`, `.gnupg`, password stores and keyrings, aichat's config, `.env` files, keys and
   certificates, browser profiles and everything that looks like their storage (cookies, local
   storage, databases), mail and chat apps, `.git` directories, `.cache`, flatpak's `.var`, shell
-  history, `environment.d` and uwsm's env files (`SECRET_DIRS` and `SECRET_NAMES` in
-  `tools/mascot-tools`). That list is a safety net, not a guarantee: it cannot know every app, so
-  allow only the dotfiles you would show anyone.
+  history, `environment.d` and uwsm's env files, developer tools' logins (GitHub's `gh` and Copilot,
+  cloud and container tools, VS Code) (`SECRET_DIRS` and `SECRET_NAMES` in `tools/mascot-tools`).
+  In what the mascot may read, a line like `export OPENAI_API_KEY=...` is shown as
+  *OPENAI_API_KEY=[hidden]*, and so is a long random-looking string. That is a safety net, not a
+  guarantee: it cannot know every app or every way to write a key, so allow only the dotfiles you
+  would show anyone.
 - Big files: `read_file` hands the model about a quarter of its context, so the conversation still
   fits (more silently pushes your question out of it in Ollama): it asks Ollama for the model's
   `num_ctx` (or Ollama's default of 4096 tokens without one), e.g. 12 KB for 16k tokens and 96 KB for

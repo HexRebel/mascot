@@ -11,6 +11,14 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   read or changed. The AUR package says to run it, and so does the bubble when no model is set up.
 - Robo's file tools can no longer read Mascot's own chat config and sessions (where the API key is), also with
   another `MASCOT_DATA_DIR`.
+- Security: importing a `.wlshm` pack from someone else could write files anywhere in your home directory (a
+  member named `../../.bashrc` or with an absolute path) and overflow a buffer with its header. Mascot now refuses
+  such a pack whole, both the CLI and the daemon. Inherited from wl_shimeji.
+- Security: names, tool arguments and errors in the bubble and the menu are shown as plain text, so a pack's name
+  or text a model was fed can no longer make the bubble load an address from the net.
+- Security: the file tools hide keys in the dotfiles you let the mascot see (`export OPENAI_API_KEY=...` in
+  `~/.zshrc` shows as `[hidden]`, and searching for a key finds nothing), and keep out of more places with logins
+  (Copilot, `hub`, gcloud, sops, doctl, Terraform, containers' `auth.json`, VS Code, fish's variables).
 - Mascot says where its settings are, so you no longer need the docs to find them. `mascot --help` ends with how to
   start, the chat's settings (`CHAT_TOOLS`, `CHAT_LANGUAGE`, `CHAT_DOTFILES`, `CHAT_REMARKS`, `CHAT_ROLE`) and where
   your roles go. `.tools` shows every tool, on and off, and the command to change them; `.roles` says where to make
