@@ -20,6 +20,7 @@ is read without echo, never printed, and only sent to the service it belongs to.
 import json
 import os
 import re
+import shutil
 import tempfile
 import urllib.error
 import urllib.request
@@ -292,3 +293,258 @@ def online_models(provider: str, key: str) -> list:
         models = [m for m in models if re.match(r"gpt-|o\d", m["id"])]
     models.sort(key=lambda m: m.get("created_at") or m.get("created") or 0, reverse=True)
     return [{"name": m["id"], "tools": True} for m in models]
+
+
+LANGUAGES = {
+    "da": "Danish", "de": "German", "en": "English", "es": "Spanish", "fi": "Finnish", "fr": "French",
+    "it": "Italian", "ja": "Japanese", "ko": "Korean", "nb": "Norwegian", "nl": "Dutch", "nn": "Norwegian",
+    "no": "Norwegian", "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "sv": "Swedish", "tr": "Turkish",
+    "uk": "Ukrainian", "zh": "Chinese",
+}
+DEFAULT_TOOLS = {"local": ["time", "weather", "todo", "reminders", "sleep"], "online": ["time", "weather", "sleep"]}
+AICHAT_DOCS = "https://github.com/sigoden/aichat/wiki/Configuration-Guide"
+ROBO = [" ╭───╮", " │◉ ◉│  Robo: See you on the desktop! Beep.", " ╰───╯"]
+
+
+def language_from_locale(env: dict) -> str | None:
+    """The language the locale names (LC_ALL, LC_MESSAGES, LANG), e.g. da_DK.UTF-8: Danish"""
+    for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        if env.get(name):
+            return LANGUAGES.get(re.split(r"[_.@]", env[name])[0].lower())
+    return None
+
+
+class Stop(Exception):
+    """Setup cannot go on (something missing, or nothing to set up): nothing is written"""
+
+
+def run_setup(config_root: str, ask, ask_secret, out, set_option, current: dict, env: dict) -> int:
+    """mascot setup's questions, then (only after "Write this?") Mascot's config and CHAT_LANGUAGE/CHAT_TOOLS.
+    ask/ask_secret(prompt) -> answer, out(line), set_option(key, value); current: CHAT_COMMAND, CHAT_LANGUAGE
+    and CHAT_TOOLS as set now; env: HOME, XDG_CONFIG_HOME, AICHAT_CONFIG_DIR, PATH and the locale"""
+    home = env.get("HOME") or os.path.expanduser("~")
+
+    def shown(path):
+        return "~" + path[len(home):] if path.startswith(home + os.sep) else path
+
+    def say(label, text=""):
+        out(f"{label:>7}  {text}".rstrip())
+
+    def pick(label, question, options, default=None):
+        """1-based number of one of options; Enter takes default"""
+        say(label, question)
+        for i, option in enumerate(options, 1):
+            say("", f"{i}. {option}")
+        numbers = ", ".join(str(i) for i in range(1, len(options))) + f" or {len(options)}" if len(options) > 1 else "1"
+        while True:
+            answer = ask(f"         › {'(Enter: ' + str(default) + ') ' if default else ''}").strip()
+            if not answer and default:
+                return default
+            if answer.isdigit() and 1 <= int(answer) <= len(options):
+                return int(answer)
+            say("", f"Answer {numbers}.")
+
+    def yes(label, question):
+        while True:
+            answer = ask(f"{label:>7}  {question} [Y/n] ").strip().lower()
+            if answer in ("", "y", "yes"):
+                return True
+            if answer in ("n", "no"):
+                return False
+
+    directory = os.path.join(config_root, "aichat")
+    own_dir = env.get("AICHAT_CONFIG_DIR") or os.path.join(env.get("XDG_CONFIG_HOME") or os.path.join(home, ".config"), "aichat")
+    own = current.get("CHAT_COMMAND") or (os.path.join(own_dir, "config.yaml") if os.path.isfile(os.path.join(own_dir, "config.yaml")) else "")
+    say("robo", "Hi! I'm Robo. Let's get me talking - it takes a minute.")
+    try:
+        choice = None
+        if own:
+            say("aichat", f"Using your own aichat config ({shown(own)}); Mascot never changes it.")
+        else:
+            choice = choose_models(directory, ask, ask_secret, say, pick, yes, env)
+        language = ask_language(current, env, ask, say)
+        tools = ask_tools(current, choice, ask, say)
+        out("")
+        if choice:
+            old = " (the one there now is kept as config.yaml.old)" if os.path.exists(os.path.join(directory, "config.yaml")) else ""
+            say("✔", f"Mascot's chat config: {shown(os.path.join(directory, 'config.yaml'))}{old}")
+        if language and language != current.get("CHAT_LANGUAGE"):
+            say("✔", f"CHAT_LANGUAGE = {language}")
+        if ",".join(tools) != current.get("CHAT_TOOLS"):
+            say("✔", f"CHAT_TOOLS = {','.join(tools)}")
+        if not yes("", "Write this?"):
+            raise Stop()
+    except (KeyboardInterrupt, EOFError, Stop):
+        out("")
+        say("", "Nothing was changed.")
+        return 1
+    if choice:
+        write_config(directory, config_yaml(choice, ollama_base()))
+    if language and language != current.get("CHAT_LANGUAGE"):
+        set_option("CHAT_LANGUAGE", language)
+    if ",".join(tools) != current.get("CHAT_TOOLS"):
+        set_option("CHAT_TOOLS", ",".join(tools))
+    out("")
+    say("next", "mascot summon Robo      bring me onto the screen")
+    say("", "click me                to talk; .help shows what I can do")
+    if choice and choice.local_model and choice.online:
+        say("", f".model {PROVIDERS[choice.online.provider]['prefix']}:{choice.online.model}")
+        say("", "                        in the bubble asks the one online (or right-click me: Settings, Model)")
+    say("", "mascot setup            run this again any time")
+    out("")
+    for line in ROBO:
+        out(line)
+    return 0
+
+
+def choose_models(directory, ask, ask_secret, say, pick, yes, env) -> Choice:
+    """Where the mascot thinks and with which model(s); raises Stop when something is missing"""
+    if not shutil.which("aichat", path=env.get("PATH")):
+        say("aichat", "aichat is not installed: Mascot chats through it. On Arch: pacman -S aichat;")
+        say("", "elsewhere: github.com/sigoden/aichat/releases. Then run mascot setup again.")
+        raise Stop()
+    previous = read_current(directory)
+    where_default = None
+    if previous:
+        where_default = 3 if previous.local_model and previous.online else 1 if previous.local_model else 2
+    where = pick("where", "Where should I think?", [
+        "On this computer (Ollama) - private, free, needs a good graphics card",
+        "Online - any computer, pay per message",
+        "Both - this computer by default, online when you ask for it"], where_default)
+    choice = Choice(None, [], None, "online" if where == 2 else "local")
+    if where in (1, 3):
+        base = ollama_base()
+        models = ollama_models(base)
+        if models is None:
+            say("ollama", f"Ollama is not running at {base}. Start it (e.g. sudo systemctl enable --now ollama,")
+            say("", "or ollama serve), then run mascot setup again. Installing it: ollama.com/download")
+            raise Stop()
+        if not models:
+            say("ollama", "Ollama has no model to chat with. Download one (ollama pull <model>, see")
+            say("", "ollama.com/library), then run mascot setup again.")
+            raise Stop()
+        names = [m["name"] for m in models]
+        default = names.index(previous.local_model) + 1 if previous and previous.local_model in names else None
+        n = pick("model", "Which model on this computer?", [
+            f"{m['name']}  {m['size']}{'' if m['tools'] else ', cannot use tools'}".rstrip() for m in models], default)
+        choice.local_model = names[n - 1]
+        choice.local_models = [{"name": m["name"], "tools": m["tools"]} for m in models]
+    if where in (2, 3):
+        choice.online = choose_online(previous, ask, ask_secret, say, pick, yes)
+        if not choice.online:
+            if where == 2:
+                say("", "Nothing to set up online.")
+                raise Stop()
+            choice.default = "local"
+    return choice
+
+
+def choose_online(previous, ask, ask_secret, say, pick, yes) -> Online | None:
+    ids = list(PROVIDERS)
+    default = ids.index(previous.online.provider) + 1 if previous and previous.online else None
+    n = pick("online", "Which service?", [
+        "OpenRouter - one key for models from every company (recommended)",
+        "Anthropic (Claude)", "OpenAI (GPT)", "Google (Gemini)",
+        "Another one - set it up in aichat yourself"], default)
+    if n == 5:
+        say("", f"aichat can use many more: {AICHAT_DOCS}")
+        say("", "Mascot uses your own aichat config (~/.config/aichat) when there is one.")
+        return None
+    provider = ids[n - 1]
+    info = PROVIDERS[provider]
+    key = None
+    if previous and previous.online and previous.online.provider == provider:
+        if yes("key", f"A key for {info['title']} is set. Keep it?"):
+            key = previous.online.key
+    while key is None:
+        say("key", f"Your {info['title']} key, from {info['key_url']} (it is not shown; Enter skips):")
+        typed = ask_secret("         › ").strip()
+        if not typed:
+            return None
+        status = check_key(provider, typed)
+        if status == 200:
+            say("", "✔ the key works")
+            key = typed
+        elif status == 0:
+            say("", f"Could not reach {info['title']}; check the network and try again.")
+        else:
+            say("", f"The key did not work (HTTP {status}); try again.")
+    if provider == "openrouter":
+        say("", "Tip: give the key a credit limit at openrouter.ai/keys, so a lost key costs little.")
+    return Online(provider, key, *choose_online_model(provider, key, previous, ask, say, pick))
+
+
+def choose_online_model(provider, key, previous, ask, say, pick) -> tuple:
+    """(model, the models to keep in the config: the one chosen and those shown)"""
+    models = online_models(provider, key)
+    names = [m["name"] for m in models]
+    shown = [m for m in models if m["name"] in RECOMMENDED[provider]] or models[:5]
+    old = previous.online.model if previous and previous.online and previous.online.provider == provider else None
+    if old in names and old not in [m["name"] for m in shown]:
+        shown = [models[names.index(old)]] + shown
+    if not models:
+        say("", f"Could not get {PROVIDERS[provider]['title']}'s models.")
+    while True:
+        options = [m["name"] for m in shown] + ["type a name (or part of one)"]
+        n = pick("model", "Which model?", options, options.index(old) + 1 if old in options else None)
+        if n <= len(shown):
+            chosen = shown[n - 1]
+            break
+        typed = ask("         name › ").strip()
+        if not typed:
+            continue
+        if not models:  # the list could not be read: take it as written
+            chosen = {"name": typed, "tools": True}
+            break
+        exact = [m for m in models if m["name"] == typed]
+        matches = exact or [m for m in models if typed.lower() in m["name"].lower()]
+        if len(matches) == 1:
+            chosen = matches[0]
+            break
+        if matches:
+            shown = matches[:10]
+        else:
+            say("", f"{PROVIDERS[provider]['title']} has no model called {typed}.")
+    return chosen["name"], [chosen] + [m for m in shown if m["name"] != chosen["name"]]
+
+
+def ask_language(current, env, ask, say) -> str | None:
+    """The language for CHAT_LANGUAGE; None leaves it as it is"""
+    guess = current.get("CHAT_LANGUAGE") or language_from_locale(env)
+    say("lang", f"Which language do you write in? (Enter: {guess or 'I follow yours'})")
+    answer = ask("         › ").strip()
+    return answer[:1].upper() + answer[1:] if answer else guess
+
+
+def ask_tools(current, choice, ask, say) -> list:
+    """The tools for CHAT_TOOLS, in TOOLS' order. Without a model on this computer, the local ones cannot be
+    chosen (the bubble would not give them to a model online); with the user's own config, all can"""
+    local = choice is None or bool(choice.local_model)
+    on = [t for t in current.get("CHAT_TOOLS", "").split(",") if t in TOOLS] \
+        or DEFAULT_TOOLS["local" if local else "online"]
+    if not local:
+        on = [t for t in on if t not in LOCAL_TOOLS]
+    if choice and choice.default == "local":
+        model = next(m for m in choice.local_models if m["name"] == choice.local_model)
+        if not model["tools"]:
+            say("tools", f"{choice.local_model} cannot use tools; they work once you pick a model that can.")
+    while True:
+        say("tools", "What may I look up? I only ever look, never change anything.")
+        for i, t in enumerate(TOOLS, 1):
+            only = " (only with a model on this computer)" if not local and t in LOCAL_TOOLS else ""
+            say("", f"{i}. [{'x' if t in on else ' '}] {t:<10} {TOOL_NOTES[t]}{only}")
+        say("", "Type numbers to turn them on or off (e.g. 3 7), Enter when done.")
+        answer = ask("         › ").strip()
+        if not answer:
+            return [t for t in TOOLS if t in on]
+        for token in re.split(r"[\s,]+", answer):
+            if not (token.isdigit() and 1 <= int(token) <= len(TOOLS)):
+                say("", f"There is no tool {token}.")
+                continue
+            t = TOOLS[int(token) - 1]
+            if not local and t in LOCAL_TOOLS:
+                say("", f"{t} works only with a model on this computer.")
+            elif t in on:
+                on.remove(t)
+            else:
+                on.append(t)

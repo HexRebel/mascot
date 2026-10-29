@@ -4,7 +4,7 @@
     python3 -I scripts/test_setup.py -v
 
 Each test gets its own home and data directory in a temporary directory; nothing outside it is read or
-written. No real key is ever used: the made-up services accept "good" and refuse anything else.
+written. No real key is ever used: the made-up services accept "sk-good-key" and refuse anything else.
 """
 import http.server
 import importlib.machinery
@@ -168,10 +168,10 @@ class FakeServices(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         good = {
-            "/api/v1/key": h.get("Authorization") == "Bearer good",
+            "/api/v1/key": h.get("Authorization") == "Bearer sk-good-key",
             "/api/v1/models": True,
-            "/v1/models": h.get("x-api-key") == "good" or h.get("Authorization") == "Bearer good",
-            "/v1beta/models": h.get("x-goog-api-key") == "good",
+            "/v1/models": h.get("x-api-key") == "sk-good-key" or h.get("Authorization") == "Bearer sk-good-key",
+            "/v1beta/models": h.get("x-goog-api-key") == "sk-good-key",
         }.get(self.path)
         if good is None:
             return self.reply(404, {})
@@ -250,31 +250,218 @@ class Net(Served):
         for provider, path in (("openrouter", "/api/v1/key"), ("anthropic", "/v1/models"),
                                ("openai", "/v1/models"), ("google", "/v1beta/models")):
             SEEN.clear()
-            self.assertEqual(setup.check_key(provider, "good"), 200, provider)
+            self.assertEqual(setup.check_key(provider, "sk-good-key"), 200, provider)
             self.assertEqual(SEEN[-1][0], path)
             self.assertEqual(setup.check_key(provider, "bad"), 401, provider)
         SEEN.clear()
-        setup.check_key("anthropic", "good")
+        setup.check_key("anthropic", "sk-good-key")
         self.assertIn("anthropic-version", {k.lower() for k in SEEN[-1][1]})
         SEEN.clear()
-        setup.check_key("google", "good")
+        setup.check_key("google", "sk-good-key")
         self.assertNotIn("key=", SEEN[-1][0])
         os.environ["MASCOT_SETUP_TEST_BASE"] = f"http://127.0.0.1:{free_port()}"
-        self.assertEqual(setup.check_key("openai", "good"), 0)
+        self.assertEqual(setup.check_key("openai", "sk-good-key"), 0)
 
     def test_no_redirect(self):
         os.environ["MASCOT_SETUP_TEST_BASE"] = self.base + "/redirect"
-        self.assertEqual(setup.check_key("openai", "good"), 302)
+        self.assertEqual(setup.check_key("openai", "sk-good-key"), 302)
 
     def test_online_models(self):
-        self.assertEqual(setup.online_models("openrouter", "good"),
+        self.assertEqual(setup.online_models("openrouter", "sk-good-key"),
                          [{"name": "anthropic/claude-haiku-5.5", "tools": True},
                           {"name": "some/old-model", "tools": False}])
-        self.assertEqual([m["name"] for m in setup.online_models("openai", "good")], ["gpt-5-mini", "o3"])
-        self.assertEqual(setup.online_models("google", "good"), [{"name": "gemini-3-flash", "tools": True}])
-        self.assertEqual([m["name"] for m in setup.online_models("anthropic", "good")],
+        self.assertEqual([m["name"] for m in setup.online_models("openai", "sk-good-key")], ["gpt-5-mini", "o3"])
+        self.assertEqual(setup.online_models("google", "sk-good-key"), [{"name": "gemini-3-flash", "tools": True}])
+        self.assertEqual([m["name"] for m in setup.online_models("anthropic", "sk-good-key")],
                          ["claude-opus-5-5", "claude-haiku-5-5"])
         self.assertEqual(setup.online_models("openai", "bad"), [])
+
+
+class Script:
+    """Answers to setup's questions in order (an exception class is raised instead), and what it says"""
+
+    def __init__(self, *answers):
+        self.answers = list(answers)
+        self.secret_asked = 0
+        self.lines = []
+        self.options = []
+
+    def next(self):
+        if not self.answers:
+            raise AssertionError("setup asked more than the script answers:\n" + self.text())
+        a = self.answers.pop(0)
+        if isinstance(a, type) and issubclass(a, BaseException):
+            raise a()
+        return a
+
+    def ask(self, prompt):
+        return self.next()
+
+    def ask_secret(self, prompt):
+        self.secret_asked += 1
+        return self.next()
+
+    def out(self, line):
+        self.lines.append(line)
+
+    def set_option(self, key, value):
+        self.options.append((key, value))
+
+    def text(self):
+        return "\n".join(self.lines)
+
+
+class Flow(Served):
+    def setUp(self):
+        super().setUp()
+        OLLAMA["gemma4:12b"] = (["completion", "tools"], "11.9B")
+        OLLAMA["tiny"] = (["completion"], "1B")
+        self.bin = os.path.join(self.tmp.name, "bin")
+        os.makedirs(self.bin)
+        with open(os.path.join(self.bin, "aichat"), "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(os.path.join(self.bin, "aichat"), 0o755)
+        self.env = {"HOME": self.home, "XDG_CONFIG_HOME": os.path.join(self.home, ".config"), "PATH": self.bin}
+        self.current = {"CHAT_COMMAND": "", "CHAT_LANGUAGE": "", "CHAT_TOOLS": ""}
+
+    def run_setup(self, script, **current):
+        code = setup.run_setup(self.data, script.ask, script.ask_secret, script.out, script.set_option,
+                               {**self.current, **current}, self.env)
+        return code
+
+    def config(self):
+        with open(os.path.join(self.aichat_dir, "config.yaml")) as f:
+            return f.read()
+
+    def written(self):
+        return os.path.exists(os.path.join(self.aichat_dir, "config.yaml"))
+
+    def test_local(self):
+        s = Script("1", "1", "Danish", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("model: ollama:gemma4:12b", self.config())
+        self.assertIn(("CHAT_LANGUAGE", "Danish"), s.options)
+        self.assertIn(("CHAT_TOOLS", "time,weather,todo,reminders,sleep"), s.options)
+        self.assertIn("mascot summon Robo", s.text())
+        self.assertIn("Robo", s.lines[0])
+
+    def test_online_openrouter(self):
+        s = Script("2", "1", " sk-good-key\n", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("model: openrouter:anthropic/claude-haiku-5.5", self.config())
+        self.assertNotIn("name: ollama", self.config())
+        self.assertIn(("CHAT_TOOLS", "time,weather,sleep"), s.options)
+        self.assertFalse([o for o in s.options if o[0] == "CHAT_LANGUAGE"])
+        self.assertIn("limit", s.text())
+        self.assertNotIn("sk-good-key", s.text())
+
+    def test_bad_key_then_good(self):
+        s = Script("2", "1", "bad-key-123", "sk-good-key", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("did not work (HTTP 401)", s.text())
+        self.assertNotIn("bad-key-123", s.text())
+        self.assertEqual(s.secret_asked, 2)
+
+    def test_both(self):
+        s = Script("3", "1", "2", "sk-good-key", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        text = self.config()
+        self.assertIn("model: ollama:gemma4:12b", text)
+        self.assertIn("type: claude", text)
+        self.assertIn(".model claude:", s.text())
+
+    def test_invalid_answers(self):
+        s = Script("x", "0", "9", "", "1", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertEqual(s.text().count("Where should I think?"), 1)
+        self.assertGreaterEqual(s.text().count("1, 2 or 3"), 4)
+
+    def test_tools_toggle(self):
+        s = Script("1", "1", "", "3 7", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn(("CHAT_TOOLS", "time,weather,files,todo,reminders"), s.options)
+        s = Script("2", "1", "sk-good-key", "1", "", "3", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("only with a model on this computer", s.text())
+        self.assertIn(("CHAT_TOOLS", "time,weather,sleep"), s.options)
+
+    def test_own_config_skips_models(self):
+        own = os.path.join(self.home, ".config", "aichat", "config.yaml")
+        os.makedirs(os.path.dirname(own))
+        with open(own, "w") as f:
+            f.write("model: x\n")
+        s = Script("Danish", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("Using your own aichat config", s.text())
+        self.assertFalse(self.written())
+        s = Script("Danish", "", "y")
+        os.unlink(own)
+        self.assertEqual(self.run_setup(s, CHAT_COMMAND="my-aichat"), 0, s.text())
+        self.assertIn("Using your own aichat config", s.text())
+        self.assertFalse(self.written())
+
+    def test_ctrl_c_writes_nothing(self):
+        for stop in (KeyboardInterrupt, EOFError):
+            s = Script("1", "1", "Danish", stop)
+            self.assertEqual(self.run_setup(s), 1)
+            self.assertIn("Nothing was changed.", s.text())
+            self.assertFalse(self.written())
+            self.assertEqual(s.options, [])
+
+    def test_no_at_confirm(self):
+        s = Script("1", "1", "", "", "n")
+        self.assertEqual(self.run_setup(s), 1)
+        self.assertIn("Nothing was changed.", s.text())
+        self.assertFalse(self.written())
+        self.assertEqual(s.options, [])
+
+    def test_rerun_keeps_key(self):
+        online = setup.Online("openrouter", "sk-good-key", "anthropic/claude-haiku-5.5",
+                              [{"name": "anthropic/claude-haiku-5.5", "tools": True}])
+        setup.write_config(self.aichat_dir, setup.config_yaml(setup.Choice(None, [], online, "online"), self.base))
+        s = Script("2", "1", "y", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertEqual(s.secret_asked, 0)
+        self.assertEqual(setup.read_current(self.aichat_dir).online.key, "sk-good-key")
+        self.assertTrue(os.path.exists(os.path.join(self.aichat_dir, "config.yaml.old")))
+        self.assertNotIn("sk-good-key", s.text())
+
+    def test_rerun_defaults(self):
+        setup.write_config(self.aichat_dir, setup.config_yaml(
+            setup.Choice("tiny", [{"name": "gemma4:12b", "tools": True}, {"name": "tiny", "tools": False}],
+                         None, "local"), self.base))
+        s = Script("", "", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("model: ollama:tiny", self.config())
+
+    def test_another_service(self):
+        s = Script("2", "5")
+        self.assertEqual(self.run_setup(s), 1)
+        self.assertIn("aichat", s.text())
+        self.assertIn("Nothing to set up online", s.text())
+        self.assertEqual(s.secret_asked, 0)
+        s = Script("3", "1", "5", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("model: ollama:gemma4:12b", self.config())
+
+    def test_no_ollama_stops(self):
+        os.environ["OLLAMA_HOST"] = f"127.0.0.1:{free_port()}"
+        s = Script("1")
+        self.assertEqual(self.run_setup(s), 1)
+        self.assertIn("ollama serve", s.text())
+        self.assertFalse(self.written())
+
+    def test_no_aichat_stops(self):
+        os.unlink(os.path.join(self.bin, "aichat"))
+        s = Script()
+        self.assertEqual(self.run_setup(s), 1)
+        self.assertIn("aichat is not installed", s.text())
+
+    def test_language_from_locale(self):
+        self.assertEqual(setup.language_from_locale({"LANG": "da_DK.UTF-8"}), "Danish")
+        self.assertEqual(setup.language_from_locale({"LC_ALL": "nb_NO.UTF-8", "LANG": "en_US"}), "Norwegian")
+        self.assertIsNone(setup.language_from_locale({"LANG": "C"}))
+        self.assertIsNone(setup.language_from_locale({}))
 
 
 if __name__ == "__main__":
