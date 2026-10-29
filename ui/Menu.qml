@@ -92,7 +92,6 @@ PanelWindow {
         menu.page = "main";
         menu.waiting = true;
         menu.listRequested();
-        menu.openRouterRequested();
         const command = (e.command || "aichat") + " %s </dev/null";
         // Through env, not the Process's environment: Quickshell 0.3.0 (Debian 13)
         // cannot bind an object to it
@@ -139,6 +138,8 @@ PanelWindow {
         stdout: StdioCollector {
             onStreamFinished: {
                 const models = this.text.split("\n").map(l => l.trim()).filter(l => l);
+                // Only someone with an OpenRouter model asks OpenRouter which of them it still has
+                if (models.some(m => m.startsWith("openrouter:"))) menu.openRouterRequested();
                 // This computer's models first
                 menu.models = models.filter(m => m.startsWith("ollama:"))
                     .concat(models.filter(m => !m.startsWith("ollama:")));

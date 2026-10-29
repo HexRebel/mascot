@@ -77,5 +77,15 @@ class Local(unittest.TestCase):
             self.assertEqual(self.call("localModel", "model: ollama:gemma4:12b", host), "", host)
 
 
+class Network(unittest.TestCase):
+    def test_menu_asks_openrouter_only_when_used(self):
+        # OpenRouter's list only hides its models that are gone; someone without one is not to ask it at all
+        with open(os.path.join(ROOT, "ui", "Menu.qml")) as f:
+            calls = [line for line in f if "openRouterRequested()" in line and "signal" not in line]
+        self.assertTrue(calls)
+        for line in calls:
+            self.assertIn('startsWith("openrouter:")', line, line.strip())
+
+
 if __name__ == "__main__":
     unittest.main()

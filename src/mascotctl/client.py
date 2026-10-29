@@ -1229,7 +1229,7 @@ def setup_handler(arguments: argparse.Namespace) -> int:
     def set_option(key: str, value: str) -> None:
         # Right after installing there is no config yet; mascotd fills in the rest
         if not os.path.exists(conf):
-            os.makedirs(os.path.dirname(conf), exist_ok=True)
+            os.makedirs(os.path.dirname(conf), mode=0o700, exist_ok=True)
             open(conf, "a").close()
         done = subprocess.run([sys.executable, os.path.realpath(sys.argv[0]), *given, "config", "set", key, value],
                               capture_output=True, text=True)

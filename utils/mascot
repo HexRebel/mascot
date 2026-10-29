@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import subprocess
-from dataclasses import dataclass, field
+import http.client
 import argparse
-import termios
-import base64
-import shutil
-import re
-import xml.etree.ElementTree as ET
-import enum
-import os
+import subprocess
 import stat
-from dataclasses import dataclass
+import tarfile
+import html
+import json
+import pathlib
+import os
+from typing import Dict, Optional
+import enum
+import urllib.request
+import io
+import xml.etree.ElementTree as ET
+import shutil
+import xml
+import struct
+from dataclasses import dataclass, field
+from xml.etree import ElementTree
 from typing import Callable, Any
 import codecs
-import socket
-import urllib.request
-import http.client
-import tempfile
-import errno
-from xml.etree import ElementTree
-import tarfile
-import urllib.parse
-import zipfile
-import xml
-import urllib.error
-import sys
-import struct
-import html
-import pathlib
-import json
-from PIL import Image
-from typing import Dict, Optional
 import logging
+import zipfile
+import tempfile
+import base64
+from PIL import Image
+import urllib.error
+import re
+import sys
+import urllib.parse
+import termios
+import socket
 import time
-import io
+from dataclasses import dataclass
 import random
+import errno
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -1990,8 +1990,8 @@ OPENROUTER_API = "https://openrouter.ai/api/v1"
 @dataclass
 class Online:
     provider: str  # a key of PROVIDERS
-    key: str
-    model: str
+    key: str = field(repr=False)  # never in a debug print, a log line or a test's diff
+    model: str = ""
     models: list = field(default_factory=list)  # [{"name", "tools"}], model among them
 
 
@@ -2111,6 +2111,9 @@ def read_current(directory: str) -> Choice | None:
 def write_config(directory: str, text: str) -> str:
     """Writes Mascot's own config (directory 700, file 600, in one step); one that is there is kept as
     config.yaml.old (600: it may hold a key). Returns its path"""
+    # Mascot's own directory too, when it is new (right after installing): it holds the sessions and todo list
+    # Mascot's own directory too, when it is new (right after installing): it holds the sessions and todo list
+    os.makedirs(os.path.dirname(directory), mode=0o700, exist_ok=True)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     os.chmod(directory, 0o700)
     path = os.path.join(directory, "config.yaml")
@@ -2200,9 +2203,14 @@ def ollama_models(base: str) -> list | None:
     return models
 
 
+# Only the tests' own copy sets it (scripts/test_setup.py): the environment cannot change where a key goes
+# Only the tests' own copy sets it (scripts/test_setup.py): the environment cannot change where a key goes
+TEST_BASE = None
+
+
 def service(provider: str, key: str, path: str) -> tuple[int, dict | None]:
     """One request to a service, with the key in a header (never in the address)"""
-    base = os.environ.get("MASCOT_SETUP_TEST_BASE") or PROVIDERS[provider]["base"]  # only tests set it
+    base = TEST_BASE or PROVIDERS[provider]["base"]
     headers = {"anthropic": {"x-api-key": key, "anthropic-version": "2023-06-01"},
                "google": {"x-goog-api-key": key}}.get(provider, {"Authorization": f"Bearer {key}"})
     return get(base + path, headers)
@@ -4506,7 +4514,7 @@ def setup_handler(arguments: argparse.Namespace) -> int:
         # Right after installing there is no config yet; mascotd fills in the rest
         # Right after installing there is no config yet; mascotd fills in the rest
         if not os.path.exists(conf):
-            os.makedirs(os.path.dirname(conf), exist_ok=True)
+            os.makedirs(os.path.dirname(conf), mode=0o700, exist_ok=True)
             open(conf, "a").close()
         done = subprocess.run([sys.executable, os.path.realpath(sys.argv[0]), *given, "config", "set", key, value],
                               capture_output=True, text=True)

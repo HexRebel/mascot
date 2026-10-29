@@ -111,6 +111,24 @@ class Config(Home):
             f.write("model: something\nkeybindings: vi\n")
         self.assertIsNone(setup.read_current(self.aichat_dir))
 
+    def test_online_repr_hides_key(self):
+        # A debug print, a log line or a failing test's diff must not show the key
+        online = setup.Online("openrouter", "sk-good-key", "anthropic/claude-haiku-5.5", [])
+        self.assertNotIn("sk-good-key", repr(online))
+        self.assertNotIn("sk-good-key", repr(setup.Choice(None, [], online, "online")))
+
+    def test_shipped_mascot_has_no_test_address(self):
+        # Where a key is sent is not something the environment can change in the command people install
+        with open(os.path.join(ROOT, "utils", "mascot")) as f:
+            text = f.read()
+        self.assertNotIn("MASCOT_SETUP_TEST_BASE", text)
+        self.assertIn("\nTEST_BASE = None", text)
+
+    def test_data_dir_private_when_new(self):
+        # Right after installing there is no ~/.local/share: Mascot's own directory is made 700, not 755
+        setup.write_config(self.aichat_dir, "model: ollama:a\n")
+        self.assertEqual(self.mode(self.data), 0o700)
+
     def test_write_perms_and_old(self):
         path = setup.write_config(self.aichat_dir, "model: ollama:a\n")
         self.assertEqual(path, os.path.join(self.aichat_dir, "config.yaml"))
@@ -153,7 +171,7 @@ SEEN = []  # (path, headers) of every request to a service
 
 
 class FakeServices(http.server.BaseHTTPRequestHandler):
-    """Ollama and the four services at one address (MASCOT_SETUP_TEST_BASE, OLLAMA_HOST)"""
+    """Ollama and the four services at one address (chatsetup.TEST_BASE, OLLAMA_HOST)"""
 
     def log_message(self, *args):
         pass
@@ -239,11 +257,12 @@ class Served(Home):
         super().setUp()
         OLLAMA.clear()
         SEEN.clear()
-        self.saved = {k: os.environ.get(k) for k in ("MASCOT_SETUP_TEST_BASE", "OLLAMA_HOST")}
-        os.environ["MASCOT_SETUP_TEST_BASE"] = self.base
+        self.saved = {k: os.environ.get(k) for k in ("OLLAMA_HOST",)}
         os.environ["OLLAMA_HOST"] = self.base
+        setup.TEST_BASE = self.base
 
     def tearDown(self):
+        setup.TEST_BASE = None
         for k, v in self.saved.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -289,11 +308,11 @@ class Net(Served):
         SEEN.clear()
         setup.check_key("google", "sk-good-key")
         self.assertNotIn("key=", SEEN[-1][0])
-        os.environ["MASCOT_SETUP_TEST_BASE"] = f"http://127.0.0.1:{free_port()}"
+        setup.TEST_BASE = f"http://127.0.0.1:{free_port()}"
         self.assertEqual(setup.check_key("openai", "sk-good-key"), 0)
 
     def test_no_redirect(self):
-        os.environ["MASCOT_SETUP_TEST_BASE"] = self.base + "/redirect"
+        setup.TEST_BASE = self.base + "/redirect"
         self.assertEqual(setup.check_key("openai", "sk-good-key"), 302)
 
     def test_online_models(self):
@@ -579,6 +598,12 @@ class Cli(Served):
         cls.composed = os.path.join(cls.build.name, "mascot")
         subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "py-compose.py"), "-s",
                         os.path.join(ROOT, "src", "mascotctl", "client.py"), "-o", cls.composed], check=True)
+        # Only this copy sends the services' requests to the made-up services
+        with open(cls.composed) as f:
+            text = f.read()
+        assert text.count("\nTEST_BASE = None") == 1
+        with open(cls.composed, "w") as f:
+            f.write(text.replace("\nTEST_BASE = None", f"\nTEST_BASE = {cls.base!r}"))
 
     @classmethod
     def tearDownClass(cls):
@@ -597,7 +622,7 @@ class Cli(Served):
         os.chmod(os.path.join(self.bin, "aichat"), 0o755)
         self.env = {"HOME": self.home, "XDG_CONFIG_HOME": os.path.join(self.home, ".config"),
                     "XDG_RUNTIME_DIR": self.run_dir, "PATH": self.bin + os.pathsep + "/usr/bin" + os.pathsep + "/bin",
-                    "OLLAMA_HOST": self.base, "MASCOT_SETUP_TEST_BASE": self.base, "LANG": "C"}
+                    "OLLAMA_HOST": self.base, "LANG": "C"}
 
     def mascot(self, *args, stdin=subprocess.DEVNULL):
         return subprocess.run([sys.executable, self.mascot_path(), "-cr", self.data, *args], env=self.env,
@@ -621,6 +646,7 @@ class Cli(Served):
     def test_cli_setup_via_pty(self):
         text, code = self.setup_via_pty(["1", "1", "Danish", "", "y"])
         self.assertEqual(code, 0, text)
+        self.assertEqual(self.mode(self.data), 0o700)
         self.assertTrue(os.path.exists(os.path.join(self.aichat_dir, "config.yaml")), text)
         with open(os.path.join(self.data, "mascotd.conf")) as f:
             conf = f.read()

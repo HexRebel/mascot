@@ -61,8 +61,8 @@ OPENROUTER_API = "https://openrouter.ai/api/v1"
 @dataclass
 class Online:
     provider: str  # a key of PROVIDERS
-    key: str
-    model: str
+    key: str = field(repr=False)  # never in a debug print, a log line or a test's diff
+    model: str = ""
     models: list = field(default_factory=list)  # [{"name", "tools"}], model among them
 
 
@@ -182,6 +182,8 @@ def read_current(directory: str) -> Choice | None:
 def write_config(directory: str, text: str) -> str:
     """Writes Mascot's own config (directory 700, file 600, in one step); one that is there is kept as
     config.yaml.old (600: it may hold a key). Returns its path"""
+    # Mascot's own directory too, when it is new (right after installing): it holds the sessions and todo list
+    os.makedirs(os.path.dirname(directory), mode=0o700, exist_ok=True)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     os.chmod(directory, 0o700)
     path = os.path.join(directory, "config.yaml")
@@ -270,9 +272,13 @@ def ollama_models(base: str) -> list | None:
     return models
 
 
+# Only the tests' own copy sets it (scripts/test_setup.py): the environment cannot change where a key goes
+TEST_BASE = None
+
+
 def service(provider: str, key: str, path: str) -> tuple[int, dict | None]:
     """One request to a service, with the key in a header (never in the address)"""
-    base = os.environ.get("MASCOT_SETUP_TEST_BASE") or PROVIDERS[provider]["base"]  # only tests set it
+    base = TEST_BASE or PROVIDERS[provider]["base"]
     headers = {"anthropic": {"x-api-key": key, "anthropic-version": "2023-06-01"},
                "google": {"x-goog-api-key": key}}.get(provider, {"Authorization": f"Bearer {key}"})
     return get(base + path, headers)
