@@ -151,6 +151,13 @@ class Guide(unittest.TestCase):
         self.assertEqual(s["state"], "choose")
         self.assertEqual(s["models"], [{"name": "gemma4:latest", "tools": True}, {"name": "llama2:7b", "tools": False}])
 
+    def test_cloud_models_not_offered(self):
+        # Ollama lists its cloud models too, but they run at ollama.com: not for "on this computer"
+        self.choose_models()
+        MODELS["gpt-oss:120b-cloud"] = ["completion", "tools"]
+        MODELS["glm-4.6:cloud"] = ["completion", "tools"]
+        self.assertEqual([m["name"] for m in self.status()["models"]], ["gemma4:latest", "llama2:7b"])
+
     def test_ollama_host_forms(self):
         self.choose_models()
         for host in (f"127.0.0.1:{self.port}", f"http://127.0.0.1:{self.port}/"):

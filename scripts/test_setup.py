@@ -212,7 +212,8 @@ class FakeServices(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])) or "{}")
         model = OLLAMA.get(body.get("model") or body.get("name"))
         if self.path == "/api/show" and model:
-            return self.reply(200, {"capabilities": model[0], "details": {"parameter_size": model[1]}})
+            return self.reply(200, {"capabilities": model[0], "details": {"parameter_size": model[1]},
+                                    **(model[2] if len(model) > 2 else {})})
         self.reply(500, {"error": "no"})
 
 
@@ -260,6 +261,20 @@ class Net(Served):
         self.assertEqual(setup.ollama_models(self.base), [{"name": "gemma4:12b", "tools": True, "size": "11.9B"},
                                                           {"name": "tiny", "tools": False, "size": "1B"}])
         self.assertIsNone(setup.ollama_models(f"http://127.0.0.1:{free_port()}"))
+
+    def test_ollama_cloud_models_are_not_local(self):
+        # Ollama lists its cloud models too, but they run at ollama.com
+        OLLAMA["gemma4:12b"] = (["completion", "tools"], "11.9B")
+        OLLAMA["gpt-oss:120b-cloud"] = (["completion", "tools"], "116.8B")
+        OLLAMA["glm-4.6:cloud"] = (["completion", "tools"], "")
+        OLLAMA["renamed"] = (["completion", "tools"], "", {"remote_host": "https://ollama.com:443"})
+        self.assertEqual([m["name"] for m in setup.ollama_models(self.base)], ["gemma4:12b"])
+
+    def test_ollama_here(self):
+        for base in ("http://127.0.0.1:11434", "http://localhost:11434", "http://[::1]:11434", "http://0.0.0.0:11434"):
+            self.assertTrue(setup.ollama_here(base), base)
+        for base in ("http://192.168.1.20:11434", "https://ollama.example.com"):
+            self.assertFalse(setup.ollama_here(base), base)
 
     def test_check_key_headers(self):
         for provider, path in (("openrouter", "/api/v1/key"), ("anthropic", "/v1/models"),
@@ -453,6 +468,18 @@ class Flow(Served):
         self.assertEqual(self.run_setup(s), 0, s.text())
         self.assertIn(("CHAT_LANGUAGE", "Danish"), s.options)
         self.assertIn("arrow key", s.text())
+
+    def test_ollama_elsewhere(self):
+        # Ollama on another machine: setup says so, and the tools that read this computer are not offered
+        saved = setup.ollama_here
+        setup.ollama_here = lambda base: False
+        try:
+            s = Script("1", "1", "", "", "y")
+            self.assertEqual(self.run_setup(s), 0, s.text())
+        finally:
+            setup.ollama_here = saved
+        self.assertIn("not on this computer", s.text())
+        self.assertIn(("CHAT_TOOLS", "time,weather,sleep"), s.options)
 
     def test_own_config_skips_models(self):
         own = os.path.join(self.home, ".config", "aichat", "config.yaml")

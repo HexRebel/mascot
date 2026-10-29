@@ -144,7 +144,7 @@ install: all
 	install -m644 src/plugins.h $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
 	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
-	install -m644 ui/*.qml ui/prompt.md $(DESTDIR)$(PREFIX)/share/mascot/ui/
+	install -m644 ui/*.qml ui/*.js ui/prompt.md $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/
 	install -m755 tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/
 	install -m755 tools/mascot-guide $(DESTDIR)$(PREFIX)/share/mascot/tools/

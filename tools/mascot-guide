@@ -26,6 +26,7 @@ and never over one that is there. Ollama is only asked which models it has and w
 """
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -69,10 +70,15 @@ def chat_models():
         return None
     models = []
     for name in names:
+        if re.search(r"[-:]cloud$", name):  # Ollama's cloud models run at ollama.com, not on this computer
+            continue
         try:
-            caps = ollama("/api/show", {"model": name}).get("capabilities")
+            show = ollama("/api/show", {"model": name})
         except (OSError, ValueError):
             continue
+        if show.get("remote_host") or show.get("remote_model"):
+            continue
+        caps = show.get("capabilities")
         # Ollama before 0.6.4 does not say: then any model can chat, and none is known to use tools
         if caps is None:
             caps = ["completion"]

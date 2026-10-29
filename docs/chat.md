@@ -273,7 +273,8 @@ The file, todo, reminder, shell and system tools keep to what is yours to share:
   *api_key* and the like is shown as *[hidden]*. When they found nothing to go on, the mascot shows it
   does not know while it answers (Robo's "?").
 - Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
-  your computer. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
+  your computer. Not Ollama's cloud models (`…-cloud`, `…:cloud`: they run at ollama.com), and not when
+  `OLLAMA_HOST` is another machine. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
   its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).
 - In a `.session` (it outlives Mascot) only when it is private: a session whose first message went to
   a local model is private, has these tools, and only local models may go on with it - the bubble

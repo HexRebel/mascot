@@ -9,6 +9,7 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "local.js" as Local
 
 PanelWindow {
     id: bubble
@@ -963,10 +964,7 @@ PanelWindow {
                 return;
             }
             const probe = (c.model ? ["-m", c.model] : []).concat(role, "-s", "mascot-probe");
-            lookup(probe, c, command, (info, ok) => {
-                const local = ok ? info.match(/^model:?\s+ollama:(\S+)/m) : null;
-                send(local ? local[1] : "");
-            });
+            lookup(probe, c, command, (info, ok) => send(ok ? Local.localModel(info, bubble.ollamaHost) : ""));
         };
         if (role[0] !== "-r") {
             build([], role[1] ?? ""); // Mascot's prompt, or none
@@ -1143,7 +1141,7 @@ PanelWindow {
     function localForPrivate(c: QtObject): void {
         const command = bubble.event?.command || "aichat";
         const isLocal = (model, done) => lookup((model ? ["-m", model] : []).concat(roleFlags(), "-s", "mascot-probe"), c, command,
-                                                (info, ok) => done(ok && /^model:?\s+ollama:/m.test(info)));
+                                                (info, ok) => done(ok && Local.localModel(info, bubble.ollamaHost) !== ""));
         const use = model => {
             c.model = model;
             c.entries.append({ kind: "system", body: `model: ${model || defaultName("model")} - ${c.session} is a private `
@@ -1157,13 +1155,13 @@ PanelWindow {
                     use("");
                     return;
                 }
-                const used = bubble.usedModels.find(m => m.startsWith("ollama:"));
+                const used = bubble.usedModels.find(m => Local.localModel(`model: ${m}`, bubble.ollamaHost));
                 if (used) {
                     use(used);
                     return;
                 }
                 run(["--list-models"], false, "", (list, ok) => {
-                    const first = ok ? list.split("\n").map(l => l.trim()).find(m => m.startsWith("ollama:")) : null;
+                    const first = ok ? list.split("\n").map(l => l.trim()).find(m => Local.localModel(`model: ${m}`, bubble.ollamaHost)) : null;
                     if (first)
                         use(first);
                     else
@@ -1224,7 +1222,7 @@ PanelWindow {
     function sessionKind(c: QtObject, command: string, done: var): void {
         const probe = (c.model ? ["-m", c.model] : []).concat(roleFlags(), "-s", "mascot-probe");
         lookup(probe, c, command, (info, ok) => {
-            const local = ok && /^model:?\s+ollama:/m.test(info);
+            const local = ok && Local.localModel(info, bubble.ollamaHost) !== "";
             const kind = bubble.sessionKinds[c.session];
             if (kind === "private" && !local) {
                 c.entries.append({ kind: "system", body: `${c.session} is a private session: it holds what your `
@@ -1757,6 +1755,8 @@ PanelWindow {
     // the data directory replaces Mascot's bundled one (an empty one turns the
     // prompt off). Read when the bubble starts
     readonly property string dataDir: Quickshell.env("MASCOT_DATA_DIR")
+    // Where Ollama is: a model there counts as local only on this computer (see local.js)
+    readonly property string ollamaHost: Quickshell.env("OLLAMA_HOST") || ""
         || `${Quickshell.env("XDG_DATA_HOME") || Quickshell.env("HOME") + "/.local/share"}/mascot`
     property var userPrompt: null // null: no prompt.md in dataDir
     property string bundledPrompt: ""

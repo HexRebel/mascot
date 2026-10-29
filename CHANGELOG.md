@@ -16,6 +16,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   such a pack whole, both the CLI and the daemon. Inherited from wl_shimeji.
 - Security: names, tool arguments and errors in the bubble and the menu are shown as plain text, so a pack's name
   or text a model was fed can no longer make the bubble load an address from the net.
+- Security: Ollama's cloud models (`…-cloud`) and an Ollama on another machine (`OLLAMA_HOST`) no longer count as
+  local, so they do not get the tools that read your files, todo list and shell history; `mascot setup` and the
+  bubble's guide no longer offer cloud models as "on this computer".
 - Security: the file tools hide keys in the dotfiles you let the mascot see (`export OPENAI_API_KEY=...` in
   `~/.zshrc` shows as `[hidden]`, and searching for a key finds nothing), and keep out of more places with logins
   (Copilot, `hub`, gcloud, sops, doctl, Terraform, containers' `auth.json`, VS Code, fish's variables).

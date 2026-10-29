@@ -24,6 +24,7 @@ import re
 import shutil
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -242,6 +243,12 @@ def ollama_base() -> str:
     return (host if "://" in host else "http://" + host).rstrip("/")
 
 
+def ollama_here(base: str) -> bool:
+    """Whether Ollama at base is this computer (as ui/local.js decides for the bubble's tools)"""
+    host = urllib.parse.urlsplit(base).hostname or ""
+    return host in ("", "localhost", "::1", "0.0.0.0") or host.startswith("127.")
+
+
 def ollama_models(base: str) -> list | None:
     """Ollama's models that can chat, [{"name", "tools", "size"}]; None if Ollama does not answer"""
     status, tags = get(base + "/api/tags", {})
@@ -249,8 +256,10 @@ def ollama_models(base: str) -> list | None:
         return None
     models = []
     for name in sorted(m["name"] for m in tags.get("models", [])):
+        if re.search(r"[-:]cloud$", name):  # Ollama's cloud models run at ollama.com, not here
+            continue
         status, show = get(base + "/api/show", {}, {"model": name})
-        if status != 200 or show is None:
+        if status != 200 or show is None or show.get("remote_host") or show.get("remote_model"):
             continue
         caps = show.get("capabilities")
         if caps is None:  # Ollama before 0.6.4 does not say
@@ -457,6 +466,9 @@ def choose_models(directory, ask, ask_secret, say, pick, yes, env) -> Choice:
             say("ollama", "Ollama has no model to chat with. Download one (ollama pull <model>, see")
             say("", "ollama.com/library), then run mascot setup again.")
             raise SetupStopped()
+        if not ollama_here(base):
+            say("ollama", f"Ollama is at {base}, not on this computer: what you write goes there, so I only")
+            say("", "get the tools that do not read this computer.")
         names = [m["name"] for m in models]
         default = names.index(previous.local_model) + 1 if previous and previous.local_model in names else None
         n = pick("model", "Which model on this computer?", [
@@ -553,7 +565,7 @@ def ask_language(current, env, ask, say) -> str | None:
 def ask_tools(current, choice, ask, say) -> list:
     """The tools for CHAT_TOOLS, in TOOLS' order. Without a model on this computer, the local ones cannot be
     chosen (the bubble would not give them to a model online); with the user's own config, all can"""
-    local = choice is None or bool(choice.local_model)
+    local = choice is None or (bool(choice.local_model) and ollama_here(ollama_base()))
     # Not set: the defaults; set to nothing: none, as the user chose
     chosen = current.get("CHAT_TOOLS")
     on = list(DEFAULT_TOOLS["local" if local else "online"]) if chosen is None \
