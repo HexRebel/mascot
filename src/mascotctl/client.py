@@ -25,6 +25,8 @@ import time
 
 from levenstein import lv_variant
 from noclimb import strip_climbing
+from chatsetup import *
+import getpass
 
 import random
 
@@ -1124,7 +1126,7 @@ def chat_is_set_up(config_root: str) -> bool:
             or os.path.isfile(os.path.join(config_root, "aichat", "config.yaml")))
 
 
-SETUP_HINT = "Chat is not set up yet; tap the mascot to set it up."
+SETUP_HINT = "Chat is not set up yet; run mascot setup (or tap the mascot)."
 
 
 def roles_dir(config_root: str) -> str | None:
@@ -1167,6 +1169,7 @@ def chat_help(config_root: str) -> str:
     else:
         roles = "once the chat is set up (tap a mascot), a .md file in aichat's roles directory"
     return f"""getting started:
+  mascot setup              set up the chat (model, language, tools)
   mascot summon Robo        bring Robo onto the screen
   mascot chat               open the chat bubble (or just click a mascot)
   mascot config list        every setting and its value
@@ -1186,6 +1189,49 @@ roles: {roles} (its name is the role's).
   {tilde(os.path.join(config_root, "prompt.md"))}
 
 in the bubble: .help, .help all, .tools, .roles"""
+
+
+def setup_handler(arguments: argparse.Namespace) -> int:
+    """mascot setup in the terminal (see chatsetup.run_setup)"""
+    if not sys.stdin.isatty():
+        print("mascot setup asks questions; run it in a terminal.", file=sys.stderr)
+        return 1
+    root = os.path.expanduser(arguments.config_root or "~/.local/share/mascot")
+    conf = arguments.config or os.path.join(root, "mascotd.conf")
+    keys = {"chat_command": "CHAT_COMMAND", "chat_language": "CHAT_LANGUAGE", "chat_tools": "CHAT_TOOLS"}
+    current = {v: "" for v in keys.values()}
+    try:
+        with open(conf) as f:
+            for line in f:
+                key, _, value = line.partition("=")
+                if key.strip() in keys:
+                    current[keys[key.strip()]] = value.strip()
+    except OSError:
+        pass
+    given = []
+    for flag, value in (("-s", arguments.socket), ("-c", arguments.config), ("-cr", arguments.config_root)):
+        if value:
+            given += [flag, value]
+
+    def set_option(key: str, value: str) -> None:
+        # Right after installing there is no config yet; mascotd fills in the rest
+        if not os.path.exists(conf):
+            os.makedirs(os.path.dirname(conf), exist_ok=True)
+            open(conf, "a").close()
+        done = subprocess.run([sys.executable, os.path.realpath(sys.argv[0]), *given, "config", "set", key, value],
+                              capture_output=True, text=True)
+        if done.returncode != 0:
+            print(f"Could not set {key}: {(done.stderr or done.stdout).strip()}", file=sys.stderr)
+
+    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+
+    def out(line: str) -> None:
+        label = line[:7].strip()
+        if color and label and not label.startswith(("╭", "│", "╰")):
+            line = f"\033[1;36m{line[:7]}\033[0m{line[7:]}"
+        print(line, flush=True)
+
+    return run_setup(root, input, getpass.getpass, out, set_option, current, dict(os.environ))
 
 
 class MascotParser(argparse.ArgumentParser):
@@ -2454,6 +2500,8 @@ if __name__ == "__main__":
 
 # Chat bubble
 
+    category.add_parser("setup", help="Set up the chat: where the mascot thinks, the model, your language and its tools")
+
     chat_parser = category.add_parser("chat", help="Open the chat bubble at the mascot you last talked to, or close it")
     chat_parser.add_argument("--remark", action="store_true", help="Let a random mascot say something now instead (as CHAT_REMARKS does)")
 
@@ -2520,6 +2568,10 @@ if __name__ == "__main__":
             print(SETUP_HINT + "\n", file=sys.stderr)
         argparser.print_help()
         exit(1)
+
+    # Setup asks in the terminal and writes files; the overlay is only told through mascot config set
+    if arguments.category == "setup":
+        exit(setup_handler(arguments))
 
     # Converting only writes files, so it must not need (or start) the overlay
     if arguments.category == "convert":

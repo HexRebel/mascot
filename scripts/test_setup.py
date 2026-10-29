@@ -9,8 +9,10 @@ written. No real key is ever used: the made-up services accept "sk-good-key" and
 import http.server
 import importlib.machinery
 import importlib.util
-import os
 import json
+import os
+import pty
+import select
 import shutil
 import socket
 import stat
@@ -462,6 +464,87 @@ class Flow(Served):
         self.assertEqual(setup.language_from_locale({"LC_ALL": "nb_NO.UTF-8", "LANG": "en_US"}), "Norwegian")
         self.assertIsNone(setup.language_from_locale({"LANG": "C"}))
         self.assertIsNone(setup.language_from_locale({}))
+
+
+class Cli(Served):
+    """The composed mascot command, run like a user would (its own copy, with a home and runtime dir of its own)"""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.build = tempfile.TemporaryDirectory()
+        cls.composed = os.path.join(cls.build.name, "mascot")
+        subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "py-compose.py"), "-s",
+                        os.path.join(ROOT, "src", "mascotctl", "client.py"), "-o", cls.composed], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.build.cleanup()
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        OLLAMA["gemma4:12b"] = (["completion", "tools"], "11.9B")
+        self.bin = os.path.join(self.tmp.name, "bin")
+        self.run_dir = os.path.join(self.tmp.name, "run")
+        os.makedirs(self.bin)
+        os.makedirs(self.run_dir, mode=0o700)
+        with open(os.path.join(self.bin, "aichat"), "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(os.path.join(self.bin, "aichat"), 0o755)
+        self.env = {"HOME": self.home, "XDG_CONFIG_HOME": os.path.join(self.home, ".config"),
+                    "XDG_RUNTIME_DIR": self.run_dir, "PATH": self.bin + os.pathsep + "/usr/bin" + os.pathsep + "/bin",
+                    "OLLAMA_HOST": self.base, "MASCOT_SETUP_TEST_BASE": self.base, "LANG": "C"}
+
+    def mascot(self, *args, stdin=subprocess.DEVNULL):
+        return subprocess.run([sys.executable, self.mascot_path(), "-cr", self.data, *args], env=self.env,
+                              stdin=stdin, capture_output=True, text=True, timeout=60)
+
+    def mascot_path(self):
+        return type(self).composed
+
+    def test_cli_needs_tty(self):
+        out = self.mascot("setup")
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("run it in a terminal", out.stderr)
+        self.assertEqual(os.listdir(self.run_dir), [])
+
+    def test_cli_help_mentions_setup(self):
+        out = self.mascot("--help")
+        self.assertIn("mascot setup", out.stdout)
+        out = self.mascot()
+        self.assertIn("run mascot setup", out.stderr)
+
+    def test_cli_setup_via_pty(self):
+        answers = ["1", "1", "Danish", "", "y"]
+        # openpty + Popen, not pty.fork: forking a process with the fake server's thread can deadlock
+        fd, tty = pty.openpty()
+        child = subprocess.Popen([sys.executable, self.mascot_path(), "-cr", self.data, "setup"], env=self.env,
+                                 stdin=tty, stdout=tty, stderr=tty, start_new_session=True)
+        os.close(tty)
+        seen = b""
+        while True:
+            ready, _, _ = select.select([fd], [], [], 30)
+            if not ready:
+                child.kill()
+                self.fail("setup did not answer:\n" + seen.decode(errors="replace"))
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            seen += chunk
+            if (seen.rstrip().endswith(b"\xe2\x80\xba") or seen.rstrip().endswith(b"[Y/n]")) and answers:
+                os.write(fd, (answers.pop(0) + "\n").encode())
+        os.close(fd)
+        text = seen.decode(errors="replace")
+        self.assertEqual(child.wait(30), 0, text)
+        self.assertTrue(os.path.exists(os.path.join(self.aichat_dir, "config.yaml")), text)
+        with open(os.path.join(self.data, "mascotd.conf")) as f:
+            conf = f.read()
+        self.assertIn("chat_language=Danish", conf)
+        self.assertIn("chat_tools=time,weather,todo,reminders,sleep", conf)
 
 
 if __name__ == "__main__":
