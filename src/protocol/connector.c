@@ -275,8 +275,8 @@ int32_t ipc_packet_read_bytes(ipc_packet_t *packet, void *data, uint16_t length)
         return -1;
     }
 
-    memcpy(data, packet->buffer + packet->reader_position, length);
-    packet->reader_position += length;
+    memcpy(data, packet->buffer + packet->reader_position, data_length);
+    packet->reader_position += data_length;
 
     return 0;
 }
@@ -387,6 +387,14 @@ int32_t ipc_connector_receive(ipc_connector_t *connector, ipc_packet_t **packet)
 
     if (received_bytes != expected_length) {
         WARN("Received %zd bytes, expected %d", received_bytes, expected_length);
+        free(received_packet->buffer);
+        free(received_packet);
+        return -EIO;
+    }
+
+    // Every read is bounded by the header's length, which the client wrote: it must be what came
+    if (received_packet->header->length != received_bytes) {
+        WARN("A packet says it is %u bytes, but %zd came", received_packet->header->length, received_bytes);
         free(received_packet->buffer);
         free(received_packet);
         return -EIO;
