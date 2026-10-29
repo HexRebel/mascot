@@ -405,8 +405,12 @@ static int start_bubble(int epfd, void* epoll_ptr, const char* chat_path)
 
 size_t default_socket_path(char* pathbuf, size_t pathbuf_len)
 {
+    // Only in the user's own runtime directory: in /tmp another user could make the socket first
     const char *prefix = secure_getenv("XDG_RUNTIME_DIR");
-    if (!prefix) prefix = "/tmp";
+    if (!prefix || !prefix[0]) {
+        pathbuf[0] = 0;
+        return 0;
+    }
 
     return snprintf(pathbuf, pathbuf_len, DEFAULT_SOCK_PATH, prefix);
 }
@@ -705,6 +709,11 @@ int main(int argc, const char** argv)
             default_socket_path(socket_path, PATH_MAX-1);
         } else {
             strncpy(socket_path, config_get_socket_location(), PATH_MAX-1);
+        }
+        if (!socket_path[0]) {
+            fprintf(stderr, "XDG_RUNTIME_DIR is not set: mascotd keeps its sockets there, where only you can reach "
+                            "them (your login sets it under Wayland). Set it, or give one with -s <path>\n");
+            return 1;
         }
     }
 

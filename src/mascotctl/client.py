@@ -2645,9 +2645,12 @@ if __name__ == "__main__":
             logger.error("Nothing to import")
             exit(1)
 
-    socket_path = arguments.socket or (
-        os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "mascotd.sock")
-    )
+    # Only in the user's own runtime directory: in /tmp another user could make the socket first
+    if not arguments.socket and not os.environ.get("XDG_RUNTIME_DIR"):
+        print("XDG_RUNTIME_DIR is not set: Mascot keeps its sockets there, where only you can reach them (your "
+              "login sets it under Wayland). Set it, or give one with -s <path>", file=sys.stderr)
+        exit(1)
+    socket_path = arguments.socket or os.path.join(os.environ["XDG_RUNTIME_DIR"], "mascotd.sock")
 
     # Goes straight to the chat socket next to the IPC socket (foo.sock ->
     # foo-chat.sock, see src/chat.c); never starts the overlay

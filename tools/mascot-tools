@@ -959,8 +959,11 @@ def sleep_mode(args):
         if at <= now:
             raise ToolError(f"{shown_time(at)} has passed")
         message = {"event": "sleep", "minutes": round((at - now) / 60, 2)}
-    path = os.environ.get("MASCOT_CHAT_SOCKET") or os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp",
-                                                              "mascotd-chat.sock")
+    # Never /tmp: another user could have made a socket there first
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    path = os.environ.get("MASCOT_CHAT_SOCKET") or (runtime and os.path.join(runtime, "mascotd-chat.sock"))
+    if not path:
+        raise ToolError("cannot reach Mascot: XDG_RUNTIME_DIR is not set")
     import socket
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as chat:

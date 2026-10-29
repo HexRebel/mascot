@@ -20,6 +20,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   so the daemon could not start while the pack was there. Inherited from wl_shimeji.
 - Security: `mascot setup` makes Mascot's own directory private (700) when it is new, as mascotd does; the menu
   asks OpenRouter for its model list only when you have an OpenRouter model.
+- Security: without `XDG_RUNTIME_DIR`, Mascot no longer puts its sockets in `/tmp` (where another user could make
+  them first); it says so and stops, unless you give one with `-s`. The file tools no longer read a file that is
+  also somewhere else under another name (a hard link).
 - Security: names, tool arguments and errors in the bubble and the menu are shown as plain text, so a pack's name
   or text a model was fed can no longer make the bubble load an address from the net.
 - Security: Ollama's cloud models (`…-cloud`) and an Ollama on another machine (`OLLAMA_HOST`) no longer count as
