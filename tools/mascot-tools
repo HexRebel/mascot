@@ -147,11 +147,15 @@ def check_path(path, listing=False):
     link may not lead out of home, into a secret place or a hidden one not allowed"""
     home = os.path.realpath(os.path.expanduser("~"))
     allowed = allowed_dotfiles()
+    # Mascot's own chat config (the API key mascot setup saved) and sessions, wherever MASCOT_DATA_DIR is
+    data = os.environ.get("MASCOT_DATA_DIR", "")
+    private = [os.path.join(d, sub) for d in ({os.path.normpath(data), os.path.realpath(data)} if data else ())
+               for sub in ("aichat", "aichat-sessions")]
     for candidate in (os.path.normpath(path), os.path.realpath(path)):
         rel = os.path.relpath(candidate, home)
         if rel == ".." or rel.startswith("../"):
             return "only files in the home directory can be read"
-        if is_secret(rel):
+        if is_secret(rel) or any(under(candidate, p) for p in private):
             return f"{shown(candidate)} is private (where keys, tokens or history are kept)"
         hidden = any(part.startswith(".") for part in rel.split(os.sep) if part != ".")
         if hidden and not any(under(candidate, a) or (listing and under(a, candidate)) for a in allowed):

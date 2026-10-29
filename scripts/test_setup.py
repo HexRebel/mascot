@@ -547,5 +547,31 @@ class Cli(Served):
         self.assertIn("chat_tools=time,weather,todo,reminders,sleep", conf)
 
 
+class ToolsPrivacy(Home):
+    """Robo's file tools never read Mascot's chat config or sessions, wherever MASCOT_DATA_DIR is"""
+
+    def read(self, path, **env):
+        return subprocess.run([os.path.join(ROOT, "tools", "bin", "read_file"), json.dumps({"path": path})],
+                              env={"HOME": self.home, "PATH": "/usr/bin:/bin", "MASCOT_TOOLS_LOCAL": "1", **env},
+                              capture_output=True, text=True, timeout=30)
+
+    def test_tools_block_data_dir_aichat(self):
+        elsewhere = os.path.join(self.home, "elsewhere")
+        for sub in ("aichat", "aichat-sessions"):
+            os.makedirs(os.path.join(elsewhere, sub))
+            with open(os.path.join(elsewhere, sub, "config.yaml"), "w") as f:
+                f.write('api_key: "sk-good-key"\n')
+        os.symlink(os.path.join(elsewhere, "aichat"), os.path.join(self.home, "link"))
+        for path in (os.path.join(elsewhere, "aichat", "config.yaml"),
+                     os.path.join(elsewhere, "aichat-sessions", "config.yaml"),
+                     os.path.join(self.home, "link", "config.yaml")):
+            out = self.read(path, MASCOT_DATA_DIR=elsewhere)
+            self.assertIn("private", out.stdout + out.stderr, path)
+            self.assertNotIn("sk-good-key", out.stdout + out.stderr, path)
+        with open(os.path.join(elsewhere, "notes.txt"), "w") as f:
+            f.write("just notes\n")
+        self.assertIn("just notes", self.read(os.path.join(elsewhere, "notes.txt"), MASCOT_DATA_DIR=elsewhere).stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
