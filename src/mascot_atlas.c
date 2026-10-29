@@ -26,6 +26,7 @@
 
 #include "mascot_atlas.h"
 #include <errno.h>
+#include <linux/limits.h>
 #include <io.h>
 
 #define QOI_IMPLEMENTATION
@@ -116,6 +117,13 @@ bool _write_buffers(environment_buffer_factory_t* factory, uint64_t* buffer_fact
     return true;
 }
 
+// Whether a file the walk found is a sprite: its name ends in .qoi (in any case)
+static bool is_sprite(const char* name)
+{
+    size_t length = strlen(name);
+    return length >= 5 && !strcasecmp(name + length - 4, ".qoi");
+}
+
 struct mascot_atlas* mascot_atlas_new(const char* dirname)
 {
 
@@ -139,9 +147,10 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
         return NULL;
     }
 
+    // The same test in both loops (the whole name, however long), so the sprites counted here are the ones
+    // loaded below, each into its own slot
     for (uint32_t i = 0; i < file_count; i++) {
-        if (strnlen(file_paths[i], 128) < 5) continue;
-        if (!strcasecmp(file_paths[i] + strnlen(file_paths[i], 128) - 4, ".qoi")) {
+        if (is_sprite(file_paths[i])) {
             sprite_count ++;
         }
     }
@@ -168,15 +177,14 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
 
     uint16_t local_ecount = 0;
     for (uint32_t i = 0; i < file_count; i++) {
-        if (strnlen(file_paths[i], 128) < 5) continue;
-        if (!strcasecmp(file_paths[i] + strnlen(file_paths[i], 128) - 4, ".qoi")) {
-            if (local_ecount > sprite_count) break;
+        if (is_sprite(file_paths[i])) {
+            if (local_ecount >= sprite_count) break;
             else local_ecount ++;
-            char fullpath[256] = {0};
-            size_t printed = snprintf(fullpath, 256, "%s/%s", dirname, file_paths[i]);
+            char fullpath[PATH_MAX] = {0};
+            size_t printed = snprintf(fullpath, sizeof(fullpath), "%s/%s", dirname, file_paths[i]);
             UNUSED(printed);
-            pixels[i] = qoi_read(fullpath, &qois[local_ecount-1], 4);
-            if (!pixels[i])
+            pixels[local_ecount-1] = qoi_read(fullpath, &qois[local_ecount-1], 4);
+            if (!pixels[local_ecount-1])
             {
                 WARN("Could not create atlas from dir \"%s\": Failed to read QOI file \"%s\"", dirname, file_paths[i]);
                 goto fail_free_qoi_ctxs;
