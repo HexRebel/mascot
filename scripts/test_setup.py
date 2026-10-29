@@ -138,6 +138,13 @@ class Config(Home):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("ollama:gemma4:12b", out.stdout)
         self.assertIn("openrouter:anthropic/claude-haiku-5.5", out.stdout)
+        for provider, model in (("anthropic", "claude-haiku-5-5"), ("openai", "gpt-5-mini"), ("google", "gemini-3-flash")):
+            online = setup.Online(provider, "not-a-key", model, [{"name": model, "tools": True}])
+            setup.write_config(self.aichat_dir, setup.config_yaml(setup.Choice(None, [], online, "online"), ""))
+            out = subprocess.run(["aichat", "--list-models"], env=env, capture_output=True, text=True,
+                                 stdin=subprocess.DEVNULL, timeout=30)
+            self.assertEqual(out.returncode, 0, provider + ": " + out.stderr)
+            self.assertIn(f"{setup.PROVIDERS[provider]['prefix']}:{model}", out.stdout)
 
 
 # The made-up Ollama's models: name -> (capabilities, parameter size)
@@ -162,6 +169,7 @@ class FakeServices(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         SEEN.append((self.path, dict(self.headers)))
         h = self.headers
+        self.path = self.path.split("?")[0]
         if self.path == "/api/tags":
             return self.reply(200, {"models": [{"name": n} for n in OLLAMA]})
         if self.path == "/redirect/v1/models":
@@ -188,12 +196,17 @@ class FakeServices(http.server.BaseHTTPRequestHandler):
         if self.path == "/v1beta/models":
             return self.reply(200, {"models": [
                 {"name": "models/gemini-3-flash", "supportedGenerationMethods": ["generateContent"]},
-                {"name": "models/text-embedding-9", "supportedGenerationMethods": ["embedContent"]}]})
+                {"name": "models/text-embedding-9", "supportedGenerationMethods": ["embedContent"]},
+                {"name": "models/gemma-3-27b-it", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3-flash-preview-tts", "supportedGenerationMethods": ["generateContent"]}]})
         if h.get("x-api-key"):
             return self.reply(200, {"data": [{"id": "claude-haiku-5-5", "created_at": "2026-09-01T00:00:00Z"},
                                              {"id": "claude-opus-5-5", "created_at": "2026-10-01T00:00:00Z"}]})
         return self.reply(200, {"data": [{"id": "gpt-5-mini", "created": 2}, {"id": "o3", "created": 1},
-                                         {"id": "text-embedding-3", "created": 3}, {"id": "whisper-1", "created": 4}]})
+                                         {"id": "text-embedding-3", "created": 3}, {"id": "whisper-1", "created": 4}]
+                               + [{"id": i, "created": 9} for i in (
+                                   "gpt-image-1", "gpt-realtime", "gpt-4o-transcribe", "gpt-4o-mini-tts", "gpt-audio",
+                                   "gpt-4o-search-preview", "o3-pro", "o3-deep-research", "omni-moderation-latest")]})
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])) or "{}")
@@ -253,7 +266,7 @@ class Net(Served):
                                ("openai", "/v1/models"), ("google", "/v1beta/models")):
             SEEN.clear()
             self.assertEqual(setup.check_key(provider, "sk-good-key"), 200, provider)
-            self.assertEqual(SEEN[-1][0], path)
+            self.assertEqual(SEEN[-1][0].split("?")[0], path)
             self.assertEqual(setup.check_key(provider, "bad"), 401, provider)
         SEEN.clear()
         setup.check_key("anthropic", "sk-good-key")
@@ -277,6 +290,28 @@ class Net(Served):
         self.assertEqual([m["name"] for m in setup.online_models("anthropic", "sk-good-key")],
                          ["claude-opus-5-5", "claude-haiku-5-5"])
         self.assertEqual(setup.online_models("openai", "bad"), [])
+
+    def test_online_models_whole_list(self):
+        # Anthropic gives 20 and Google 50 unless asked for more, and a typed name must be found in the list
+        SEEN.clear()
+        setup.online_models("anthropic", "sk-good-key")
+        setup.online_models("google", "sk-good-key")
+        self.assertIn("/v1/models?limit=1000", [path for path, _ in SEEN])
+        self.assertIn("/v1beta/models?pageSize=1000", [path for path, _ in SEEN])
+
+    def test_get_survives_broken_http(self):
+        # Something that is not HTTP at OLLAMA_HOST (or a cut-off answer): could not reach, no traceback
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen()
+
+            def answer():
+                conn, _ = server.accept()
+                conn.recv(1024)
+                conn.sendall(b"SSH-2.0-OpenSSH\r\n\r\n")
+                conn.close()
+            threading.Thread(target=answer, daemon=True).start()
+            self.assertEqual(setup.get(f"http://127.0.0.1:{server.getsockname()[1]}/api/tags", {}), (0, None))
 
 
 class Script:
@@ -324,7 +359,7 @@ class Flow(Served):
             f.write("#!/bin/sh\n")
         os.chmod(os.path.join(self.bin, "aichat"), 0o755)
         self.env = {"HOME": self.home, "XDG_CONFIG_HOME": os.path.join(self.home, ".config"), "PATH": self.bin}
-        self.current = {"CHAT_COMMAND": "", "CHAT_LANGUAGE": "", "CHAT_TOOLS": ""}
+        self.current = {"CHAT_COMMAND": "", "CHAT_LANGUAGE": "", "CHAT_TOOLS": None}
 
     def run_setup(self, script, **current):
         code = setup.run_setup(self.data, script.ask, script.ask_secret, script.out, script.set_option,
@@ -393,6 +428,31 @@ class Flow(Served):
         self.assertNotIn("files      ", s.text())
         self.assertIn("There is no tool 4.", s.text())
         self.assertIn(("CHAT_TOOLS", "time,weather"), s.options)
+
+    def test_tools_question_is_honest(self):
+        # todo and reminders change things, so the question must not say the tools never do
+        s = Script("1", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertNotIn("never change", s.text())
+
+    def test_tools_none_stays_none(self):
+        # CHAT_TOOLS set to nothing on purpose: a rerun starts with none ticked, and Enter keeps it so
+        s = Script("1", "1", "", "", "y")
+        self.assertEqual(self.run_setup(s, CHAT_TOOLS=""), 0, s.text())
+        self.assertNotIn("[x]", s.text())
+        self.assertNotIn("CHAT_TOOLS", [k for k, _ in s.options])
+
+    def test_odd_digits_ask_again(self):
+        s = Script("²", "1", "1", "", "³", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn("There is no tool ³.", s.text())
+
+    def test_control_characters_ask_again(self):
+        # Without line editing, an arrow key puts ESC [ D in the answer; it must not reach the config
+        s = Script("1", "1", "Dan\x1b[Dish", "Danish", "", "y")
+        self.assertEqual(self.run_setup(s), 0, s.text())
+        self.assertIn(("CHAT_LANGUAGE", "Danish"), s.options)
+        self.assertIn("arrow key", s.text())
 
     def test_own_config_skips_models(self):
         own = os.path.join(self.home, ".config", "aichat", "config.yaml")
@@ -465,6 +525,15 @@ class Flow(Served):
         s = Script()
         self.assertEqual(self.run_setup(s), 1)
         self.assertIn("aichat is not installed", s.text())
+
+    def test_conf_options(self):
+        conf = os.path.join(self.home, "mascotd.conf")
+        with open(conf, "w") as f:
+            f.write("CHAT_COMMAND=aichat -m x\nchat_tools=\nsomething=else\n")
+        self.assertEqual(setup.conf_options(conf), {"CHAT_COMMAND": "aichat -m x", "CHAT_LANGUAGE": None,
+                                                    "CHAT_TOOLS": ""})
+        self.assertEqual(setup.conf_options(os.path.join(self.home, "none")),
+                         {"CHAT_COMMAND": None, "CHAT_LANGUAGE": None, "CHAT_TOOLS": None})
 
     def test_language_from_locale(self):
         self.assertEqual(setup.language_from_locale({"LANG": "da_DK.UTF-8"}), "Danish")

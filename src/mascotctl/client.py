@@ -1199,16 +1199,7 @@ def setup_handler(arguments: argparse.Namespace) -> int:
         return 1
     root = os.path.expanduser(arguments.config_root or "~/.local/share/mascot")
     conf = arguments.config or os.path.join(root, "mascotd.conf")
-    keys = {"chat_command": "CHAT_COMMAND", "chat_language": "CHAT_LANGUAGE", "chat_tools": "CHAT_TOOLS"}
-    current = {v: "" for v in keys.values()}
-    try:
-        with open(conf) as f:
-            for line in f:
-                key, _, value = line.partition("=")
-                if key.strip() in keys:
-                    current[keys[key.strip()]] = value.strip()
-    except OSError:
-        pass
+    current = conf_options(conf)
     given = []
     for flag, value in (("-s", arguments.socket), ("-c", arguments.config), ("-cr", arguments.config_root)):
         if value:
@@ -1232,6 +1223,10 @@ def setup_handler(arguments: argparse.Namespace) -> int:
             line = f"\033[1;36m{line[:7]}\033[0m{line[7:]}"
         print(line, flush=True)
 
+    try:
+        import readline  # noqa: F401 - arrow keys edit the answer instead of adding ESC [ D to it
+    except ImportError:
+        pass
     return run_setup(root, input, read_secret, out, set_option, current, dict(os.environ))
 
 

@@ -17,6 +17,7 @@
 """mascot setup writes one file, Mascot's own aichat config ($MASCOT_DATA_DIR/aichat/config.yaml), and
 CHAT_LANGUAGE and CHAT_TOOLS. The user's own aichat config is only looked for, never read or written. An API key
 is read without echo, never printed, and only sent to the service it belongs to."""
+import http.client
 import json
 import os
 import re
@@ -231,7 +232,7 @@ def get(url: str, headers: dict, body: dict | None = None) -> tuple[int, dict | 
     except urllib.error.HTTPError as e:
         e.close()
         return e.code, None
-    except (OSError, ValueError):
+    except (OSError, ValueError, http.client.HTTPException):
         return 0, None
 
 
@@ -268,8 +269,11 @@ def service(provider: str, key: str, path: str) -> tuple[int, dict | None]:
     return get(base + path, headers)
 
 
-MODELS_PATH = {"openrouter": "/api/v1/models", "anthropic": "/v1/models", "openai": "/v1/models",
-               "google": "/v1beta/models"}
+# The whole list: Anthropic gives 20 and Google 50 unless asked for more
+MODELS_PATH = {"openrouter": "/api/v1/models", "anthropic": "/v1/models?limit=1000", "openai": "/v1/models",
+               "google": "/v1beta/models?pageSize=1000"}
+# Models in the lists that aichat cannot chat with (pictures, sound, realtime, search, the Responses API only)
+NOT_CHAT = re.compile(r"image|audio|realtime|tts|transcribe|search|embedding|moderation|deep-research|-pro\b|^gemma-")
 
 
 def check_key(provider: str, key: str) -> int:
@@ -286,11 +290,12 @@ def online_models(provider: str, key: str) -> list:
         return [{"name": m["id"], "tools": "tools" in (m.get("supported_parameters") or [])}
                 for m in answer.get("data", [])]
     if provider == "google":
-        return [{"name": m["name"].removeprefix("models/"), "tools": True} for m in answer.get("models", [])
-                if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+        return [{"name": name, "tools": True} for m in answer.get("models", [])
+                if "generateContent" in (m.get("supportedGenerationMethods") or [])
+                and not NOT_CHAT.search(name := m["name"].removeprefix("models/"))]
     models = answer.get("data", [])
     if provider == "openai":
-        models = [m for m in models if re.match(r"gpt-|o\d", m["id"])]
+        models = [m for m in models if re.match(r"gpt-|o\d", m["id"]) and not NOT_CHAT.search(m["id"])]
     models.sort(key=lambda m: m.get("created_at") or m.get("created") or 0, reverse=True)
     return [{"name": m["id"], "tools": True} for m in models]
 
@@ -318,6 +323,35 @@ class SetupStopped(Exception):
     """Setup cannot go on (something missing, or nothing to set up): nothing is written"""
 
 
+def number(answer: str, most: int) -> bool:
+    """Whether answer is one of 1..most, in plain digits (not ² or a thousand-digit number)"""
+    return answer.isascii() and answer.isdecimal() and len(answer) < 5 and 1 <= int(answer) <= most
+
+
+def typed_plain(ask, say, prompt: str) -> str:
+    """A written answer without control characters: without line editing, an arrow key adds ESC [ D"""
+    while True:
+        answer = ask(prompt).strip()
+        if not any(ord(c) < 32 or ord(c) == 127 for c in answer):
+            return answer
+        say("", "That has a control character in it (an arrow key?); write it again.")
+
+
+def conf_options(path: str) -> dict:
+    """CHAT_COMMAND, CHAT_LANGUAGE and CHAT_TOOLS as mascotd.conf sets them (keys in any case, as config.c
+    reads them); None when it does not set one, "" when it sets it to nothing"""
+    options = {"CHAT_COMMAND": None, "CHAT_LANGUAGE": None, "CHAT_TOOLS": None}
+    try:
+        with open(path, errors="replace") as f:
+            for line in f:
+                key, sep, value = line.partition("=")
+                if sep and key.strip().upper() in options:
+                    options[key.strip().upper()] = value.strip()
+    except OSError:
+        pass
+    return options
+
+
 def run_setup(config_root: str, ask, ask_secret, out, set_option, current: dict, env: dict) -> int:
     """mascot setup's questions, then (only after "Write this?") Mascot's config and CHAT_LANGUAGE/CHAT_TOOLS.
     ask/ask_secret(prompt) -> answer, out(line), set_option(key, value); current: CHAT_COMMAND, CHAT_LANGUAGE
@@ -340,7 +374,7 @@ def run_setup(config_root: str, ask, ask_secret, out, set_option, current: dict,
             answer = ask(f"         › {'(Enter: ' + str(default) + ') ' if default else ''}").strip()
             if not answer and default:
                 return default
-            if answer.isdigit() and 1 <= int(answer) <= len(options):
+            if number(answer, len(options)):
                 return int(answer)
             say("", f"Answer {numbers}.")
 
@@ -490,7 +524,7 @@ def choose_online_model(provider, key, previous, ask, say, pick) -> tuple:
         if n <= len(shown):
             chosen = shown[n - 1]
             break
-        typed = ask("         name › ").strip()
+        typed = typed_plain(ask, say, "         name › ")
         if not typed:
             continue
         if not models:  # the list could not be read: take it as written
@@ -512,7 +546,7 @@ def ask_language(current, env, ask, say) -> str | None:
     """The language for CHAT_LANGUAGE; None leaves it as it is"""
     guess = current.get("CHAT_LANGUAGE") or language_from_locale(env)
     say("lang", f"Which language do you write in? (Enter: {guess or 'I follow yours'})")
-    answer = ask("         › ").strip()
+    answer = typed_plain(ask, say, "         › ")
     return answer[:1].upper() + answer[1:] if answer else guess
 
 
@@ -520,8 +554,10 @@ def ask_tools(current, choice, ask, say) -> list:
     """The tools for CHAT_TOOLS, in TOOLS' order. Without a model on this computer, the local ones cannot be
     chosen (the bubble would not give them to a model online); with the user's own config, all can"""
     local = choice is None or bool(choice.local_model)
-    on = [t for t in current.get("CHAT_TOOLS", "").split(",") if t in TOOLS] \
-        or DEFAULT_TOOLS["local" if local else "online"]
+    # Not set: the defaults; set to nothing: none, as the user chose
+    chosen = current.get("CHAT_TOOLS")
+    on = list(DEFAULT_TOOLS["local" if local else "online"]) if chosen is None \
+        else [t for t in chosen.split(",") if t in TOOLS]
     if not local:
         on = [t for t in on if t not in LOCAL_TOOLS]
     if choice and choice.default == "local":
@@ -532,7 +568,7 @@ def ask_tools(current, choice, ask, say) -> list:
     choices = TOOLS if local else [t for t in TOOLS if t not in LOCAL_TOOLS]
     others = [t for t in TOOLS if t not in choices]
     while True:
-        say("tools", "What may I look up? I only ever look, never change anything.")
+        say("tools", "Which tools may I use?")
         for i, t in enumerate(choices, 1):
             say("", f"{i}. [{'x' if t in on else ' '}] {t:<10} {TOOL_NOTES[t]}")
         if others:
@@ -542,7 +578,7 @@ def ask_tools(current, choice, ask, say) -> list:
         if not answer:
             return [t for t in TOOLS if t in on]
         for token in re.split(r"[\s,]+", answer):
-            if not (token.isdigit() and 1 <= int(token) <= len(choices)):
+            if not number(token, len(choices)):
                 say("", f"There is no tool {token}.")
                 continue
             t = choices[int(token) - 1]
