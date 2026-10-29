@@ -141,6 +141,8 @@ ShellRoot {
         usedModels: bubble.usedModels
         sessionKinds: bubble.sessionKinds
         openRouterModels: bubble.openRouterModels
+        sessionsDir: bubble.sessionsDir
+        mascotAichatDir: bubble.chatSetup === "mascot" ? bubble.mascotAichatDir : ""
         onOpenRouterRequested: bubble.askOpenRouter(null)
         onListRequested: root.send({ event: "list" })
         onMenuRequested: mascot => root.send({ event: "menu", mascot: mascot })

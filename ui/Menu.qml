@@ -43,6 +43,11 @@ PanelWindow {
     // list of them is old, and those that are gone answer with an error, so
     // they are left out. null: not known (yet, or no network)
     property var openRouterModels: null
+    // Where the bubble's aichat keeps the .sessions (Bubble.sessionsDir), and
+    // Mascot's own aichat config when that is the one (Bubble.mascotAichatDir,
+    // "" otherwise), so the lists are the bubble's, see Bubble.run()
+    property string sessionsDir: ""
+    property string mascotAichatDir: ""
 
     // aichat's models and the ones used, without those OpenRouter no longer has
     readonly property var shownModels: menu.models.concat(menu.usedModels.filter(m => !menu.models.includes(m)))
@@ -89,9 +94,13 @@ PanelWindow {
         menu.listRequested();
         menu.openRouterRequested();
         const command = (e.command || "aichat") + " %s </dev/null";
-        modelList.command = ["sh", "-c", command.replace("%s", "--list-models")];
-        roleList.command = ["sh", "-c", command.replace("%s", "--list-roles")];
-        sessionList.command = ["sh", "-c", command.replace("%s", "--list-sessions")];
+        // Through env, not the Process's environment: Quickshell 0.3.0 (Debian 13)
+        // cannot bind an object to it
+        const env = ["env", `AICHAT_SESSIONS_DIR=${menu.sessionsDir}`]
+            .concat(!e.command && menu.mascotAichatDir ? [`AICHAT_CONFIG_DIR=${menu.mascotAichatDir}`] : []);
+        modelList.command = env.concat(["sh", "-c", command.replace("%s", "--list-models")]);
+        roleList.command = env.concat(["sh", "-c", command.replace("%s", "--list-roles")]);
+        sessionList.command = env.concat(["sh", "-c", command.replace("%s", "--list-sessions")]);
         modelList.running = true;
         roleList.running = true;
         sessionList.running = true;
