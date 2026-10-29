@@ -1084,7 +1084,7 @@ PanelWindow {
                     + "computer: install Ollama (on Arch: pacman -S ollama, or ollama-cuda for NVIDIA, ollama-rocm "
                     + "for AMD; elsewhere: ollama.com/download), start it (systemctl enable --now ollama), download "
                     + "a model (ollama pull <model>, see ollama.com/library), then write again. For a hosted one "
-                    + `instead: "Getting started" in Mascot's README, with the config in ${tilde(bubble.mascotAichatDir)}/config.yaml`);
+                    + "(OpenRouter, Anthropic, OpenAI, Google), or to choose step by step: run mascot setup in a terminal.");
             } else {
                 say("Ollama is running, but has no model to chat with. Download one (ollama pull <model>, see "
                     + "ollama.com/library), then write again.");
@@ -1095,7 +1095,7 @@ PanelWindow {
     function showModels(c: QtObject): void {
         const list = c.guideModels.map((m, i) => `${i + 1}. ${m.name}${m.tools ? "" : " (no tools)"}`);
         c.entries.append({ kind: "system", body: "Mascot needs a language model to chat. Ollama has these - write a "
-            + "number to use one:\n" + list.join("\n") });
+            + "number to use one:\n" + list.join("\n") + "\n(mascot setup in a terminal has more choices)" });
     }
 
     // While the list is shown: a number or a model's name makes Mascot's config

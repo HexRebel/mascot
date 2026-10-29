@@ -5,6 +5,12 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## Unreleased
 
+- `mascot setup`: Robo walks you through setting up the chat in the terminal, right after installing. Local with
+  Ollama, online (OpenRouter, Anthropic, OpenAI or Google, with the API key checked before it is saved) or both;
+  then your language and Robo's tools. Nothing is written until you say yes, and your own aichat config is never
+  read or changed. The AUR package says to run it, and so does the bubble when no model is set up.
+- Robo's file tools can no longer read Mascot's own chat config and sessions (where the API key is), also with
+  another `MASCOT_DATA_DIR`.
 - Mascot says where its settings are, so you no longer need the docs to find them. `mascot --help` ends with how to
   start, the chat's settings (`CHAT_TOOLS`, `CHAT_LANGUAGE`, `CHAT_DOTFILES`, `CHAT_REMARKS`, `CHAT_ROLE`) and where
   your roles go. `.tools` shows every tool, on and off, and the command to change them; `.roles` says where to make

@@ -47,6 +47,31 @@ Started by hand, it reconnects if the daemon is restarted. It uses the daemon's 
 `$XDG_RUNTIME_DIR/mascotd-chat.sock`, or `MASCOT_CHAT_SOCKET`. The daemon names the chat socket
 after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 
+## Setting up
+
+`mascot setup` sets the chat up in the terminal, with Robo as host:
+
+1. **Where the mascot thinks**: on this computer (Ollama, the default), online, or both. With both, the local model
+   answers and `.model` in the bubble (or right-click, *Settings*, *Model*) switches to the online one.
+2. **The model**: Ollama's models with their size, marked when one cannot use tools; online, OpenRouter
+   (recommended: one key, many models), Anthropic, OpenAI or Google. Setup asks for the API key without showing
+   it, checks it with the service and lists the service's current models. For another service, see
+   [aichat's clients](https://github.com/sigoden/aichat/blob/main/config.example.yaml).
+3. **Your language** (`CHAT_LANGUAGE`), guessed from your locale.
+4. **Tools** (`CHAT_TOOLS`): which ones Robo may use. The file, todo and reminder tools only work with a local model.
+5. **Write this?** Setup shows what it will write and changes nothing until you say yes (Ctrl+C stops it, also
+   with nothing changed).
+
+The config goes in `~/.local/share/mascot/aichat/config.yaml`, readable only by you (`600`, in a `700` directory);
+the one there before is kept as `config.yaml.old`. That is also where the API key is, so Robo's file tools can never
+read that directory or the chat sessions next to it, wherever `MASCOT_DATA_DIR` points. If you already have your
+own aichat config (or `CHAT_COMMAND` is set), setup says so, never reads or changes it, and only asks about language
+and tools. Run `mascot setup` again any time to change something.
+
+Online services charge for what you use, so set a spending limit with them; on OpenRouter you can give each key its
+own limit at [openrouter.ai/keys](https://openrouter.ai/keys). Setup is tested with OpenRouter and Ollama; Anthropic,
+OpenAI and Google follow their documented APIs but have not been tried with real keys yet.
+
 ## Using it
 
 - **Tap** a mascot to open the bubble. Dragging a mascot does not open it, and dragging the mascot

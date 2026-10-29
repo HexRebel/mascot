@@ -70,8 +70,19 @@ then clone and build as above. Debian adds `~/.local/bin` to your PATH at login 
 again after the first install.
 
 **2. Give it a language model to talk with.** The chat bubble talks through
-[aichat](https://github.com/sigoden/aichat). If you already use aichat, Mascot uses your config as it is;
-skip this. Otherwise pick one:
+[aichat](https://github.com/sigoden/aichat). The easiest way is to let Robo walk you through it:
+
+```sh
+mascot setup
+```
+
+It asks where the mascot should think (on this computer with Ollama, online, or both), which model, your language
+and which tools Robo may use, shows what it will write, and writes nothing until you say yes. Online it knows
+OpenRouter, Anthropic, OpenAI and Google, and checks your API key before saving it. If you already use aichat,
+Mascot uses your config as it is and setup only asks about language and tools
+(see [Setting up](docs/chat.md#setting-up)).
+
+Or by hand, pick one:
 
 - **Free and local, with Ollama** (runs on your own computer; a graphics card helps):
 
