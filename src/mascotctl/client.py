@@ -1127,6 +1127,82 @@ def chat_is_set_up(config_root: str) -> bool:
 SETUP_HINT = "Chat is not set up yet; tap the mascot to set it up."
 
 
+def roles_dir(config_root: str) -> str | None:
+    """Where the bubble's aichat keeps its roles (aichat --info's roles_dir), run as the bubble runs it:
+    CHAT_COMMAND, else aichat with the user's own config, else with Mascot's own (see chat_is_set_up())"""
+    command = ""
+    try:
+        with open(os.path.join(config_root, "mascotd.conf")) as f:
+            for line in f:
+                key, _, value = line.partition("=")
+                if key.strip() == "chat_command":
+                    command = value.strip()
+    except OSError:
+        pass
+    env = dict(os.environ)
+    own = os.environ.get("AICHAT_CONFIG_DIR") or os.path.join(
+        os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "aichat")
+    if not command and not os.path.isfile(os.path.join(own, "config.yaml")):
+        env["AICHAT_CONFIG_DIR"] = os.path.join(config_root, "aichat")
+    try:
+        info = subprocess.run(["sh", "-c", (command or "aichat") + " --info </dev/null"], env=env,
+                              capture_output=True, text=True, timeout=3).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    found = re.search(r"^roles_dir\s+(.+)$", info, re.M)
+    return found[1].strip() if found else None
+
+
+def tilde(path: str) -> str:
+    """A path as the user would write it, with ~ for the home directory"""
+    home = os.path.expanduser("~")
+    return "~" + path[len(home):] if path.startswith(home + os.sep) else path
+
+
+def chat_help(config_root: str) -> str:
+    """The end of mascot --help: how to start, and the chat's settings, which are otherwise only in the docs"""
+    if chat_is_set_up(config_root):
+        found = roles_dir(config_root)
+        roles = f"a .md file in {tilde(found)}" if found else "a .md file in aichat's roles_dir (aichat --info)"
+    else:
+        roles = "once the chat is set up (tap a mascot), a .md file in aichat's roles directory"
+    return f"""getting started:
+  mascot summon Robo        bring Robo onto the screen
+  mascot chat               open the chat bubble (or just click a mascot)
+  mascot config list        every setting and its value
+
+chat settings (mascot config set KEY VALUE):
+  CHAT_TOOLS      what the mascot may look up: time, weather, files, todo,
+                  reminders, shell, sleep, system (.tools in the bubble says what each does)
+                  e.g. mascot config set CHAT_TOOLS 'time,weather,files'
+  CHAT_LANGUAGE   the language it answers in, e.g. Danish
+  CHAT_DOTFILES   the hidden files the files tool may read, e.g. '~/.zshrc;~/.config/hypr'
+  CHAT_REMARKS    a mascot says something by itself every N to 2N minutes; 0: never
+  CHAT_ROLE       a role for every mascot (CHAT_ROLES: one per mascot, 'Robo=my-role;Shimeji=')
+
+roles: {roles} (its name is the role's).
+  A role takes the place of the mascot's own personality; .exit role in the bubble brings it back.
+  A personality for the mascots without one of their own (Robo has one):
+  {tilde(os.path.join(config_root, "prompt.md"))}
+
+in the bubble: .help, .help all, .tools, .roles"""
+
+
+class MascotParser(argparse.ArgumentParser):
+    """mascot's own parser: its help ends with chat_help(), made only when the help is shown,
+    as it asks aichat"""
+
+    def format_help(self) -> str:
+        argv = sys.argv[1:]
+        root = "~/.local/share/mascot"
+        for i, arg in enumerate(argv):
+            if arg in ("-cr", "--config-root") and i + 1 < len(argv):
+                root = argv[i + 1]
+            elif arg.startswith("--config-root="):
+                root = arg.split("=", 1)[1]
+        return super().format_help() + "\n" + chat_help(os.path.expanduser(root)) + "\n"
+
+
 def prototype_dir(arguments: argparse.Namespace, path: str) -> tuple[str | None, bool]:
     """The directory of an installed prototype, which the daemon names relative
     to where it loaded it from: PROTOTYPES_LOCATION (<config root>/shimejis by
@@ -2248,7 +2324,7 @@ def plugins_handler(arguments, client, plugins_category):
         client.queue_packet(packet)
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser(description="CLI client for the mascot overlay")
+    argparser = MascotParser(description="CLI client for the mascot overlay")
     argparser.add_argument("-s", "--socket", help="Path to the mascotd socket")
     argparser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     argparser.add_argument("-c", "--config", help="Path to the mascotd config")
@@ -2257,7 +2333,8 @@ if __name__ == "__main__":
     argparser.add_argument("--do-start", action="store_true", help="Start the overlay")
     argparser.add_argument("--version", action="store_true", help="Show Mascot's version (the installed mascotd's)")
 
-    category = argparser.add_subparsers(dest="category", help="")
+    # Only mascot --help ends with chat_help()
+    category = argparser.add_subparsers(dest="category", help="", parser_class=argparse.ArgumentParser)
 
 # Mascot category
 
@@ -2368,8 +2445,8 @@ if __name__ == "__main__":
     getter.add_argument("key", help="Key of the config value to get")
 
     setter = config_subparsers.add_parser("set", help="Set a config value")
-    setter.add_argument("key", help="Key of the config value to set")
-    setter.add_argument("value", help="Value to set")
+    setter.add_argument("key", help="Key of the config value to set, e.g. CHAT_TOOLS (mascot config list shows them all, mascot --help the chat's)")
+    setter.add_argument("value", help="Value to set, e.g. 'time,weather,files'")
 
 # Stop
 

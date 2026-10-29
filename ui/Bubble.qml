@@ -640,7 +640,9 @@ PanelWindow {
         ".copy                  copy the last answer",
         ".clear                 start this conversation over",
         "",
-        "Select text with the mouse and press Ctrl+C to copy part of it."
+        "Select text with the mouse and press Ctrl+C to copy part of it.",
+        "Settings: .tools and .roles say how to change them; in a terminal,",
+        "mascot --help shows the chat's settings and mascot config list all of them."
     ].join("\n")
 
     // The user's language for remarks: CHAT_LANGUAGE, else the locale's language
@@ -839,6 +841,49 @@ PanelWindow {
         }, c, command);
     }
 
+    // What a tool does, for toolHint()
+    readonly property var toolAbout: ({
+        time: "knowing the date and time",
+        weather: "the weather",
+        files: "reading the user's files",
+        todo: "keeping their todo list",
+        reminders: "reminders and timers",
+        shell: "the commands they ran in the terminal",
+        sleep: "letting the mascots sleep for a while",
+        system: "looking into why something on their computer does not work, and how it is doing"
+    })
+
+    // The tools the mascot does not have now, so it says how to get one
+    // instead of only that it cannot: those not in CHAT_TOOLS (the user turns
+    // them on; Mascot never does), and local ones it may not use here (a model
+    // online, or an open .session). Group names only: askWithTools() tells a
+    // local persona by its function names
+    function toolHint(tools: var, env: var, c: QtObject): string {
+        const used = (env.AICHAT_USE_TOOLS ?? "").split(",");
+        const off = Object.keys(bubble.toolFunctions).filter(t => !tools.includes(t));
+        const blocked = tools.filter(t => bubble.localTools.includes(t) && !bubble.toolFunctions[t].some(f => used.includes(f)));
+        const list = names => names.map(t => `${t} (${bubble.toolAbout[t]})`).join(", ");
+        let hint = "";
+        if (off.length)
+            hint += `\n\nThese tools are turned off: ${list(off)}. When the user asks for something one of them `
+                + "would do, say plainly that it is turned off and that they can turn it on in a terminal with "
+                + `mascot config set CHAT_TOOLS '${tools.concat("NAME").join(",")}' (NAME: the tool's name). `
+                + "Never act as if you used it.";
+        if (blocked.length)
+            hint += `\n\nThese tools work only ${c.session && bubble.sessionKinds[c.session] !== "private"
+                    ? "outside this session (a model online may see it)" : "with a local (ollama:) model, chosen with .model"}: `
+                + `${list(blocked)}. When the user asks for one, say so plainly, and never act as if you used it.`;
+        return hint;
+    }
+
+    // flags with the hint after the prompt: Mascot's or the mascot's own, or a
+    // role sent as one with the tools; a role sent as -r is left as it is
+    function withHint(flags: var, hint: string): var {
+        if (!hint)
+            return flags;
+        return flags.map((f, i) => f.startsWith("--prompt=") || flags[i - 1] === "--prompt" ? f + hint : f);
+    }
+
     // The role or prompt flags for a message with the tools, and their
     // environment: done(flags, env). aichat gives a role's own use_tools
     // precedence over AICHAT_USE_TOOLS (and --prompt makes a role with none), so
@@ -849,9 +894,10 @@ PanelWindow {
     // .session (it outlives Mascot) only a private one, which only local models
     // may go on with (see sessionKind()): aichat --info on a fresh session says
     // which model that is, as .model and the role may each choose it
-    function withTools(c: QtObject, command: string, done: var): void {
+    function withTools(c: QtObject, command: string, finish: var): void {
         const tools = toolNames();
         const role = roleFlags();
+        const done = (flags, env) => finish(withHint(flags, toolHint(tools, env, c)), env);
         if (!tools.length) {
             done(role, toolEnvironment([], ""));
             return;
@@ -1490,7 +1536,18 @@ PanelWindow {
                 run(["--list-models"]);
             return;
         case ".roles":
-            run(["--list-roles"]);
+            // Then where to make one: aichat's roles_dir, as the bubble runs it
+            run(["--list-roles"], false, "system", (out, ok) => {
+                if (!ok)
+                    return;
+                const c = bubble.current;
+                lookup([], c, bubble.event?.command || "aichat", (info, ok) => {
+                    const dir = ok ? (info.match(/^roles_dir\s+(.+)$/m) ?? [])[1] : null;
+                    c.entries.append({ kind: "system", body: `Make your own: a .md file in ${dir ? bubble.tilde(dir.trim()) : "aichat's roles_dir"} `
+                        + "(its name is the role's). A role takes the place of the mascot's own personality; "
+                        + ".exit role brings it back." });
+                });
+            });
             return;
         case ".sessions":
             run(["--list-sessions"]);
@@ -1541,27 +1598,28 @@ PanelWindow {
         case ".tools":
             {
                 const tools = toolNames();
-                if (!tools.length) {
-                    say("tools: none (set CHAT_TOOLS to time, weather, files, todo, reminders, shell and/or sleep)");
-                    return;
-                }
                 const notes = {
                     time: "time - the date and time, sent with every message",
                     weather: "weather - from wttr.in (only the place name is sent)",
                     files: "files - lists and reads files and looks at images in your home directory, "
-                        + "dotfiles only those in CHAT_DOTFILES, never where keys, logins or history are kept, "
-                        + "and only with a local (ollama:) model" + bubble.sessionNote(),
-                    todo: "todo - shows, adds to, changes and removes from your todo list (also .todo), "
-                        + "only with a local (ollama:) model" + bubble.sessionNote(),
-                    reminders: "reminders - sets, lists and cancels reminders and timers (also .remind), "
-                        + "only with a local (ollama:) model" + bubble.sessionNote(),
+                        + "dotfiles only those in CHAT_DOTFILES, never where keys, logins or history are kept",
+                    todo: "todo - shows, adds to, changes and removes from your todo list (also .todo)",
+                    reminders: "reminders - sets, lists and cancels reminders and timers (also .remind)",
                     shell: "shell - the last commands you ran (zsh, bash or fish history), hiding those that may "
-                        + "hold a password or key, only with a local (ollama:) model"
-                        + bubble.sessionNote(),
+                        + "hold a password or key",
                     sleep: "sleep - the mascots sleep for a while when you ask (do not disturb: no remarks, "
-                        + "reminders wait), also mascot sleep --minutes"
+                        + "reminders wait), also mascot sleep --minutes",
+                    system: "system - looks into why something on your computer does not work (network, sound, "
+                        + "crashes, services) and how it is doing (heat, fans, memory, disks), and reads logs; "
+                        + "it only looks and never changes anything"
                 };
-                say(tools.map(t => notes[t]).join("\n"));
+                const local = t => bubble.localTools.includes(t)
+                    ? ", only with a local (ollama:) model" + bubble.sessionNote() : "";
+                const off = Object.keys(bubble.toolFunctions).filter(t => !tools.includes(t));
+                say((tools.length ? "on:\n" + tools.map(t => "  " + notes[t] + local(t)).join("\n") : "on: none")
+                    + (off.length ? "\n\noff:\n" + off.map(t => "  " + notes[t]).join("\n") : "")
+                    + "\n\nTo change them, in a terminal (the names you want, comma-separated):\n"
+                    + `  mascot config set CHAT_TOOLS '${(tools.length ? tools : Object.keys(bubble.toolFunctions)).join(",")}'`);
                 return;
             }
         case ".todo":

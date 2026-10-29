@@ -3,6 +3,16 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- Mascot says where its settings are, so you no longer need the docs to find them. `mascot --help` ends with how to
+  start, the chat's settings (`CHAT_TOOLS`, `CHAT_LANGUAGE`, `CHAT_DOTFILES`, `CHAT_REMARKS`, `CHAT_ROLE`) and where
+  your roles go. `.tools` shows every tool, on and off, and the command to change them; `.roles` says where to make
+  your own, and that a role takes the place of the mascot's own personality.
+- The mascot says how to turn a tool on when you ask for something it is turned off for (or that needs a local
+  model), instead of only that it cannot. It never turns one on itself.
+- Fixed: `.tools` showed nothing for the `system` tool, and the docs left it out of `CHAT_TOOLS`.
+
 ## 0.7.1 (2026-10-29)
 
 One fix: the right-click menu lists the bubble's sessions.
