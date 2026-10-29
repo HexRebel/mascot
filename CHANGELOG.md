@@ -3,7 +3,9 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.7.1 (2026-10-29)
+
+One fix: the right-click menu lists the bubble's sessions.
 
 - Fixed: the menu's Session page listed aichat's own sessions, not the bubble's
   (`~/.local/share/mascot/aichat-sessions`), and with Mascot's own aichat config the menu found no models,
