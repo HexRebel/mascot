@@ -3,7 +3,7 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.8.0 (2026-10-29)
 
 - `mascot setup`: Robo walks you through setting up the chat in the terminal, right after installing. Local with
   Ollama, online (OpenRouter, Anthropic, OpenAI or Google, with the API key checked before it is saved) or both;
