@@ -39,6 +39,7 @@ import ipaddress
 import json
 import os
 import re
+import stat
 import sys
 import time
 import urllib.error
@@ -161,6 +162,15 @@ def check_path(path, listing=False):
         hidden = any(part.startswith(".") for part in rel.split(os.sep) if part != ".")
         if hidden and not any(under(candidate, a) or (listing and under(a, candidate)) for a in allowed):
             return f"{shown(candidate)} is hidden; the mascot only sees the dotfiles listed in CHAT_DOTFILES"
+    # A hard link is the file itself under another name, so the checks above cannot see where else it is
+    # (it could be ~/.ssh/id_ed25519): a file with more than one name is not read
+    if not listing:
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        if stat.S_ISREG(st.st_mode) and st.st_nlink > 1:
+            return f"{shown(path)} is a hard link (the same file also has another name); the mascot does not read those"
     return None
 
 

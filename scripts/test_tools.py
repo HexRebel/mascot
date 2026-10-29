@@ -65,6 +65,20 @@ class Files(unittest.TestCase):
             self.assertIn("private", out, rel)
             self.assertNotIn(KEY[:12], out, rel)
 
+    def test_hard_link_to_a_secret_refused(self):
+        # A hard link is the file itself, not a link check_path can follow: one with more names is not read
+        secret = self.write(".ssh/id_ed25519", "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n")
+        os.makedirs(os.path.join(self.home, "docs"))
+        os.link(secret, os.path.join(self.home, "docs", "hard"))
+        self.write("docs/notes.txt", "OPENSSH notes\n")
+        out = self.tool("read_file", {"path": "~/docs/hard"})
+        self.assertIn("hard link", out)
+        self.assertNotIn("b3BlbnNzaC1rZXk", out)
+        out = self.tool("search_file", {"path": "~/docs", "text": "OPENSSH"})
+        self.assertIn("notes.txt", out)
+        self.assertNotIn("b3BlbnNzaC1rZXk", out)
+        self.assertNotIn("PRIVATE KEY", out)
+
     def test_plain_file_unchanged(self):
         self.write("notes.txt", "buy milk\nthe meeting is at 10\n")
         self.assertIn("buy milk\nthe meeting is at 10", self.tool("read_file", {"path": "~/notes.txt"}))
