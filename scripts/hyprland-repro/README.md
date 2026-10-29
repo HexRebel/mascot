@@ -33,7 +33,8 @@ cc -I. repro.c wlr-layer-shell-unstable-v1-protocol.c xdg-shell-protocol.c -lway
 ## Run
 
 It is safest in a nested Hyprland, because the compositor crashes. `hyprland.conf` in this
-directory is a minimal config for that.
+directory is a minimal config for that (before 0.57; from 0.57, Hyprland's config is Lua: use
+`hyprland.lua` instead, which also turns the donation dialog off, as it covers the squares).
 
 1. In your Hyprland session, start a nested one:
    ```sh
@@ -49,6 +50,9 @@ directory is a minimal config for that.
    sleep 1
    hyprctl dispatch movecursor 400 400   # onto the red square
    ```
+   From 0.57, `hyprctl dispatch` takes Lua and `movecursor` is gone; a virtual pointer works
+   instead, e.g. `VPTR_W=<width> VPTR_H=<height> ../vptr/vptr move 400 400` with the
+   nested monitor's size (`hyprctl monitors`).
 3. When `repro` prints `B destroyed.`, the nested Hyprland segfaults and `repro` prints
    `Lost the connection to the compositor`.
 
@@ -72,4 +76,7 @@ report from one run:
 ```
 
 On `main`, PR #16311 (`f33e6a0`, after v0.56.2) gives subsurfaces of layer surfaces their own
-view, which probably avoids the crash. This has not been tested against a build that contains it.
+view, which probably avoids the crash.
+
+Hyprland v0.57.0 (Arch, 29 Oct 2026), nested with `hyprland.lua`: no crash in 3 of 3 attempts with
+the cursor on the red square when B was destroyed (`Compositor still alive.`).
