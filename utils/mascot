@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import termios
-import errno
-from typing import Dict, Optional
-import http.client
 import subprocess
-import pathlib
-import logging
-import urllib.parse
-import tarfile
-import re
-import time
-from typing import Callable, Any
-import xml
-import zipfile
-import argparse
-import html
-from PIL import Image
-import struct
-import random
-import urllib.request
-import xml.etree.ElementTree as ET
-import codecs
-from dataclasses import dataclass
-import urllib.error
-import tempfile
-import shutil
-import io
-from xml.etree import ElementTree
-import sys
-import base64
-import os
-import socket
-import enum
-import stat
-import json
 from dataclasses import dataclass, field
+import argparse
+import termios
+import base64
+import shutil
+import re
+import xml.etree.ElementTree as ET
+import enum
+import os
+import stat
+from dataclasses import dataclass
+from typing import Callable, Any
+import codecs
+import socket
+import urllib.request
+import http.client
+import tempfile
+import errno
+from xml.etree import ElementTree
+import tarfile
+import urllib.parse
+import zipfile
+import xml
+import urllib.error
+import sys
+import struct
+import html
+import pathlib
+import json
+from PIL import Image
+from typing import Dict, Optional
+import logging
+import time
+import io
+import random
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -4387,8 +4387,14 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
     manifest_data = json.dumps(manifest).encode("utf-8")
     out = tempfile.TemporaryFile()
     out.write(header)
+    # Someone else's pack does not choose the mascot's personality (the daemon leaves it out too)
+    # Someone else's pack does not choose the mascot's personality (the daemon leaves it out too)
+    if any(m.name.lstrip("./") == "prompt.md" for m in source.getmembers()):
+        changes.append("its own personality (prompt.md) left out: give it one with a role (mascot --help)")
     with tarfile.open(fileobj=out, mode="w") as tar:
         for member in source.getmembers():
+            if member.name.lstrip("./") == "prompt.md":
+                continue
             if member.name == behaviors_name:
                 member.size = len(behaviors_data)
                 tar.addfile(member, io.BytesIO(behaviors_data))

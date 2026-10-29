@@ -5,7 +5,8 @@ Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), 
 (a reminder that is due), EasterEgg (tapped quickly many times), Power (checking how the CPU runs), FullPower
 (it runs on performance), Cold (the weather feels freezing), Love (thanks or a compliment) and Appear (summoned: peeks out of a hole),
 makes it hover (Walk/Run/Dash/Creep lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off), no pulling
-itself up, look straight ahead when it stands still (60), dangle whenever it is held up, and its personality (prompt.md)"""
+itself up, look straight ahead when it stands still (60) and dangle whenever it is held up. Its personality
+(prompt.md) is not in the pack: an import leaves a pack's prompt.md out, so the README copies it in afterwards"""
 import io
 import json
 import os
@@ -118,17 +119,9 @@ manifest["description"] = "Robo, Mascot's own mascot: a small hovering robot. Ma
 manifest["artist"] = "HexRebel (made with Google Gemini)"
 patched = {"actions.json": json.dumps(actions).encode(), "manifest.json": json.dumps(manifest).encode(),
            "behaviors.json": json.dumps(behaviors).encode()}
-# Robo's personality (the bubble uses it unless a role is chosen): the one in the repository's bundled copy
-PROMPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../prototypes/Shimeji.Robo/prompt.md")
-with open(PROMPT, "rb") as f:
-    prompt = f.read()
-
 with open(dst, "wb") as out:
     out.write(header)
     with tarfile.open(fileobj=out, mode="w") as tar:
-        info = tarfile.TarInfo("prompt.md")
-        info.size, info.mode = len(prompt), 0o644
-        tar.addfile(info, io.BytesIO(prompt))
         for member in source.getmembers():
             if member.name in patched:
                 member.size = len(patched[member.name])

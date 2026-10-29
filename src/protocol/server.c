@@ -876,7 +876,8 @@ void* protocol_import_thread(void* arg) {
     struct archive_entry* entry = NULL;
 
     // Only plain files and directories, and only inside the new directory: no absolute paths, no "..",
-    // no links (so nothing in it can point out of it either). Anything else and the pack is refused whole
+    // no links (so nothing in it can point out of it either). Anything else and the pack is refused whole.
+    // Its own prompt.md is left out: a pack from someone else does not choose the mascot's personality
     bool unpacked = true;
     while (archive_read_next_header(archive, &entry) == ARCHIVE_OK) {
         const char* path = archive_entry_pathname(entry);
@@ -884,6 +885,9 @@ void* protocol_import_thread(void* arg) {
         if (!wlshm_member_path_safe(path) || (type != AE_IFREG && type != AE_IFDIR)) {
             unpacked = false;
             break;
+        }
+        if (type == AE_IFREG && wlshm_member_is_prompt(path)) {
+            continue;  // archive_read_next_header skips its data
         }
         if (type == AE_IFDIR) {
             if (mkdirat(newfd, path, 0755) == -1 && errno != EEXIST) {

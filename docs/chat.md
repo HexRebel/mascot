@@ -164,7 +164,8 @@ Unless you pick a role with `.role` or set `CHAT_ROLE`, every message is sent wi
 (aichat's `--prompt`), so the mascot answers in character, briefly and in your language (set `CHAT_LANGUAGE` if it guesses wrong, e.g. Norwegian for Danish). `{name}` in
 the prompt becomes the mascot's name, so Shimeji answers as Shimeji. A mascot can bring its own prompt:
 a `prompt.md` in its prototype directory comes first (Robo has one: a small, playful robot, which now
-and then mentions its visor or its tools). Your aichat roles and
+and then mentions its visor or its tools). `mascot import` leaves a pack's own `prompt.md` out, so a mascot
+from someone else cannot choose what it is told while it has your tools; give it a personality with a role. Your aichat roles and
 your `cmd_prelude` are left alone; the prompt simply takes their place in the bubble.
 
 The bundled prompt is `$(PREFIX)/share/mascot/ui/prompt.md`. To write your own, put a `prompt.md` in

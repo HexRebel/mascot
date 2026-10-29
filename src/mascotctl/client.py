@@ -1112,8 +1112,13 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
     manifest_data = json.dumps(manifest).encode("utf-8")
     out = tempfile.TemporaryFile()
     out.write(header)
+    # Someone else's pack does not choose the mascot's personality (the daemon leaves it out too)
+    if any(m.name.lstrip("./") == "prompt.md" for m in source.getmembers()):
+        changes.append("its own personality (prompt.md) left out: give it one with a role (mascot --help)")
     with tarfile.open(fileobj=out, mode="w") as tar:
         for member in source.getmembers():
+            if member.name.lstrip("./") == "prompt.md":
+                continue
             if member.name == behaviors_name:
                 member.size = len(behaviors_data)
                 tar.addfile(member, io.BytesIO(behaviors_data))

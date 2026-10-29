@@ -21,4 +21,8 @@ bool wlshm_name_safe(const char* name);
 // Whether a member's path stays inside the directory it is unpacked into: relative, not empty, no ".."
 bool wlshm_member_path_safe(const char* path);
 
+// Whether a member is the pack's own prompt.md (in its root, as src/chat.c reads it), which would become the
+// mascot's personality with every tool it has; someone else's pack never brings one
+bool wlshm_member_is_prompt(const char* path);
+
 #endif

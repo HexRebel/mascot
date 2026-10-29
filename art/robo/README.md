@@ -69,7 +69,11 @@ python3 ../scripts/compose.py ../complete.png Robo bubble       # or arch, or sq
 echo 1 | mascot convert -O out --name Robo Robo
 python3 ../scripts/patch.py out/Shimeji.Robo.wlshm Robo.wlshm
 mascot import -f --no-climb --talk Chatter --sleep Snooze --answered NewMessage Robo.wlshm
+install -m644 ../../../prototypes/Shimeji.Robo/prompt.md ~/.local/share/mascot/shimejis/Shimeji.Robo/
 ```
+
+The last line gives the imported Robo its personality: an import leaves a pack's own `prompt.md` out (a pack
+from someone else must not choose what a mascot with tools is told), so it is copied in by hand.
 
 The bundled copy in `prototypes/Shimeji.Robo/` is what that import installs (from
 `~/.local/share/mascot/shimejis/Shimeji.Robo/`). `mascot import -f` does not update a Robo that is

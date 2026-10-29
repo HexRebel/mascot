@@ -14,6 +14,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: importing a `.wlshm` pack from someone else could write files anywhere in your home directory (a
   member named `../../.bashrc` or with an absolute path) and overflow a buffer with its header. Mascot now refuses
   such a pack whole, both the CLI and the daemon. Inherited from wl_shimeji.
+- Security: `mascot import` leaves a pack's own `prompt.md` out, so a mascot from someone else cannot choose
+  what the model is told while it has your tools. Give an imported mascot a personality with a role.
 - Security: names, tool arguments and errors in the bubble and the menu are shown as plain text, so a pack's name
   or text a model was fed can no longer make the bubble load an address from the net.
 - Security: Ollama's cloud models (`…-cloud`) and an Ollama on another machine (`OLLAMA_HOST`) no longer count as

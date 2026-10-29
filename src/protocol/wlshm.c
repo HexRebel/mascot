@@ -25,6 +25,16 @@ bool wlshm_read_header(const uint8_t header[WLSHM_HEADER_SIZE], char name[256], 
     return wlshm_name_safe(name);
 }
 
+bool wlshm_member_is_prompt(const char* path)
+{
+    while (path[0] == '.' && path[1] == '/') {
+        path += 2;
+        while (*path == '/')
+            path++;
+    }
+    return strcmp(path, "prompt.md") == 0;
+}
+
 bool wlshm_member_path_safe(const char* path)
 {
     if (!path || !path[0] || path[0] == '/')

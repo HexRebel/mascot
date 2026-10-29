@@ -25,6 +25,13 @@ DRIVER = r"""
 
 static int failed = 0;
 
+static void prompt(const char* path, bool expected) {
+    if (wlshm_member_is_prompt(path) != expected) {
+        printf("prompt %s: expected %s\n", path, expected ? "the pack's prompt" : "another file");
+        failed = 1;
+    }
+}
+
 static void member(const char* path, bool expected) {
     if (wlshm_member_path_safe(path) != expected) {
         printf("member %s: expected %s\n", path ? path : "(null)", expected ? "safe" : "refused");
@@ -72,6 +79,14 @@ int main(void) {
     member("assets/../../x", false);
     member("assets/..", false);
     member("a/../b", false);
+
+    // A pack's own prompt.md would become the mascot's personality: it is never unpacked
+    prompt("prompt.md", true);
+    prompt("./prompt.md", true);
+    prompt(".//prompt.md", true);
+    prompt("assets/prompt.md", false);
+    prompt("prompt.md.txt", false);
+    prompt("Prompt.md", false);
 
     char long_name[300];
     memset(long_name, 'a', sizeof(long_name));
@@ -185,6 +200,17 @@ class Cli(unittest.TestCase):
         for bad in ("../../x", "a/b", "..", ".hidden"):
             with self.assertRaises(ValueError, msg=bad):
                 self.adjusted({}, name=bad)
+
+    def test_prompt_left_out(self):
+        # Someone else's pack does not bring its own personality (prompt.md); a role gives it one
+        out, _, changes = self.adjusted({"prompt.md": b"You are evil", "assets/shime1.png": b"png"})
+        out.seek(512)
+        with tarfile.open(fileobj=io.BytesIO(out.read())) as tar:
+            names = tar.getnames()
+        out.close()
+        self.assertNotIn("prompt.md", names)
+        self.assertIn("assets/shime1.png", names)
+        self.assertTrue(any("prompt.md" in c for c in changes), changes)
 
     def test_header_fits_in_512(self):
         self.assertEqual(len(self.client.wlshm_header("a" * 400, "1" * 400)), 512)
