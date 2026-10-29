@@ -382,10 +382,17 @@ class Flow(Served):
         s = Script("1", "1", "", "3 7", "", "y")
         self.assertEqual(self.run_setup(s), 0, s.text())
         self.assertIn(("CHAT_TOOLS", "time,weather,files,todo,reminders"), s.options)
-        s = Script("2", "1", "sk-good-key", "1", "", "3", "", "y")
+
+    def test_tools_online_lists_only_online_ones(self):
+        # Online, the local-only tools are not choices: one line names them, the rest are numbered 1-3
+        s = Script("2", "1", "sk-good-key", "1", "", "4", "3", "", "y")
         self.assertEqual(self.run_setup(s), 0, s.text())
-        self.assertIn("only with a model on this computer", s.text())
-        self.assertIn(("CHAT_TOOLS", "time,weather,sleep"), s.options)
+        self.assertIn("With a model on this computer, I could also use files, todo, reminders, shell and system.",
+                      s.text())
+        self.assertIn("3. [x] sleep", s.text())
+        self.assertNotIn("files      ", s.text())
+        self.assertIn("There is no tool 4.", s.text())
+        self.assertIn(("CHAT_TOOLS", "time,weather"), s.options)
 
     def test_own_config_skips_models(self):
         own = os.path.join(self.home, ".config", "aichat", "config.yaml")
@@ -531,6 +538,15 @@ class Cli(Served):
         self.assertIn("Nothing was changed.", text)
         self.assertNotIn("Traceback", text)
         self.assertFalse(os.path.exists(os.path.join(self.aichat_dir, "config.yaml")), text)
+
+    def test_cli_key_shows_dots(self):
+        # One dot per character, so a paste is seen to land; backspace takes one back; the key itself never shows
+        text, code = self.setup_via_pty(["2", "1", "sk-good-keyX\x7f", "1", "", "", "y"])
+        self.assertEqual(code, 0, text)
+        self.assertIn("•" * 11, text)
+        self.assertNotIn("•" * 13, text)
+        self.assertNotIn("sk-good-key", text)
+        self.assertIn("the key works", text)
 
     def test_cli_chatsetup_names_are_its_own(self):
         import ast

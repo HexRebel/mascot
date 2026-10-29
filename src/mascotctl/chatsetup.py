@@ -457,7 +457,7 @@ def choose_online(previous, ask, ask_secret, say, pick, yes) -> Online | None:
         if yes("key", f"A key for {info['title']} is set. Keep it?"):
             key = previous.online.key
     while key is None:
-        say("key", f"Your {info['title']} key, from {info['key_url']} (it is not shown; Enter skips):")
+        say("key", f"Your {info['title']} key, from {info['key_url']} (shown as dots; Enter skips):")
         typed = ask_secret("         › ").strip()
         if not typed:
             return None
@@ -528,23 +528,25 @@ def ask_tools(current, choice, ask, say) -> list:
         model = next(m for m in choice.local_models if m["name"] == choice.local_model)
         if not model["tools"]:
             say("tools", f"{choice.local_model} cannot use tools; they work once you pick a model that can.")
+    # Online, only the tools that work there are choices; one line names the others
+    choices = TOOLS if local else [t for t in TOOLS if t not in LOCAL_TOOLS]
+    others = [t for t in TOOLS if t not in choices]
     while True:
         say("tools", "What may I look up? I only ever look, never change anything.")
-        for i, t in enumerate(TOOLS, 1):
-            only = " (only with a model on this computer)" if not local and t in LOCAL_TOOLS else ""
-            say("", f"{i}. [{'x' if t in on else ' '}] {t:<10} {TOOL_NOTES[t]}{only}")
-        say("", "Type numbers to turn them on or off (e.g. 3 7), Enter when done.")
+        for i, t in enumerate(choices, 1):
+            say("", f"{i}. [{'x' if t in on else ' '}] {t:<10} {TOOL_NOTES[t]}")
+        if others:
+            say("", f"With a model on this computer, I could also use {', '.join(others[:-1])} and {others[-1]}.")
+        say("", "Type numbers to turn them on or off (e.g. 1 3), Enter when done.")
         answer = ask("         › ").strip()
         if not answer:
             return [t for t in TOOLS if t in on]
         for token in re.split(r"[\s,]+", answer):
-            if not (token.isdigit() and 1 <= int(token) <= len(TOOLS)):
+            if not (token.isdigit() and 1 <= int(token) <= len(choices)):
                 say("", f"There is no tool {token}.")
                 continue
-            t = TOOLS[int(token) - 1]
-            if not local and t in LOCAL_TOOLS:
-                say("", f"{t} works only with a model on this computer.")
-            elif t in on:
+            t = choices[int(token) - 1]
+            if t in on:
                 on.remove(t)
             else:
                 on.append(t)

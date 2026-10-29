@@ -26,7 +26,8 @@ import time
 from levenstein import lv_variant
 from noclimb import strip_climbing
 from chatsetup import *
-import getpass
+import codecs
+import termios
 
 import random
 
@@ -1231,7 +1232,47 @@ def setup_handler(arguments: argparse.Namespace) -> int:
             line = f"\033[1;36m{line[:7]}\033[0m{line[7:]}"
         print(line, flush=True)
 
-    return run_setup(root, input, getpass.getpass, out, set_option, current, dict(os.environ))
+    return run_setup(root, input, read_secret, out, set_option, current, dict(os.environ))
+
+
+def read_secret(prompt: str) -> str:
+    """Like getpass, but one • per character, so a pasted key is seen to land (its length, never the key itself).
+    Backspace takes one back, Ctrl+U all; Ctrl+C stops as anywhere else"""
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    mode = termios.tcgetattr(fd)
+    mode[3] &= ~(termios.ECHO | termios.ICANON)  # ISIG stays: Ctrl+C is still KeyboardInterrupt
+    mode[6][termios.VMIN], mode[6][termios.VTIME] = 1, 0
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+    typed = []
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    try:
+        termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
+        while True:
+            chunk = os.read(fd, 1024)
+            if not chunk:
+                raise EOFError
+            for ch in decoder.decode(chunk):
+                if ch in "\r\n":
+                    return "".join(typed)
+                if ch in "\x7f\b":
+                    if typed:
+                        typed.pop()
+                        sys.stdout.write("\b \b")
+                elif ch == "\x15":
+                    sys.stdout.write("\b \b" * len(typed))
+                    typed.clear()
+                elif ch == "\x04" and not typed:
+                    raise EOFError
+                elif ch >= " ":
+                    typed.append(ch)
+                    sys.stdout.write("•")
+            sys.stdout.flush()
+    finally:
+        termios.tcsetattr(fd, termios.TCSAFLUSH, saved)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
 
 
 class MascotParser(argparse.ArgumentParser):

@@ -54,8 +54,8 @@ after its IPC socket, so `-s /run/user/1000/foo.sock` gives `foo-chat.sock`.
 1. **Where the mascot thinks**: on this computer (Ollama, the default), online, or both. With both, the local model
    answers and `.model` in the bubble (or right-click, *Settings*, *Model*) switches to the online one.
 2. **The model**: Ollama's models with their size, marked when one cannot use tools; online, OpenRouter
-   (recommended: one key, many models), Anthropic, OpenAI or Google. Setup asks for the API key without showing
-   it, checks it with the service and lists the service's current models. For another service, see
+   (recommended: one key, many models), Anthropic, OpenAI or Google. Setup asks for the API key (a dot per character,
+   never the key), checks it with the service and lists the service's current models. For another service, see
    [aichat's clients](https://github.com/sigoden/aichat/blob/main/config.example.yaml).
 3. **Your language** (`CHAT_LANGUAGE`), guessed from your locale.
 4. **Tools** (`CHAT_TOOLS`): which ones Robo may use. The file, todo and reminder tools only work with a local model.

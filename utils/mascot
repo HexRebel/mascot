@@ -1,39 +1,40 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import sys
-from typing import Dict, Optional
-import stat
-import errno
-import struct
-import enum
-import html
-from typing import Callable, Any
 import subprocess
-import getpass
-from dataclasses import dataclass, field
-from PIL import Image
-import zipfile
-import tarfile
-import urllib.error
-import logging
-import random
-import pathlib
-import tempfile
-import json
-import shutil
-import argparse
-from xml.etree import ElementTree
 import io
-from dataclasses import dataclass
-import socket
-import base64
-import xml.etree.ElementTree as ET
+from PIL import Image
+import sys
 import re
-import os
+import struct
 import xml
+import pathlib
+from typing import Dict, Optional
+import html
+from xml.etree import ElementTree
 import urllib.request
+import tempfile
+import zipfile
+import codecs
+from dataclasses import dataclass, field
+import logging
+import os
+import errno
+import tarfile
+import base64
+import json
+import stat
+import shutil
+from typing import Callable, Any
+import xml.etree.ElementTree as ET
 import time
+import urllib.error
+import argparse
+import random
+import enum
+import socket
+from dataclasses import dataclass
+import termios
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -2386,7 +2387,7 @@ def choose_online(previous, ask, ask_secret, say, pick, yes) -> Online | None:
         if yes("key", f"A key for {info['title']} is set. Keep it?"):
             key = previous.online.key
     while key is None:
-        say("key", f"Your {info['title']} key, from {info['key_url']} (it is not shown; Enter skips):")
+        say("key", f"Your {info['title']} key, from {info['key_url']} (shown as dots; Enter skips):")
         typed = ask_secret("         › ").strip()
         if not typed:
             return None
@@ -2457,23 +2458,26 @@ def ask_tools(current, choice, ask, say) -> list:
         model = next(m for m in choice.local_models if m["name"] == choice.local_model)
         if not model["tools"]:
             say("tools", f"{choice.local_model} cannot use tools; they work once you pick a model that can.")
+    # Online, only the tools that work there are choices; one line names the others
+    # Online, only the tools that work there are choices; one line names the others
+    choices = TOOLS if local else [t for t in TOOLS if t not in LOCAL_TOOLS]
+    others = [t for t in TOOLS if t not in choices]
     while True:
         say("tools", "What may I look up? I only ever look, never change anything.")
-        for i, t in enumerate(TOOLS, 1):
-            only = " (only with a model on this computer)" if not local and t in LOCAL_TOOLS else ""
-            say("", f"{i}. [{'x' if t in on else ' '}] {t:<10} {TOOL_NOTES[t]}{only}")
-        say("", "Type numbers to turn them on or off (e.g. 3 7), Enter when done.")
+        for i, t in enumerate(choices, 1):
+            say("", f"{i}. [{'x' if t in on else ' '}] {t:<10} {TOOL_NOTES[t]}")
+        if others:
+            say("", f"With a model on this computer, I could also use {', '.join(others[:-1])} and {others[-1]}.")
+        say("", "Type numbers to turn them on or off (e.g. 1 3), Enter when done.")
         answer = ask("         › ").strip()
         if not answer:
             return [t for t in TOOLS if t in on]
         for token in re.split(r"[\s,]+", answer):
-            if not (token.isdigit() and 1 <= int(token) <= len(TOOLS)):
+            if not (token.isdigit() and 1 <= int(token) <= len(choices)):
                 say("", f"There is no tool {token}.")
                 continue
-            t = TOOLS[int(token) - 1]
-            if not local and t in LOCAL_TOOLS:
-                say("", f"{t} works only with a model on this computer.")
-            elif t in on:
+            t = choices[int(token) - 1]
+            if t in on:
                 on.remove(t)
             else:
                 on.append(t)
@@ -4452,7 +4456,47 @@ def setup_handler(arguments: argparse.Namespace) -> int:
             line = f"\033[1;36m{line[:7]}\033[0m{line[7:]}"
         print(line, flush=True)
 
-    return run_setup(root, input, getpass.getpass, out, set_option, current, dict(os.environ))
+    return run_setup(root, input, read_secret, out, set_option, current, dict(os.environ))
+
+
+def read_secret(prompt: str) -> str:
+    """Like getpass, but one • per character, so a pasted key is seen to land (its length, never the key itself).
+    Backspace takes one back, Ctrl+U all; Ctrl+C stops as anywhere else"""
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    mode = termios.tcgetattr(fd)
+    mode[3] &= ~(termios.ECHO | termios.ICANON)  # ISIG stays: Ctrl+C is still KeyboardInterrupt
+    mode[6][termios.VMIN], mode[6][termios.VTIME] = 1, 0
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+    typed = []
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    try:
+        termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
+        while True:
+            chunk = os.read(fd, 1024)
+            if not chunk:
+                raise EOFError
+            for ch in decoder.decode(chunk):
+                if ch in "\r\n":
+                    return "".join(typed)
+                if ch in "\x7f\b":
+                    if typed:
+                        typed.pop()
+                        sys.stdout.write("\b \b")
+                elif ch == "\x15":
+                    sys.stdout.write("\b \b" * len(typed))
+                    typed.clear()
+                elif ch == "\x04" and not typed:
+                    raise EOFError
+                elif ch >= " ":
+                    typed.append(ch)
+                    sys.stdout.write("•")
+            sys.stdout.flush()
+    finally:
+        termios.tcsetattr(fd, termios.TCSAFLUSH, saved)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
 
 
 class MascotParser(argparse.ArgumentParser):
