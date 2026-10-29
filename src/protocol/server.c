@@ -6,6 +6,7 @@
 #include "mascot_config_parser.h"
 #include "messages.h"
 #include "protocol/connector.h"
+#include "protocol/wlshm.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/limits.h>
@@ -731,12 +732,18 @@ void* protocol_import_thread(void* arg) {
     char mascot_version[128] = {0};
     char dirname[PATH_MAX] = {0};
     char tmpdirname[] = ".unpackingMascotXXXXXX";
-    uint8_t namesize = wlshm_header[4];
-    memcpy(mascot_name, wlshm_header + 5, namesize);
-    memcpy(dirname, wlshm_header + 5, namesize);
-
-    uint8_t version_size = wlshm_header[5 + namesize];
-    memcpy(mascot_version, wlshm_header + 6 + namesize, version_size);
+    // The pack is someone else's file: its name becomes a directory in the store, so it must be one
+    if (!wlshm_read_header(wlshm_header, mascot_name, mascot_version)) {
+        ipc_packet_t* error = protocol_builder_import_failed(import, 1);
+        ipc_connector_send(client->connector, error);
+        protocol_client_remove_object(client, import->id);
+        pthread_mutex_unlock(&import->thread_mutex);
+        pthread_mutex_destroy(&import->thread_mutex);
+        close(import->target_descriptor);
+        free(import);
+        return NULL;
+    }
+    snprintf(dirname, PATH_MAX, "%s", mascot_name);
 
     static uint8_t minmax_ver_precomputed = false;
     static int64_t minimum_version = 0;
@@ -868,18 +875,56 @@ void* protocol_import_thread(void* arg) {
 
     struct archive_entry* entry = NULL;
 
+    // Only plain files and directories, and only inside the new directory: no absolute paths, no "..",
+    // no links (so nothing in it can point out of it either). Anything else and the pack is refused whole
+    bool unpacked = true;
     while (archive_read_next_header(archive, &entry) == ARCHIVE_OK) {
-        if ((archive_entry_pathname(entry)[strlen(archive_entry_pathname(entry))-1]) != '/') {
-            io_buildtreeat(newfd, archive_entry_pathname(entry));
-            int32_t writefd = openat(newfd, archive_entry_pathname(entry), O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-            archive_read_data_into_fd(archive, writefd);
-            close(writefd);
-        } else {
-            mkdirat(newfd, archive_entry_pathname(entry), 0755);
+        const char* path = archive_entry_pathname(entry);
+        mode_t type = archive_entry_filetype(entry);
+        if (!wlshm_member_path_safe(path) || (type != AE_IFREG && type != AE_IFDIR)) {
+            unpacked = false;
+            break;
+        }
+        if (type == AE_IFDIR) {
+            if (mkdirat(newfd, path, 0755) == -1 && errno != EEXIST) {
+                unpacked = false;
+                break;
+            }
+            continue;
+        }
+        if (io_buildtreeat(newfd, path) != 0) {
+            unpacked = false;
+            break;
+        }
+        int32_t writefd = openat(newfd, path, O_WRONLY | O_TRUNC | O_CREAT | O_NOFOLLOW, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if (writefd < 0) {
+            unpacked = false;
+            break;
+        }
+        int32_t written = archive_read_data_into_fd(archive, writefd);
+        close(writefd);
+        if (written != ARCHIVE_OK && written != ARCHIVE_WARN) {
+            unpacked = false;
+            break;
         }
     }
 
     int32_t store_fd = mascot_prototype_store_get_fd(server_state->prototypes);
+    if (!unpacked) {
+        io_unlinkat(store_fd, tmpdirname, IO_RECURSIVE);
+        mascot_prototype_unlink(old_prototype);
+        close(newfd);
+        archive_read_free(archive);
+        ipc_packet_t* error = protocol_builder_import_failed(import, 1);
+        ipc_connector_send(client->connector, error);
+        protocol_client_remove_object(client, import->id);
+        pthread_mutex_unlock(&import->thread_mutex);
+        pthread_mutex_destroy(&import->thread_mutex);
+        close(import->target_descriptor);
+        free(import);
+        return NULL;
+    }
+
     int32_t moved;
     if (replace_in_place) {
         moved = io_swapat(store_fd, tmpdirname, store_fd, dirname);

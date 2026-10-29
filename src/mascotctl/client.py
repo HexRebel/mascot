@@ -1044,10 +1044,24 @@ def set_talk_sleep(behaviors: dict, definitions: list, assets: set, talk: str | 
 def wlshm_header(name: str, version: str) -> bytes:
     """A .wlshm's 512 bytes before its tar: WLPK, then the name and version, each a length byte and the text"""
     header = b"WLPK"
-    for text in (name, version):
-        data = text.encode("utf-8")[:255]
+    # The name gets up to 255 bytes, the version what the daemon reads (127) and what is left of the 512
+    for text, most in ((name, 255), (version, min(127, 512 - 6 - len(name.encode("utf-8")[:255])))):
+        data = text.encode("utf-8")[:most]
         header += struct.pack(f"B{len(data)}s", len(data), data)
     return header + b"\x00" * (512 - len(header))
+
+
+def wlshm_check(header: bytes, members: list) -> None:
+    """ValueError unless the pack is safe to unpack, as the daemon checks it (src/protocol/wlshm.c): its name one
+    directory name that is not hidden, and only plain files and directories inside it (no "..", no links)"""
+    name = header[5:5 + header[4]].decode("utf-8", "replace")
+    if not name or name.startswith(".") or "/" in name or "\0" in name:
+        raise ValueError(f"the pack's name {name!r} is not a name for a directory")
+    for member in members:
+        if not (member.isfile() or member.isdir()):
+            raise ValueError(f"{member.name} is a link or device; a mascot has only files")
+        if not member.name or member.name.startswith("/") or ".." in member.name.split("/"):
+            raise ValueError(f"{member.name} would be unpacked outside the mascot's directory")
 
 
 def wlshm_manifest(path: str) -> dict:
@@ -1072,6 +1086,7 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
         source = tarfile.open(fileobj=io.BytesIO(f.read()), mode="r:*")
 
     names = source.getnames()
+    wlshm_check(header, source.getmembers())
     manifest = json.load(source.extractfile("manifest.json")) if "manifest.json" in names else {}
     behaviors_name = manifest.get("behaviors", "behaviors.json")
     actions_name = manifest.get("actions", "actions.json")
@@ -1083,6 +1098,7 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
         manifest["name"] = f"Shimeji.{name}"
         manifest["display_name"] = name
         header = wlshm_header(manifest["name"], manifest.get("version", "0.0.1"))
+        wlshm_check(header, [])
 
     definitions = json.load(source.extractfile(actions_name))
     assets = {n.removeprefix(manifest.get("assets", "assets") + "/") for n in names}
