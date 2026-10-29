@@ -517,6 +517,7 @@ PanelWindow {
                             x: menu.textMargin
                             width: parent.width - 2 * menu.textMargin - menu.checkWidth
                             elide: Text.ElideRight
+                            textFormat: Text.PlainText
                             text: modelData.label
                             color: modelData.heading ? (menu.theme?.accent ?? "#89b4fa")
                                 : modelData.action === "dismiss" ? (menu.theme?.muted ?? "#a6adc8")
@@ -530,6 +531,7 @@ PanelWindow {
                             anchors.right: parent.right
                             anchors.rightMargin: menu.textMargin
                             visible: !!modelData.checked
+                            textFormat: Text.PlainText
                             text: "✓"
                             color: menu.theme?.accent ?? "#89b4fa"
                             font.pixelSize: 13

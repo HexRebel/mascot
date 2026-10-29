@@ -2073,6 +2073,7 @@ PanelWindow {
             Text {
                 id: title
 
+                textFormat: Text.PlainText
                 text: bubble.event?.prototype ?? ""
                 color: theme.accent
                 font.bold: true
@@ -2081,6 +2082,7 @@ PanelWindow {
 
             Text {
                 anchors.right: parent.right
+                textFormat: Text.PlainText
                 text: "×"
                 color: closeArea.containsMouse ? theme.foreground : theme.muted
                 font.pixelSize: 16
@@ -2205,6 +2207,7 @@ PanelWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 leftPadding: 4
                                 visible: text !== ""
+                                textFormat: Text.PlainText
                                 text: bubble.icon(bubble.current?.doingIcon ?? "")
                                 color: theme.muted
                                 font.pixelSize: 12
@@ -2214,6 +2217,7 @@ PanelWindow {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: text !== ""
+                                textFormat: Text.PlainText
                                 text: bubble.current?.doing ?? ""
                                 color: theme.muted
                                 font.pixelSize: 12
@@ -2231,6 +2235,7 @@ PanelWindow {
 
             width: parent.width
             visible: !!bubble.current?.error
+            textFormat: Text.PlainText
             text: bubble.current?.error ?? ""
             wrapMode: Text.Wrap
             maximumLineCount: 6
@@ -2289,6 +2294,7 @@ PanelWindow {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !input.text
+                    textFormat: Text.PlainText
                     text: bubble.busy ? "…" : `Message ${bubble.event?.prototype ?? "the mascot"}…  (.help)`
                     color: theme.muted
                     font: input.font
