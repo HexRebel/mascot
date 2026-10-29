@@ -314,7 +314,7 @@ def language_from_locale(env: dict) -> str | None:
     return None
 
 
-class Stop(Exception):
+class SetupStopped(Exception):
     """Setup cannot go on (something missing, or nothing to set up): nothing is written"""
 
 
@@ -373,8 +373,8 @@ def run_setup(config_root: str, ask, ask_secret, out, set_option, current: dict,
         if ",".join(tools) != current.get("CHAT_TOOLS"):
             say("✔", f"CHAT_TOOLS = {','.join(tools)}")
         if not yes("", "Write this?"):
-            raise Stop()
-    except (KeyboardInterrupt, EOFError, Stop):
+            raise SetupStopped()
+    except (KeyboardInterrupt, EOFError, SetupStopped):
         out("")
         say("", "Nothing was changed.")
         return 1
@@ -398,11 +398,11 @@ def run_setup(config_root: str, ask, ask_secret, out, set_option, current: dict,
 
 
 def choose_models(directory, ask, ask_secret, say, pick, yes, env) -> Choice:
-    """Where the mascot thinks and with which model(s); raises Stop when something is missing"""
+    """Where the mascot thinks and with which model(s); raises SetupStopped when something is missing"""
     if not shutil.which("aichat", path=env.get("PATH")):
         say("aichat", "aichat is not installed: Mascot chats through it. On Arch: pacman -S aichat;")
         say("", "elsewhere: github.com/sigoden/aichat/releases. Then run mascot setup again.")
-        raise Stop()
+        raise SetupStopped()
     previous = read_current(directory)
     where_default = None
     if previous:
@@ -418,11 +418,11 @@ def choose_models(directory, ask, ask_secret, say, pick, yes, env) -> Choice:
         if models is None:
             say("ollama", f"Ollama is not running at {base}. Start it (e.g. sudo systemctl enable --now ollama,")
             say("", "or ollama serve), then run mascot setup again. Installing it: ollama.com/download")
-            raise Stop()
+            raise SetupStopped()
         if not models:
             say("ollama", "Ollama has no model to chat with. Download one (ollama pull <model>, see")
             say("", "ollama.com/library), then run mascot setup again.")
-            raise Stop()
+            raise SetupStopped()
         names = [m["name"] for m in models]
         default = names.index(previous.local_model) + 1 if previous and previous.local_model in names else None
         n = pick("model", "Which model on this computer?", [
@@ -434,7 +434,7 @@ def choose_models(directory, ask, ask_secret, say, pick, yes, env) -> Choice:
         if not choice.online:
             if where == 2:
                 say("", "Nothing to set up online.")
-                raise Stop()
+                raise SetupStopped()
             choice.default = "local"
     return choice
 

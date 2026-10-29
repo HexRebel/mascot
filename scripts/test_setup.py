@@ -516,7 +516,40 @@ class Cli(Served):
         self.assertIn("run mascot setup", out.stderr)
 
     def test_cli_setup_via_pty(self):
-        answers = ["1", "1", "Danish", "", "y"]
+        text, code = self.setup_via_pty(["1", "1", "Danish", "", "y"])
+        self.assertEqual(code, 0, text)
+        self.assertTrue(os.path.exists(os.path.join(self.aichat_dir, "config.yaml")), text)
+        with open(os.path.join(self.data, "mascotd.conf")) as f:
+            conf = f.read()
+        self.assertIn("chat_language=Danish", conf)
+        self.assertIn("chat_tools=time,weather,todo,reminders,sleep", conf)
+
+    def test_cli_setup_no_writes_nothing(self):
+        # The composed mascot is one namespace: a name in chatsetup must not be another module's
+        text, code = self.setup_via_pty(["1", "1", "Danish", "", "n"])
+        self.assertEqual(code, 1, text)
+        self.assertIn("Nothing was changed.", text)
+        self.assertNotIn("Traceback", text)
+        self.assertFalse(os.path.exists(os.path.join(self.aichat_dir, "config.yaml")), text)
+
+    def test_cli_chatsetup_names_are_its_own(self):
+        import ast
+        with open(type(self).composed) as f:
+            composed = ast.parse(f.read()).body
+        with open(os.path.join(ROOT, "src", "mascotctl", "chatsetup.py")) as f:
+            own = ast.parse(f.read()).body
+
+        def names(body):
+            for node in body:
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                    yield node.name
+                elif isinstance(node, ast.Assign):
+                    yield from (t.id for t in node.targets if isinstance(t, ast.Name))
+
+        everywhere = list(names(composed))
+        self.assertEqual([n for n in set(names(own)) if everywhere.count(n) > 1], [])
+
+    def setup_via_pty(self, answers):
         # openpty + Popen, not pty.fork: forking a process with the fake server's thread can deadlock
         fd, tty = pty.openpty()
         child = subprocess.Popen([sys.executable, self.mascot_path(), "-cr", self.data, "setup"], env=self.env,
@@ -538,13 +571,7 @@ class Cli(Served):
             if (seen.rstrip().endswith(b"\xe2\x80\xba") or seen.rstrip().endswith(b"[Y/n]")) and answers:
                 os.write(fd, (answers.pop(0) + "\n").encode())
         os.close(fd)
-        text = seen.decode(errors="replace")
-        self.assertEqual(child.wait(30), 0, text)
-        self.assertTrue(os.path.exists(os.path.join(self.aichat_dir, "config.yaml")), text)
-        with open(os.path.join(self.data, "mascotd.conf")) as f:
-            conf = f.read()
-        self.assertIn("chat_language=Danish", conf)
-        self.assertIn("chat_tools=time,weather,todo,reminders,sleep", conf)
+        return seen.decode(errors="replace"), child.wait(30)
 
 
 class ToolsPrivacy(Home):
