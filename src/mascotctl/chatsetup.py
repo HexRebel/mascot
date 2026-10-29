@@ -17,9 +17,12 @@
 """mascot setup writes one file, Mascot's own aichat config ($MASCOT_DATA_DIR/aichat/config.yaml), and
 CHAT_LANGUAGE and CHAT_TOOLS. The user's own aichat config is only looked for, never read or written. An API key
 is read without echo, never printed, and only sent to the service it belongs to."""
+import json
 import os
 import re
 import tempfile
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 
 # The tool groups, as CHAT_TOOLS names them, and those only a model on this computer gets (ui/Bubble.qml)
@@ -196,3 +199,96 @@ def write_config(directory: str, text: str) -> str:
             replace(path + ".old", f.read())
     replace(path, text)
     return path
+
+
+TIMEOUT = 10  # seconds a service or Ollama gets to answer
+
+# Cheap, quick models to show first, when the service has them
+RECOMMENDED = {
+    "openrouter": ["anthropic/claude-haiku-5.5", "google/gemini-3-flash", "openai/gpt-5-mini"],
+    "anthropic": [], "openai": [], "google": [],
+}
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A key goes to the service's own address and nowhere else"""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
+
+
+def get(url: str, headers: dict, body: dict | None = None) -> tuple[int, dict | None]:
+    """(HTTP status, JSON answer); status 0 when it could not be reached"""
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", **headers})
+    try:
+        with OPENER.open(request, timeout=TIMEOUT) as answer:
+            return answer.status, json.load(answer)
+    except urllib.error.HTTPError as e:
+        e.close()
+        return e.code, None
+    except (OSError, ValueError):
+        return 0, None
+
+
+def ollama_base() -> str:
+    """Ollama's address, from OLLAMA_HOST as tools/mascot-guide reads it"""
+    host = os.environ.get("OLLAMA_HOST") or "127.0.0.1:11434"
+    return (host if "://" in host else "http://" + host).rstrip("/")
+
+
+def ollama_models(base: str) -> list | None:
+    """Ollama's models that can chat, [{"name", "tools", "size"}]; None if Ollama does not answer"""
+    status, tags = get(base + "/api/tags", {})
+    if status != 200 or tags is None:
+        return None
+    models = []
+    for name in sorted(m["name"] for m in tags.get("models", [])):
+        status, show = get(base + "/api/show", {}, {"model": name})
+        if status != 200 or show is None:
+            continue
+        caps = show.get("capabilities")
+        if caps is None:  # Ollama before 0.6.4 does not say
+            caps = ["completion"]
+        if "completion" in caps:
+            models.append({"name": name, "tools": "tools" in caps,
+                           "size": (show.get("details") or {}).get("parameter_size", "")})
+    return models
+
+
+def service(provider: str, key: str, path: str) -> tuple[int, dict | None]:
+    """One request to a service, with the key in a header (never in the address)"""
+    base = os.environ.get("MASCOT_SETUP_TEST_BASE") or PROVIDERS[provider]["base"]  # only tests set it
+    headers = {"anthropic": {"x-api-key": key, "anthropic-version": "2023-06-01"},
+               "google": {"x-goog-api-key": key}}.get(provider, {"Authorization": f"Bearer {key}"})
+    return get(base + path, headers)
+
+
+MODELS_PATH = {"openrouter": "/api/v1/models", "anthropic": "/v1/models", "openai": "/v1/models",
+               "google": "/v1beta/models"}
+
+
+def check_key(provider: str, key: str) -> int:
+    """The service's answer to the key: 200 when it works, 0 when the service could not be reached"""
+    return service(provider, key, "/api/v1/key" if provider == "openrouter" else MODELS_PATH[provider])[0]
+
+
+def online_models(provider: str, key: str) -> list:
+    """The service's models to chat with, newest first where it says, [{"name", "tools"}]; [] if it fails"""
+    status, answer = service(provider, key, MODELS_PATH[provider])
+    if status != 200 or not isinstance(answer, dict):
+        return []
+    if provider == "openrouter":
+        return [{"name": m["id"], "tools": "tools" in (m.get("supported_parameters") or [])}
+                for m in answer.get("data", [])]
+    if provider == "google":
+        return [{"name": m["name"].removeprefix("models/"), "tools": True} for m in answer.get("models", [])
+                if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+    models = answer.get("data", [])
+    if provider == "openai":
+        models = [m for m in models if re.match(r"gpt-|o\d", m["id"])]
+    models.sort(key=lambda m: m.get("created_at") or m.get("created") or 0, reverse=True)
+    return [{"name": m["id"], "tools": True} for m in models]
