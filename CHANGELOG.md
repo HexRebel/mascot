@@ -67,8 +67,10 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   with the memory of what the tools had read, and could go on with a private session. It reads the config
   `aichat --info` names, so one `CHAT_COMMAND` gives aichat counts, and Ollama not yet running is not remembered.
 - Security: a client named `ollama` the tools cannot read (`- {name: ollama, …}`, `'name': "ollama"`) no longer
-  lets `OLLAMA_API_BASE` decide where the model is; quoted keys are read. A proxy not on this computer (the client's
-  `extra: proxy:`, `HTTPS_PROXY`, `ALL_PROXY`, `HTTP_PROXY`) makes the model not local: the proxy gets what is sent.
+  lets `OLLAMA_API_BASE` decide where the model is; quoted keys are read, and a list item with more spaces after
+  its `-`. A proxy not on this computer makes the model not local, as aichat 0.30 picks it (measured): the client's
+  `extra: proxy:`, else `HTTP_PROXY` (`HTTPS_PROXY` for an https address) or `ALL_PROXY`, unless `NO_PROXY` names the
+  host. The tools ask Ollama on this computer straight, never through a proxy.
 - Security: a mascot's `prompt.md` is read only when it is a regular file of the pack's own: a link (to
   `~/.ssh/id_ed25519` or aichat's `.env`, in a pack unpacked into the prototypes folder by hand) became the system
   prompt, sent to a hosted model too, and a FIFO stopped the daemon at the first click.

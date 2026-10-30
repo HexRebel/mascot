@@ -244,16 +244,18 @@ def aichat_ollama_base():
         if not text or text.startswith("#"):
             continue
         indent = len(line) - len(line.lstrip())
-        if indent == 0 and not text.startswith("- "):
+        listed = re.match(r"-\s", text) is not None
+        if indent == 0 and not listed:
             in_clients = text == "clients:"
             item = None
             continue
         if not in_clients:
             continue
-        if text.startswith("- ") and (item is None or indent == item):
-            item, keys = indent, indent + 2
+        if listed and (item is None or indent == item):
+            # Its keys are where the first starts: "-   name:" has them 4 in
+            item, keys = indent, indent + 1 + len(text[1:]) - len(text[1:].lstrip())
             clients.append({})
-            text, indent = text[2:].lstrip(), keys
+            text, indent = text[1:].lstrip(), keys
         if clients and indent == keys and (m := re.fullmatch(r"""(["']?)(name|api_base)\1:\s*(.*)""", text)):
             clients[-1].setdefault(m[2], yaml_scalar(m[3]))
         elif clients and indent > keys - 2 and (m := re.fullmatch(r"""(["']?)proxy\1:\s*(.*)""", text)):
@@ -265,14 +267,38 @@ def aichat_ollama_base():
         NOT_LOCAL_WHY = (f"{path} has a client named ollama the tools cannot read (clients: [...] or - {{...}}); "
                          "they read one written one setting a line, with its api_base")
         return None
-    # A proxy (the client's own, else aichat's HTTPS_PROXY or ALL_PROXY) gets what is sent; "-" is none
-    proxies = [client.get("proxy")] + [os.environ.get(k) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY",
-                                                                   "all_proxy", "HTTP_PROXY", "http_proxy")]
-    for proxy in proxies:
+    base = client.get("api_base") or os.environ.get("OLLAMA_API_BASE") or None
+    # A proxy gets what is sent: the client's own ("-" is none), else the one
+    # aichat 0.30 takes from the environment for base (measured)
+    for proxy in [client.get("proxy")] + (environment_proxies(base) if base else []):
         if proxy and proxy.strip() not in ("", "-") and not loopback(proxy.strip()):
             NOT_LOCAL_WHY = f"aichat would send it through the proxy {proxy.strip()}, which is not on this computer"
             return None
-    return client.get("api_base") or os.environ.get("OLLAMA_API_BASE") or None
+    return base
+
+
+def environment_proxies(url):
+    """The proxies aichat (reqwest) takes from the environment for url: for
+    http:// HTTP_PROXY, for https:// HTTPS_PROXY, and ALL_PROXY; none when
+    NO_PROXY names its host (exactly, a domain it is in, its IP or network, or *)"""
+    try:
+        parts = urllib.parse.urlsplit(url if "://" in url else "http://" + url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return []
+    for entry in (os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or "").split(","):
+        entry = entry.strip().lower()
+        if not entry:
+            continue
+        if entry == "*" or host == entry.lstrip(".") or host.endswith("." + entry.lstrip(".")):
+            return []
+        try:
+            if ipaddress.ip_address(host) in ipaddress.ip_network(entry, strict=False):
+                return []
+        except ValueError:
+            pass
+    scheme = "HTTPS" if parts.scheme == "https" else "HTTP"
+    return [os.environ.get(name) for name in (f"{scheme}_PROXY", f"{scheme.lower()}_proxy", "ALL_PROXY", "all_proxy")]
 
 
 NOT_LOCAL_WHY = None
@@ -312,7 +338,8 @@ def ollama_show(model):
     request = urllib.request.Request(ollama_url("/api/show"), data=json.dumps({"model": model}).encode(),
                                      headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:
+        # Straight to Ollama on this computer, never through a proxy
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=5) as response:
             show = json.loads(response.read())
     except (OSError, ValueError):
         return None

@@ -157,17 +157,31 @@ class Files(unittest.TestCase):
             with open(os.path.join(cfg, "config.yaml"), "w") as f:
                 f.write("model: ollama:gemma4:12b\nclients:\n" + clients)
             self.assertNotIn("secret plans", self.read_as("gemma4:12b", **local), clients)
+        # A list item with more spaces after its - (YAML allows it): its keys are where they start
+        for item in ("-   name: ollama\n    api_base: http://192.168.1.20:11434/v1\n",
+                     "-\tname: ollama\n  api_base: http://192.168.1.20:11434/v1\n"):
+            with open(os.path.join(cfg, "config.yaml"), "w") as f:
+                f.write("model: ollama:gemma4:12b\nclients:\n" + item)
+            self.assertNotIn("secret plans", self.read_as("gemma4:12b", **local), item)
+        with open(os.path.join(cfg, "config.yaml"), "w") as f:
+            f.write(f"model: ollama:gemma4:12b\nclients:\n-   name: ollama\n    api_base: {base}/v1\n")
+        self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
         # Quoted keys are read
         with open(os.path.join(cfg, "config.yaml"), "w") as f:
             f.write(f'model: ollama:gemma4:12b\nclients:\n  - "type": openai-compatible\n    "name": ollama\n'
                     f'    "api_base": {base}/v1\n')
         self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
         self.aichat_config(base + "/v1")
-        for proxy in ({"HTTPS_PROXY": "http://proxy.example.com:3128"}, {"all_proxy": "socks5://10.0.0.1:1080"},
-                      {"http_proxy": "http://proxy.example.com:3128"}):
+        # As aichat 0.30 does it (measured): for an http:// address HTTP_PROXY or ALL_PROXY, not HTTPS_PROXY, unless
+        # NO_PROXY names the host itself (localhost is not 127.0.0.1)
+        far = "http://proxy.example.com:3128"
+        for proxy in ({"all_proxy": "socks5://10.0.0.1:1080"}, {"http_proxy": far}, {"HTTP_PROXY": far},
+                      {"HTTP_PROXY": far, "NO_PROXY": "localhost"}, {"ALL_PROXY": far, "no_proxy": ".example.com"}):
             self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg, **proxy), proxy)
-        self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg,
-                                                   HTTPS_PROXY="http://127.0.0.1:8118"))
+        for proxy in ({"HTTPS_PROXY": far}, {"HTTP_PROXY": far, "NO_PROXY": "127.0.0.1,localhost"},
+                      {"ALL_PROXY": far, "no_proxy": "*"}, {"HTTP_PROXY": far, "NO_PROXY": "127.0.0.0/8"},
+                      {"HTTP_PROXY": "http://127.0.0.1:8118"}):
+            self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg, **proxy), proxy)
         with open(os.path.join(cfg, "config.yaml"), "a") as f:
             f.write("    extra:\n      proxy: socks5://10.0.0.1:1080\n")
         self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
