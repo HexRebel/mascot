@@ -819,6 +819,7 @@ void* protocol_import_thread(void* arg) {
             pthread_mutex_destroy(&import->thread_mutex);
             close(import->target_descriptor);
             free(import);
+            archive_read_free(archive);
             return NULL;
         }
         struct stat st;
@@ -840,6 +841,7 @@ void* protocol_import_thread(void* arg) {
                 pthread_mutex_destroy(&import->thread_mutex);
                 close(import->target_descriptor);
                 free(import);
+                archive_read_free(archive);
                 return NULL;
             }
             snprintf(dirname, PATH_MAX, "%s (%d)", mascot_name, retries_count++);

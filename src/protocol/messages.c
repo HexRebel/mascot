@@ -724,6 +724,7 @@ bool protocol_handler_reload_prototype(struct protocol_client* client, ipc_packe
         // hear it is withdrawn once no mascot of it is left
         struct mascot_prototype* gone = result == PROTOTYPE_LOAD_NOT_FOUND
             ? mascot_prototype_store_get_by_path(state->prototypes, prototype_path) : NULL;
+        mascot_prototype_unlink(prototype);
         if (gone) {
             INFO("Prototype %s removed (its directory is gone)", gone->name);
             mascot_prototype_store_remove(state->prototypes, gone);

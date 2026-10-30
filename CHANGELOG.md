@@ -35,6 +35,11 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   name (`"password": …`, `'password' => …`) and in YAML and INI files; quoted values whole; passwords in URLs
   (`postgres://bob:…@db`), `<password>…</password>`, `Authorization: …`, `--password word`, netrc's `password word`
   and `Bearer word`. Everything 0.8.0 hid is still hidden; `bypass = no` and `key = ...` in code are no longer.
+- Security: a mascot pack's `programs`, `actions` and `behaviors` files are checked before they are used. An empty
+  programs file, a behavior that is not an object, a count larger than its list (`next_behavior_list_count`,
+  `content_count`, `frame_count`) or more than 128 next behaviors crashed the daemon at every start, since it loads
+  every pack it finds. A next behavior that is not defined is left out instead of being used as one. A refused
+  pack no longer leaves its files in memory, and neither does an import refused without `-f`.
 - Security: `read_log` shows only lines that still match the search once keys are hidden. journalctl searched the
   log before that, so a search for `password=h`, then `password=hu`, could tell a password one letter at a time.
 - Security: without `XDG_RUNTIME_DIR` (with `-s`), `mascot prototypes poses` writes its page under a name nobody can

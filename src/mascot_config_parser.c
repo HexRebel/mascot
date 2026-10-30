@@ -78,6 +78,35 @@ void mascot_prototype_link(const struct mascot_prototype* prototype)
     ((struct mascot_prototype*)prototype)->reference_count++;
 }
 
+// An animation or action reference in an action's content
+static void action_content_free(struct mascot_action_content* content)
+{
+    if (content->kind == mascot_action_content_type_animation) {
+        struct mascot_animation* animation = content->value.animation;
+        for (uint16_t k = 0; k < animation->frame_count; k++) {
+            struct mascot_pose* pose = animation->frames[k];
+            free(pose);
+        }
+        free(animation->frames);
+
+        for (uint16_t k = 0; k < animation->hotspots_count; k++) {
+            struct mascot_hotspot* hotspot = animation->hotspots[k];
+            free((char*)hotspot->behavior);
+            free(hotspot);
+        }
+        free(animation->hotspots);
+        free(animation);
+    } else if (content->kind == mascot_action_content_type_action_reference) {
+        struct mascot_action_reference* reference = content->value.action_reference;
+        for (uint16_t k = 0; k < 128; k++) {
+            free(reference->overwritten_locals[k]);
+        }
+        free(reference->overwritten_locals);
+        free(reference);
+    }
+    content->kind = mascot_action_content_type_none;
+}
+
 void mascot_prototype_unlink(const struct mascot_prototype* prototype)
 {
     if (!prototype) {
@@ -128,35 +157,15 @@ void mascot_prototype_unlink(const struct mascot_prototype* prototype)
             free(action->variables);
 
             for (uint16_t j = 0; j < action->length; j++) {
-                struct mascot_action_content* content = &action->content[j];
-                if (content->kind == mascot_action_content_type_animation) {
-                    struct mascot_animation* animation = content->value.animation;
-                    for (uint16_t k = 0; k < animation->frame_count; k++) {
-                        struct mascot_pose* pose = animation->frames[k];
-                        free(pose);
-                    }
-                    free(animation->frames);
-
-                    for (uint16_t k = 0; k < animation->hotspots_count; k++) {
-                        struct mascot_hotspot* hotspot = animation->hotspots[k];
-                        free((char*)hotspot->behavior);
-                        free(hotspot);
-                    }
-                    free(animation->hotspots);
-                    free(animation);
-                } else if (content->kind == mascot_action_content_type_action_reference) {
-                    struct mascot_action_reference* reference = content->value.action_reference;
-                    for (uint16_t k = 0; k < 128; k++) {
-                        free(reference->overwritten_locals[k]);
-                    }
-                    free(reference->overwritten_locals);
-                    free(reference);
-                }
+                action_content_free(&action->content[j]);
             }
             free(action);
         }
+        free((void*)p->action_definitions);
+        free((void*)p->behavior_definitions);
 
         for (uint16_t i = 0; i < expressions_count; i++) {
+            expression_prototype_free(p->expression_definitions[i]->body);
             free((struct mascot_expression_definition*)p->expression_definitions[i]);
         }
         free(p->expression_definitions);
@@ -715,7 +724,7 @@ struct config_program_loader_result load_programs(struct json_object_s* programs
     }
 
     struct json_object_element_s* programs = programs_root->start;
-    if (programs->value->type != json_type_array || strcmp(programs->name->string, "programs") != 0) {
+    if (!programs || programs->value->type != json_type_array || strcmp(programs->name->string, "programs") != 0) {
         WARN("Invalid syntax in programs.json: first element should be named \"programs\" and be an array");
         free(result.expressions);
         result.expressions = NULL;
@@ -1237,6 +1246,8 @@ struct mascot_animation* parse_animation(struct mascot_prototype* prototype, str
 
     bool frame_count_set = false;
     bool frames_set = false;
+    bool hotspots_set = false;
+    size_t frames_parsed = 0;
 
     struct json_object_element_s* element = animation->start;
     while (element) {
@@ -1256,8 +1267,8 @@ struct mascot_animation* parse_animation(struct mascot_prototype* prototype, str
         }
         // Get frames
         else if (!strncmp(celement->name->string, "frames", celement->name->string_size) && strlen("frames") == celement->name->string_size) {
-            if (celement->value->type != json_type_array) {
-                WARN("Frames must be an array");
+            if (celement->value->type != json_type_array || frames_set) {
+                WARN("Frames must be one array");
                 goto animation_parser_fail;
             }
 
@@ -1284,17 +1295,18 @@ struct mascot_animation* parse_animation(struct mascot_prototype* prototype, str
                 }
 
                 frame = frame->next;
-                i++;
+                frames_parsed = ++i;
             }
 
             frames_set = true;
         }
         // Get hotspots
         else if (!strncmp(celement->name->string, "hotspots", celement->name->string_size) && strlen("hotspots") == celement->name->string_size) {
-            if (celement->value->type != json_type_array) {
-                WARN("Hotspots must be an array");
+            if (celement->value->type != json_type_array || hotspots_set) {
+                WARN("Hotspots must be one array");
                 goto animation_parser_fail;
             }
+            hotspots_set = true;
 
             struct json_array_s* hotspots = (struct json_array_s*)celement->value->payload;
             struct json_array_element_s* hotspot = hotspots->start;
@@ -1359,15 +1371,24 @@ struct mascot_animation* parse_animation(struct mascot_prototype* prototype, str
         goto animation_parser_fail;
     }
 
+    // The count is how many frames are read (and freed): no more than were given
+    if (animation_obj->frame_count != frames_parsed) {
+        WARN("Frame count is not the number of frames");
+        goto animation_parser_fail;
+    }
+
     return animation_obj;
 
 animation_parser_fail:
-    for (size_t i = 0; i < size; i++) {
-        if (animation_obj->frames[i]) {
-            free(animation_obj->frames[i]);
-        }
+    for (size_t i = 0; i < frames_parsed; i++) {
+        free(animation_obj->frames[i]);
     }
     free(animation_obj->frames);
+    for (uint16_t i = 0; i < animation_obj->hotspots_count; i++) {
+        free((char*)animation_obj->hotspots[i]->behavior);
+        free(animation_obj->hotspots[i]);
+    }
+    free(animation_obj->hotspots);
     free(animation_obj);
     return NULL;
 }
@@ -1438,8 +1459,10 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
                 type = mascot_action_type_select;
             } else {
                 WARN("Unknown action type: %s", type_str);
+                free(type_str);
                 continue;
             }
+            free(type_str);
         }
         if (!strncmp("content_count", celement->name->string, celement->name->string_size) && strlen("content_count") == celement->name->string_size) {
             if (content_count_set) {
@@ -1518,8 +1541,10 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
             } else {
                 WARN("Unknown embedded type: %s", embedded_type_str);
                 embedded_type = mascot_action_embedded_property_unknown;
+                free(embedded_type_str);
                 continue;
             }
+            free(embedded_type_str);
         }
         if (!strncmp("condition", celement->name->string, celement->name->string_size) && strlen("condition") == celement->name->string_size) {
             if (celement->value->type == json_type_null) {
@@ -1762,9 +1787,17 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
         goto action_generator_fail;
     }
 
+    // The count is how much of the content is read (and freed): no more than was given
+    uint16_t content_parsed = 0;
+    while (content_parsed < 64 && action_obj->content[content_parsed].kind != mascot_action_content_type_none) content_parsed++;
+    if (action_obj->length != content_parsed) {
+        WARN("Action content_count is not the length of its content");
+        goto action_generator_fail;
+    }
+
     if (embedded_type == mascot_action_embedded_property_clone) {
         if (action_obj->length) {
-            if (action_obj->content[0].kind == mascot_action_content_type_animation) {
+            if (action_obj->content[0].kind == mascot_action_content_type_animation && action_obj->content[0].value.animation->frame_count) {
                 action_obj->content[0].value.animation->frames[0]->anchor_x -= 32;
             }
         }
@@ -1791,6 +1824,9 @@ action_generator_fail:
         }
     }
     free(action_obj->variables);
+    for (size_t i = 0; i < 64; i++) {
+        action_content_free(&action_obj->content[i]);
+    }
 
     free(action_obj->name);
     free(action_obj);
@@ -1912,6 +1948,11 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
 
     struct mascot_temporal_behavior_reference tempref = {0};
 
+    if (!behaviorref) {
+        WARN("Behavior reference must be an object");
+        return result;
+    }
+
     struct json_object_element_s* element = behaviorref->start;
     while (element) {
         struct json_object_element_s* celement = element;
@@ -1929,7 +1970,7 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
             } else {
                 struct json_string_s* name = (struct json_string_s*)celement->value->payload;
                 for (size_t i = 0; i < *bcount; i++) {
-                    if (!strncmp(name->string, behaviors_definitions[i]->name, name->string_size)) {
+                    if (!strncmp(name->string, behaviors_definitions[i]->name, name->string_size) && strlen(behaviors_definitions[i]->name) == name->string_size) {
                         result.behavior.behavior = behaviors_definitions[i];
                         name_set = true;
                     }
@@ -1968,25 +2009,26 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
 bool resolve_temporal_behavior_reference(struct mascot_prototype* prototype, struct mascot_behavior* behavior, struct mascot_behavior** behaviors_definitions, size_t bcount)
 {
     UNUSED(prototype);
+    // A reference that cannot be resolved is left out: its name must not stay
+    // where a behavior is expected
+    uint16_t kept = 0;
     for (uint16_t i = 0; i < behavior->next_behaviors_count; i++) {
         struct mascot_temporal_behavior_reference ref = *(struct mascot_temporal_behavior_reference*)(void*)&behavior->next_behavior_list[i];
         bool replaced = false;
         DEBUG("Resolving behavior ref %s", ref.name);
         for (size_t j = 0; j < bcount; j++) {
             if (!strncmp(ref.name, behaviors_definitions[j]->name, strlen(behaviors_definitions[j]->name)) && strlen(ref.name) == strlen(behaviors_definitions[j]->name)) {
-                behavior->next_behavior_list[i] = (struct mascot_behavior_reference){.behavior = behaviors_definitions[j], .frequency = ref.frequency, .condition = behavior->is_condition ? behavior->condition : NULL};
+                behavior->next_behavior_list[kept++] = (struct mascot_behavior_reference){.behavior = behaviors_definitions[j], .frequency = ref.frequency, .condition = behavior->is_condition ? behavior->condition : NULL};
                 replaced = true;
                 break;
             }
         }
         if (!replaced) WARN("Could not resolve behavior reference %s", ref.name);
         free((void*)ref.name);
-        if (!replaced) {
-            return false;
-        }
-
     }
-    return false;
+    bool all = kept == behavior->next_behaviors_count;
+    behavior->next_behaviors_count = kept;
+    return all;
 }
 
 struct config_behavior_parse_result parse_behavior(struct mascot_prototype* prototype, struct json_object_s* behavior, struct mascot_behavior** behaviors_definitions, size_t* bcount)
@@ -1999,8 +2041,14 @@ struct config_behavior_parse_result parse_behavior(struct mascot_prototype* prot
 
     bool name_set = false;
     bool next_behaviors_count_set = false;
+    size_t next_behaviors_listed = 0;
     struct json_string_s* behavior_name = NULL;
     struct json_string_s* action_name = NULL;
+
+    if (!behavior) {
+        WARN("Invalid syntax in behaviors.json: a definition should be an object");
+        goto behavior_parser_failed;
+    }
 
     struct json_object_element_s* element = behavior->start;
     while (element) {
@@ -2084,7 +2132,15 @@ struct config_behavior_parse_result parse_behavior(struct mascot_prototype* prot
             struct json_array_s* next_behavior_list = (struct json_array_s*)celement->value->payload;
             struct json_array_element_s* next_behavior_element = next_behavior_list->start;
             size_t local_cnt = 0;
+            if (next_behaviors_listed) {
+                WARN("Invalid syntax in behaviors.json: more than one next_behavior_list");
+                goto behavior_parser_failed;
+            }
             while (next_behavior_element) {
+                if (local_cnt == sizeof(behavior_obj->next_behavior_list) / sizeof(behavior_obj->next_behavior_list[0])) {
+                    WARN("Invalid syntax in behaviors.json: next_behavior_list holds more than %zu", local_cnt);
+                    goto behavior_parser_failed;
+                }
                 if (next_behavior_element->value->type != json_type_object) {
                     WARN("Invalid syntax in behaviors.json: next_behavior_list should contain only objects");
                     goto behavior_parser_failed;
@@ -2102,6 +2158,7 @@ struct config_behavior_parse_result parse_behavior(struct mascot_prototype* prot
                 }
 
                 behavior_obj->next_behavior_list[local_cnt++] = behaviorref_result.behavior;
+                next_behaviors_listed = local_cnt;
                 next_behavior_element = next_behavior_element->next;
             }
         } else if (!strcmp(celement->name->string, "next_behavior_list_add") && strlen("next_behavior_list_add") == celement->name->string_size) {
@@ -2123,6 +2180,10 @@ struct config_behavior_parse_result parse_behavior(struct mascot_prototype* prot
     }
     if (!next_behaviors_count_set) {
         WARN("Invalid syntax in behaviors.json: next_behavior_list_count is required");
+        goto behavior_parser_failed;
+    }
+    if (behavior_obj->next_behaviors_count != next_behaviors_listed) {
+        WARN("Invalid syntax in behaviors.json: next_behavior_list_count is not the length of next_behavior_list");
         goto behavior_parser_failed;
     }
     if (!behavior_obj->is_condition) {
@@ -2166,6 +2227,9 @@ behavior_parser_failed:
     } else {
         WARN("Failed to load behavior");
     }
+    for (size_t i = 0; i < next_behaviors_listed; i++) {
+        free((void*)((struct mascot_temporal_behavior_reference*)(void*)&behavior_obj->next_behavior_list[i])->name);
+    }
     free((void*)behavior_obj->name);
     free(behavior_obj);
     return result;
@@ -2203,9 +2267,14 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
                     size *= 2;
                     result.behaviors = realloc(result.behaviors, size * sizeof(struct mascot_behavior*));
                 }
+                if (definition->value->type != json_type_object) {
+                    WARN("Invalid syntax in behaviors.json: a definition should be an object");
+                    definition = definition->next;
+                    continue;
+                }
                 struct config_behavior_parse_result behavior_obj = parse_behavior(prototype, (struct json_object_s*)definition->value->payload, result.behaviors, &result.count);
                 if (behavior_obj.status != MASCOT_BEHAVIOR_PARSE_OK) {
-                    if (behavior_obj.status == MASCOT_BEHAVIOR_PARSE_ERROR_NOT_DEFINED) {
+                    if (behavior_obj.status == MASCOT_BEHAVIOR_PARSE_ERROR_NOT_DEFINED && deffered_count < (int)behaviors_root->length) {
                         deffered_resolving[deffered_count++] = (struct json_object_s*)definition->value->payload;
                     } else if (behavior_obj.status == MASCOT_BEHAVIOR_PARSE_ERROR_ACTION_NOT_DEFINED) {
                         if (behavior_obj.behavior) WARN("Behavior %s has an action that is not defined", behavior_obj.behavior->name);
@@ -2244,6 +2313,11 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
                 if (result.root_list_count == size) {
                     size *= 2;
                     result.root_list = realloc(result.root_list, size * sizeof(struct mascot_behavior_reference));
+                }
+                if (root_behavior->value->type != json_type_object) {
+                    WARN("Invalid syntax in behaviors.json: root_behavior_list should contain only objects");
+                    root_behavior = root_behavior->next;
+                    continue;
                 }
                 struct config_behaviorref_parse_result behaviorref_obj = parse_behaviorref(prototype, (struct json_object_s*)root_behavior->value->payload, result.behaviors, &result.count, false);
                 if (behaviorref_obj.status != MASCOT_BEHAVIORREF_PARSE_OK) {
@@ -2315,7 +2389,30 @@ static char* read_pack_file(const char* path, size_t* size)
     return buffer;
 }
 
+// The files read for a prototype and their parsed JSON, freed once it is
+// loaded or refused
+struct pack_buffers {
+    void* held[8];
+    size_t count;
+};
+
+static void* held(struct pack_buffers* buffers, void* buffer)
+{
+    if (buffer) buffers->held[buffers->count++] = buffer;
+    return buffer;
+}
+
+static enum mascot_prototype_load_result prototype_load(struct mascot_prototype* prototype, const char* prototypes_root, const char* path_, struct pack_buffers* buffers);
+
 enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype * prototype, const char* prototypes_root, const char *path_)
+{
+    struct pack_buffers buffers = {0};
+    enum mascot_prototype_load_result result = prototype_load(prototype, prototypes_root, path_, &buffers);
+    for (size_t i = 0; i < buffers.count; i++) free(buffers.held[i]);
+    return result;
+}
+
+static enum mascot_prototype_load_result prototype_load(struct mascot_prototype* prototype, const char* prototypes_root, const char* path_, struct pack_buffers* buffers)
 {
     static int64_t minver = -1;
     static int64_t curver = -1;
@@ -2368,7 +2465,7 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     char filename_buf[PATH_MAX+15] = {0};
     snprintf(filename_buf, PATH_MAX+15, "%s/manifest.json", path);
     size_t size = 0;
-    char* buffer = read_pack_file(filename_buf, &size);
+    char* buffer = held(buffers, read_pack_file(filename_buf, &size));
     if (!buffer) {
         if (errno == ENOENT) {
             WARN("Failed to load prototype from %s: manifest.json not found", path);
@@ -2379,10 +2476,9 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     }
 
     // One pack's broken manifest only leaves that pack out
-    struct json_value_s* manifest_data = json_parse(buffer, size);
+    struct json_value_s* manifest_data = held(buffers, json_parse(buffer, size));
     if (!manifest_data) {
         WARN("Cannot load prototype from %s: Invalid JSON or out of memory", filename_buf);
-        free(buffer);
         return PROTOTYPE_LOAD_MANIFEST_INVALID;
     }
 
@@ -2520,12 +2616,12 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     }
 
     // Open and load programs.json
-    char* progbuf = read_pack_file(programs_path, &size);
+    char* progbuf = held(buffers, read_pack_file(programs_path, &size));
     if (!progbuf) {
         WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, programs_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_PROGRAMS_NOT_FOUND;
     }
-    struct json_value_s* programs_data = json_parse(progbuf, size);
+    struct json_value_s* programs_data = held(buffers, json_parse(progbuf, size));
 
     if (!programs_data) {
         WARN("Cannot load prototype from %s: Failed to parse programs.json", filename_buf);
@@ -2548,15 +2644,13 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     prototype->expression_definitions = (const struct mascot_expression**)program_loader_result.expressions;
     prototype->expressions_count = program_loader_result.count;
 
-    free(programs_data);
-    free(progbuf);
 
-    char* actbuf = read_pack_file(actions_path, &size);
+    char* actbuf = held(buffers, read_pack_file(actions_path, &size));
     if (!actbuf) {
         WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, actions_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_ACTIONS_NOT_FOUND;
     }
-    struct json_value_s* actions_data = json_parse(actbuf, size);
+    struct json_value_s* actions_data = held(buffers, json_parse(actbuf, size));
 
     if (!actions_data) {
         WARN("Cannot load prototype from %s: Failed to parse actions.json", filename_buf);
@@ -2579,17 +2673,15 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     prototype->action_definitions = (const struct mascot_action**)actions_loader_result.actions;
     prototype->actions_count = actions_loader_result.count;
 
-    free(actions_data);
-    free(actbuf);
 
-    char* behbuf = read_pack_file(behaviors_path, &size);
+    char* behbuf = held(buffers, read_pack_file(behaviors_path, &size));
     if (!behbuf) {
         WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, behaviors_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_BEHAVIORS_NOT_FOUND;
     }
     // struct json_value_s* behaviors_data = json_parse(behbuf, size);
     struct json_parse_result_s result;
-    struct json_value_s* behaviors_data = json_parse_ex(behbuf, size, 0, NULL, NULL, &result);
+    struct json_value_s* behaviors_data = held(buffers, json_parse_ex(behbuf, size, 0, NULL, NULL, &result));
 
     if (!behaviors_data) {
         WARN("Cannot load prototype from %s: Failed to parse behaviors.json", filename_buf);
@@ -2603,16 +2695,17 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
 
     struct json_object_s* behaviors_root = (struct json_object_s*)behaviors_data->payload;
     struct config_behavior_loader_result behaviors_loader_result = load_behaviors(prototype, behaviors_root);
-    if (!actions_loader_result.ok) {
+    // Given to the prototype even when refused, so they are freed with it
+    prototype->behavior_definitions = (const struct mascot_behavior**)behaviors_loader_result.behaviors;
+    prototype->root_behavior_list = (const struct mascot_behavior_reference*)behaviors_loader_result.root_list;
+    prototype->behavior_count = behaviors_loader_result.count;
+    prototype->root_behavior_list_count = behaviors_loader_result.root_list_count;
+    if (!behaviors_loader_result.ok) {
         WARN("Cannot load prototype from %s: Failed to load behaviors", filename_buf);
         return PROTOTYPE_LOAD_BEHAVIORS_INVALID;
     }
 
     DEBUG("Prototype %s: loaded %d behaviors", prototype->name, behaviors_loader_result.count);
-    prototype->behavior_definitions = (const struct mascot_behavior**)behaviors_loader_result.behaviors;
-    prototype->root_behavior_list = (const struct mascot_behavior_reference*)behaviors_loader_result.root_list;
-    prototype->behavior_count = behaviors_loader_result.count;
-    prototype->root_behavior_list_count = behaviors_loader_result.root_list_count;
 
     // Set up some behavior shortcut pointers
     for (uint16_t i = 0; i < prototype->behavior_count; i++) {
@@ -2636,8 +2729,6 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
         }
     }
 
-    free(behaviors_data);
-    free(behbuf);
 
     prototype->local_variables_count = 128;
     prototype->path = strdup(path_);

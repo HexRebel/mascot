@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -314,9 +315,25 @@ class Atlas(unittest.TestCase):
 
 
 PARSER_DRIVER = ATLAS_DRIVER.split("int main(")[0].replace('#include "mascot_atlas.h"', '#include "mascot_config_parser.h"') + r"""
+// Each next behavior must be one of the behaviors loaded, not something else in its place
+static bool defined(struct mascot_prototype* p, const struct mascot_behavior* b) {
+    for (uint16_t i = 0; i < p->behavior_count; i++) if (p->behavior_definitions[i] == b) return true;
+    return false;
+}
+
 int main(int argc, char** argv) {
     (void)argc;
-    printf("result %d\n", (int)mascot_prototype_load(mascot_prototype_new(), argv[1], argv[2]));
+    struct mascot_prototype* prototype = mascot_prototype_new();
+    int result = (int)mascot_prototype_load(prototype, argv[1], argv[2]);
+    if (!result) {
+        for (uint16_t i = 0; i < prototype->behavior_count; i++) {
+            const struct mascot_behavior* b = prototype->behavior_definitions[i];
+            for (uint16_t j = 0; j < b->next_behaviors_count; j++)
+                if (!defined(prototype, b->next_behavior_list[j].behavior)) { printf("undefined next behavior\n"); abort(); }
+        }
+    }
+    mascot_prototype_unlink(prototype);  // as the daemon does with one it refused
+    printf("result %d\n", result);
     return 0;
 }
 """
@@ -337,18 +354,24 @@ class Manifest(unittest.TestCase):
         with open(driver, "w") as f:
             f.write(PARSER_DRIVER)
         self.binary = os.path.join(self.root, "driver")
-        # Only the loading up to programs.json runs: the rest of the daemon (Wayland, expressions) is left out,
-        # each function it would call a stub that aborts
+        # Only the loading runs: the rest of the daemon (Wayland, the mascots) is left out, each function it would
+        # call a stub that aborts
         stubs = os.path.join(self.root, "stubs.c")
         open(stubs, "w").close()
         build = lambda: subprocess.run(["cc", "-std=gnu11", "-fsanitize=address,undefined", "-I", os.path.join(ROOT, "src"),
                                         "-I", os.path.join(ROOT, "build"), driver, stubs,
                                         *(os.path.join(ROOT, "src", f) for f in ("mascot_config_parser.c",
-                                                                                 "mascot_atlas.c", "io.c")),
+                                                                                 "mascot_atlas.c", "io.c",
+                                                                                 "expressions.c")),
                                         "-lm", "-o", self.binary], capture_output=True, text=True)
-        missing = sorted(set(re.findall(r"undefined reference to `(\w+)'", build().stderr)))
+        # Except the log and telling clients a refused prototype is gone, which do nothing
+        missing = sorted(set(re.findall(r"undefined reference to `(\w+)'", build().stderr))
+                         - {"__clog", "protocol_server_prototype_withdraw"})
         with open(stubs, "w") as f:
-            f.write("#include <stdlib.h>\n" + "".join(f"void {name}(void) {{ abort(); }}\n" for name in missing))
+            f.write("#include <stdlib.h>\nvoid __clog(const char* c, const char* t, const char* f, int l, const char* x, ...) "
+                    "{ (void)c; (void)t; (void)f; (void)l; (void)x; }\n"
+                    "void protocol_server_prototype_withdraw(const void* p) { (void)p; }\n"
+                    + "".join(f"void {name}(void) {{ abort(); }}\n" for name in missing))
         built = build()
         self.assertEqual(built.returncode, 0, built.stderr)
         self.pack("Outside", {})  # another pack, with the files a manifest could point at
@@ -362,10 +385,10 @@ class Manifest(unittest.TestCase):
             f.write(manifest_text if manifest_text is not None else json.dumps({**MANIFEST, **manifest_changes}))
         return path
 
-    def load(self, name):
+    def load(self, name, leaks=False):
         try:
             out = subprocess.run([self.binary, self.root, name], capture_output=True, text=True, timeout=20,
-                                 env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
+                                 env={"ASAN_OPTIONS": f"detect_leaks={int(leaks)}", "PATH": "/usr/bin:/bin"})
         except subprocess.TimeoutExpired:
             self.fail(f"{name}: no end (a FIFO read?)")
         self.assertEqual(out.returncode, 0, f"{name}: " + out.stdout[-300:] + out.stderr[-1500:])
@@ -410,6 +433,87 @@ class Manifest(unittest.TestCase):
         # ERROR() ends the daemon: one bad pack must only be left out
         self.pack("Broken", {}, manifest_text="{not json")
         self.assertEqual(self.load("Broken"), 6)
+
+
+class Pack(Manifest):
+    """Robo with one of its files broken the way a pack from the net could be: the daemon loads every pack in the
+    prototypes directory at each start, so a crash here stops it for good"""
+
+    def robo(self, name, file, change):
+        path = os.path.join(self.root, name)
+        shutil.copytree(os.path.join(ROOT, "prototypes", "Shimeji.Robo"), path)
+        with open(os.path.join(path, file)) as f:
+            data = json.load(f)
+        with open(os.path.join(path, file), "w") as f:
+            json.dump(change(data), f)
+        return path
+
+    def behavior(self, data, **changes):
+        data["definitions"][0].update(changes)
+        return data
+
+    def test_robo_loads(self):
+        self.robo("Robo", "behaviors.json", lambda data: data)
+        self.assertEqual(self.load("Robo"), 0)
+
+    def test_empty_programs(self):
+        self.robo("Programs", "scripts.json", lambda data: {})
+        self.assertEqual(self.load("Programs"), 12)  # PROTOTYPE_LOAD_PROGRAMS_INVALID
+
+    def test_definitions_that_are_not_objects(self):
+        for i, bad in enumerate((7, "x", None, True, [7], [None], [{}])):
+            self.robo(f"Definition{i}", "behaviors.json", lambda data: {**data, "definitions": [bad] + data["definitions"]})
+            self.assertEqual(self.load(f"Definition{i}"), 0, bad)
+            self.robo(f"Root{i}", "behaviors.json", lambda data: {**data, "root_behavior_list": [bad]})
+            self.assertEqual(self.load(f"Root{i}"), 0, bad)
+
+    def test_count_must_be_the_list(self):
+        # The count decided how many of the list were read, past the ones given
+        for i, count in enumerate((7, -1, 99999999)):
+            self.robo(f"Count{i}", "behaviors.json", lambda data: self.behavior(data, next_behavior_list_count=count))
+            self.assertEqual(self.load(f"Count{i}"), 0, count)
+
+    def test_content_count_must_be_the_content(self):
+        # An action holds at most 64 pieces of content: the count was read (and freed) past them
+        def change(count):
+            def apply(data):
+                action = next(a for a in data if a["content"])
+                action["content_count"] = count
+                return data
+            return apply
+        for i, count in enumerate((9999, 65, 0)):
+            self.robo(f"Content{i}", "actions.json", change(count))
+            self.load(f"Content{i}", leaks=True)
+
+    def test_frame_count_must_be_the_frames(self):
+        def change(count):
+            def apply(data):
+                animation = next(c for a in data for c in a["content"] if c.get("frames"))
+                animation["frame_count"] = count
+                return data
+            return apply
+        for i, count in enumerate((9999, -1)):
+            self.robo(f"Frames{i}", "actions.json", change(count))
+            self.load(f"Frames{i}", leaks=True)
+
+    def test_long_next_list(self):
+        # A behavior holds at most 128 next behaviors: more were written past it
+        refs = [{"name": "Look", "frequency": 1}] * 200
+        self.robo("Long", "behaviors.json",
+                  lambda data: self.behavior(data, next_behavior_list=refs, next_behavior_list_count=200))
+        self.assertEqual(self.load("Long"), 0)
+
+    def test_refused_pack_is_freed(self):
+        # The daemon reads each pack again at every reload: a refused one must not leave its files behind in memory
+        self.robo("Refused", "scripts.json", lambda data: {"programs": {}})
+        self.assertEqual(self.load("Refused", leaks=True), 12)
+        self.robo("Loaded", "scripts.json", lambda data: data)
+        self.assertEqual(self.load("Loaded", leaks=True), 0)
+
+    def test_unknown_next_behavior(self):
+        self.robo("Unknown", "behaviors.json", lambda data: self.behavior(
+            data, next_behavior_list=[{"name": "Nobody", "frequency": 1}], next_behavior_list_count=1))
+        self.assertEqual(self.load("Unknown"), 0)
 
 
 if __name__ == "__main__":
