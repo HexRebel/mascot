@@ -272,7 +272,7 @@
       "properties": {
         "search": {
           "type": "string",
-          "description": "Only lines with this text (any letter case), e.g. \"UFW BLOCK\", \"error\" or a program's name."
+          "description": "Only lines with this text (any letter case; | between texts for any of them), e.g. \"UFW BLOCK\", \"error|failed\" or a program's name."
         },
         "unit": {
           "type": "string",

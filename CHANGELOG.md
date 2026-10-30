@@ -86,9 +86,12 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   and its pictures), as does an import refused without `-f`: checked with LeakSanitizer over some 4000 packs, each
   with one value of the wrong kind. A picture that cannot be written to the shared memory refuses the pack instead
   of pointing past it, and an action's `select_behavior` is freed with it.
-- Security: `read_log` searches the newest 5000 lines of the log itself, once keys are hidden, not with journalctl's
+- Security: `read_log` searches the newest 200000 lines of the log itself, once keys are hidden, not with journalctl's
   `--grep`, which searched before that: a search for `password=h`, then `password=hu`, could tell a password one
   letter at a time, by what it found or by how many lines it found.
+  Its answer says from when it searched when that is not the whole boot (it said "since boot"), the search is text
+  (`|` between choices), never a pattern the model could make run for minutes, messages over more lines are shown
+  whole and hidden as a whole (a YAML password or a key's lines in one message).
 - Security: without `XDG_RUNTIME_DIR` (with `-s`), `mascot prototypes poses` writes its page under a name nobody can
   guess, not `/tmp/mascot-poses-<name>.html`, where another user could put a link first.
 - The bubble quits when `XDG_RUNTIME_DIR` is not set (started by hand with `qs -p`), instead of keeping its socket

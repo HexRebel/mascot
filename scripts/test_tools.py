@@ -11,6 +11,7 @@ import os
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -399,6 +400,57 @@ class Files(unittest.TestCase):
         out = self.tool("read_log", {"search": "login"}, PATH=path)
         self.assertIn("login password=[hidden]\n", out)
         self.assertNotIn("started", out)
+
+    def fake_journal(self, lines):
+        """A journalctl that gives these lines (-n: the newest that many); returns the PATH to find it"""
+        self.write("log.txt", "\n".join(lines) + "\n")
+        self.write("bin/journalctl", "#!/usr/bin/python3\nimport os, sys\n"
+                   f"lines = open({os.path.join(self.home, 'log.txt')!r}).read().splitlines()\n"
+                   "if '-n' in sys.argv: lines = lines[-int(sys.argv[sys.argv.index('-n') + 1]):]\n"
+                   "print('\\n'.join(lines))\n")
+        os.chmod(os.path.join(self.home, "bin", "journalctl"), 0o755)
+        return os.path.join(self.home, "bin") + ":/usr/bin:/bin"
+
+    def test_log_search_says_how_far_back_it_looked(self):
+        # Only the newest lines are searched: when that is not the whole boot, the answer says from when
+        tick = lambda i: "2026-10-30T%02d:%02d:%02d+0100 pc app[1]: tick %d" % (10 + i // 3600, i // 60 % 60, i % 60, i)
+        path = self.fake_journal(["2026-10-30T09:59:59+0100 pc kernel: Linux version 7.2"]
+                                 + [tick(i) for i in range(30000)])
+        out = self.tool("read_log", {"search": "Linux version"}, PATH=path)
+        self.assertIn("Linux version 7.2", out)
+        path = self.fake_journal(["2026-10-30T09:59:59+0100 pc kernel: Linux version 7.2"]
+                                 + [tick(i) for i in range(200000)])  # more than read_log searches
+        out = self.tool("read_log", {"search": "Linux version"}, PATH=path)
+        self.assertNotIn("since boot", out)
+        self.assertIn("since 2026-10-30T", out)
+
+    def test_log_search_is_text_not_a_pattern(self):
+        # The model's search is text (| between choices), never run as a pattern: (a|a)*b took minutes
+        path = self.fake_journal(["2026-10-30T10:00:%02d+0100 pc app[1]: " % (i % 60) + "a" * 60 for i in range(3000)]
+                                 + ["2026-10-30T10:01:00+0100 pc app[1]: a.b error here"])
+        started = time.time()
+        out = self.tool("read_log", {"search": "(a|a)*b"}, PATH=path)
+        self.assertLess(time.time() - started, 10)
+        self.assertIn("No lines", out)
+        self.assertIn("a.b error", self.tool("read_log", {"search": "a.b"}, PATH=path))
+        self.assertIn("a.b error", self.tool("read_log", {"search": "nothing|ERROR"}, PATH=path))
+
+    def test_log_keeps_messages_whole(self):
+        # A message over more lines: shown whole or not at all, and hidden as a whole (YAML, a key's lines)
+        head = "2026-10-30T10:00:00+0100 pc app[1]: "
+        pad = " " * len(head)
+        lines = [head + "config:", pad + "  password:", pad + "    blockpw1", pad + "  user: bob",
+                 head + "-----BEGIN OPENSSH PRIVATE KEY-----", pad + "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ/x+",
+                 pad + "-----END OPENSSH PRIVATE KEY-----"]
+        many = [head + "msg %d" % i + "".join("\n" + pad + "more %d" % j for j in range(9)) for i in range(20)]
+        path = self.fake_journal(lines + many)
+        out = self.tool("read_log", {}, PATH=path)
+        body = out.split("\n")[1:]
+        self.assertFalse(body[0][:1].isspace(), body[0])  # not the middle of a message
+        out = self.tool("read_log", {"search": "config|BEGIN"}, PATH=path)
+        self.assertIn("user: bob", out)
+        self.assertNotIn("blockpw1", out)
+        self.assertNotIn("b3BlbnNzaC1rZXk", out)
 
     def test_more_places_with_tokens_are_private(self):
         for rel in (".config/containers/auth.json", ".config/github-copilot/hosts.json", ".config/hub",
