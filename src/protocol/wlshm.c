@@ -55,6 +55,28 @@ bool wlshm_member_path_safe(const char* path)
     return true;
 }
 
+// json.h parses nesting recursively: a manifest of a million "[" ran it out of
+// stack. The loader refuses more than 64 levels too
+static bool json_shallow(const char* text, size_t size)
+{
+    int depth = 0;
+    bool in_string = false;
+    for (size_t i = 0; i < size; i++) {
+        char c = text[i];
+        if (in_string) {
+            if (c == '\\') i++;
+            else if (c == '"') in_string = false;
+        } else if (c == '"') {
+            in_string = true;
+        } else if (c == '[' || c == '{') {
+            if (++depth > 64) return false;
+        } else if (c == ']' || c == '}') {
+            depth--;
+        }
+    }
+    return true;
+}
+
 bool wlshm_manifest_names(int dirfd, const char* name)
 {
     int fd = openat(dirfd, "manifest.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
@@ -80,7 +102,7 @@ bool wlshm_manifest_names(int dirfd, const char* name)
     // refuses it too, so no name but this one can be loaded
     bool same = false;
     int names = 0;
-    struct json_value_s* root = json_parse(text, got);
+    struct json_value_s* root = json_shallow(text, got) ? json_parse(text, got) : NULL;
     if (root && root->type == json_type_object) {
         for (struct json_object_element_s* e = ((struct json_object_s*)root->payload)->start; e; e = e->next) {
             if (strcmp(e->name->string, "name"))

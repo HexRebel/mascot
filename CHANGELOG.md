@@ -50,6 +50,10 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: the bubble's memory and private sessions count a model as local the same way the tools do (where aichat
   sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
   with the memory of what the tools had read, and could go on with a private session.
+- Security: a pack's JSON files nest at most 64 levels, give no key twice in an object and have no NUL in a key or
+  text, and their words are compared whole (`"t"` was `"type"`, `""` was `"stay"`). A million `[` ran the parser
+  out of stack, a second `"definitions"` freed behaviors twice, and 70 `"type"` keys in one piece of an action
+  wrote past its 64 pieces, each crashing the daemon at every start.
 - Security: a mascot's pictures are at most 2048 pixels a side and 256 MiB together (the biggest that ships is 181
   pixels and 13 MiB), checked from the header before a file is read. A pack of a few big pictures was read and
   decoded whole, up to 1.6 GB each, and overflowed the 32-bit Wayland pool, which took the daemon down.

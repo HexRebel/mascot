@@ -60,6 +60,13 @@ struct mascot_prototype_store_ {
     char* system_location;
 };
 
+// A word from a pack compared whole, not as a prefix ("s" is not "stay", "" not
+// anything): 0 when text (size bytes) is word, any letter case
+static int strncasecmp_whole(const char* word, const char* text, size_t size)
+{
+    return strlen(word) == size ? strncasecmp(word, text, size) : 1;
+}
+
 struct mascot_prototype* mascot_prototype_new()
 {
     struct mascot_prototype* prototype = (struct mascot_prototype*)calloc(1,sizeof(struct mascot_prototype));
@@ -573,7 +580,7 @@ struct mascot_expression* parse_program(struct json_object_s* program)
                     return NULL;
                 }
                 for (int i = 0; i < MASCOT_LOCAL_VARIABLE_COUNT; i++) {
-                    if (!strncasecmp(var->string, locals[i].string, var->string_size)) {
+                    if (!strncasecmp_whole(locals[i].string, var->string, var->string_size)) {
                         mascot_vars[mascot_vars_count++] = locals[i].value;
                         break;
                     }
@@ -637,7 +644,7 @@ struct mascot_expression* parse_program(struct json_object_s* program)
                         function_getters[functions_count++] = mascot_noop;
                         break;
                     }
-                    if (!strncasecmp(var->string, globals_n_funcs[i].string, var->string_size)) {
+                    if (!strncasecmp_whole(globals_n_funcs[i].string, var->string, var->string_size)) {
                         function_getters[functions_count++] = globals_n_funcs[i].value;
                         break;
                     }
@@ -851,7 +858,7 @@ struct config_actionref_parse_result parse_action_reference(struct mascot_protot
                     goto actionref_generator_fail;
                 }
                 for (int i = 0; i < MASCOT_LOCAL_VARIABLE_COUNT; i++) {
-                    if (!strncasecmp(clocal_var->name->string, locals[i].string, clocal_var->name->string_size)) {
+                    if (!strncasecmp_whole(locals[i].string, clocal_var->name->string, clocal_var->name->string_size)) {
                         for (uint16_t j = 0; j < prototype->expressions_count; j++) {
                             if (prototype->expression_definitions[j]->body->id == atoi(local_var_value->number)) {
                                 actionref_obj->overwritten_locals[i]->used = true;
@@ -1018,9 +1025,9 @@ struct mascot_hotspot* parse_hotspot(struct json_object_s* hotspot)
             }
 
             struct json_string_s* type = (struct json_string_s*)celement->value->payload;
-            if (strncasecmp("Ellipse", type->string, type->string_size) == 0) {
+            if (strncasecmp_whole("Ellipse", type->string, type->string_size) == 0) {
                 hotspot_obj->shape = mascot_hotspot_shape_ellipse;
-            } else if (strncasecmp("Rectangle", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Rectangle", type->string, type->string_size) == 0) {
                 hotspot_obj->shape = mascot_hotspot_shape_rectangle;
             } else {
                 WARN("Unknown shape type");
@@ -1034,11 +1041,11 @@ struct mascot_hotspot* parse_hotspot(struct json_object_s* hotspot)
             }
 
             struct json_string_s* type = (struct json_string_s*)celement->value->payload;
-            if (strncasecmp("Left", type->string, type->string_size) == 0) {
+            if (strncasecmp_whole("Left", type->string, type->string_size) == 0) {
                 hotspot_obj->button = mascot_hotspot_button_left;
-            } else if (strncasecmp("Middle", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Middle", type->string, type->string_size) == 0) {
                 hotspot_obj->button = mascot_hotspot_button_middle;
-            } else if (strncasecmp("Right", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Right", type->string, type->string_size) == 0) {
                 hotspot_obj->button = mascot_hotspot_button_right;
             } else {
                 WARN("Unknown button type");
@@ -1052,23 +1059,23 @@ struct mascot_hotspot* parse_hotspot(struct json_object_s* hotspot)
             }
 
             struct json_string_s* type = (struct json_string_s*)celement->value->payload;
-            if (strncasecmp("Default", type->string, type->string_size) == 0) {
+            if (strncasecmp_whole("Default", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_hand;
-            } else if (strncasecmp("Hand", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Hand", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_hand;
-            } else if (strncasecmp("Crosshair", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Crosshair", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_crosshair;
-            } else if (strncasecmp("Move", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Move", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_move;
-            } else if (strncasecmp("Text", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Text", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_text;
-            } else if (strncasecmp("Wait", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Wait", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_wait;
-            } else if (strncasecmp("Help", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Help", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_help;
-            } else if (strncasecmp("Progress", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("Progress", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_progress;
-            } else if (strncasecmp("NotAllowed", type->string, type->string_size) == 0) {
+            } else if (strncasecmp_whole("NotAllowed", type->string, type->string_size) == 0) {
                 hotspot_obj->cursor = mascot_hotspot_cursor_deny;
             } else {
                 WARN("Unknown cursor type");
@@ -1446,17 +1453,17 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
             }
             char* type_str = strndup(((struct json_string_s*)celement->value->payload)->string, ((struct json_string_s*)celement->value->payload)->string_size);
             size_t type_str_len = strlen(type_str);
-            if (!strncasecmp("stay", type_str, type_str_len)) {
+            if (!strncasecmp_whole("stay", type_str, type_str_len)) {
                 type = mascot_action_type_stay;
-            } else if (!strncasecmp("move", type_str, type_str_len)) {
+            } else if (!strncasecmp_whole("move", type_str, type_str_len)) {
                 type = mascot_action_type_move;
-            } else if (!strncasecmp("embedded", type_str, type_str_len)) {
+            } else if (!strncasecmp_whole("embedded", type_str, type_str_len)) {
                 type = mascot_action_type_embedded;
-            } else if (!strncasecmp("animate", type_str, type_str_len)) {
+            } else if (!strncasecmp_whole("animate", type_str, type_str_len)) {
                 type = mascot_action_type_animate;
-            } else if (!strncasecmp("sequence", type_str, type_str_len)) {
+            } else if (!strncasecmp_whole("sequence", type_str, type_str_len)) {
                 type = mascot_action_type_sequence;
-            } else if (!strncasecmp("select", type_str, type_str_len)) {
+            } else if (!strncasecmp_whole("select", type_str, type_str_len)) {
                 type = mascot_action_type_select;
             } else {
                 WARN("Unknown action type: %s", type_str);
@@ -1503,41 +1510,41 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
             }
             char* embedded_type_str = strndup(((struct json_string_s*)celement->value->payload)->string, ((struct json_string_s*)celement->value->payload)->string_size);
             size_t embedded_type_str_len = strlen(embedded_type_str);
-            if (!strncasecmp("none", embedded_type_str, embedded_type_str_len)) {
+            if (!strncasecmp_whole("none", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_none;
-            } else if (!strncasecmp("look", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("look", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_look;
-            } else if (!strncasecmp("offset", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("offset", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_offset;
-            } else if (!strncasecmp("jump", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("jump", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_jump;
-            } else if (!strncasecmp("fall", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("fall", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_fall;
-            } else if (!strncasecmp("dragged", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("dragged", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_drag;
-            } else if (!strncasecmp("resist", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("resist", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_drag_resist;
-            } else if (!strncasecmp("breed", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("breed", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_clone;
-            } else if (!strncasecmp("broadcast", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("broadcast", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_broadcast;
-            } else if (!strncasecmp("scanmove", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("scanmove", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_scanmove;
-            } else if (!strncasecmp("scanjump", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("scanjump", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_scanjump;
-            } else if (!strncasecmp("interact", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("interact", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_interact;
-            } else if (!strncasecmp("dispose", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("dispose", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_dispose;
-            } else if (!strncasecmp("transform", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("transform", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_transform;
-            } else if (!strncasecmp("thrown", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("thrown", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_thrown;
-            } else if (!strncasecmp("walkwithie", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("walkwithie", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_walkwithie;
-            } else if (!strncasecmp("fallwithie", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("fallwithie", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_fallwithie;
-            } else if (!strncasecmp("throwie", embedded_type_str, embedded_type_str_len)) {
+            } else if (!strncasecmp_whole("throwie", embedded_type_str, embedded_type_str_len)) {
                 embedded_type = mascot_action_embedded_property_throwie;
             } else {
                 WARN("Unknown embedded type: %s", embedded_type_str);
@@ -1604,7 +1611,7 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
                 }
 
                 for (int i = 0; i < MASCOT_LOCAL_VARIABLE_COUNT; i++) {
-                    if (!strncasecmp(curr_local_var->name->string, locals[i].string, strlen(locals[i].string))) {
+                    if (!strncasecmp_whole(locals[i].string, curr_local_var->name->string, curr_local_var->name->string_size)) {
                         for (uint16_t j = 0; j < prototype->expressions_count; j++) {
                             if (prototype->expression_definitions[j]->body->id == atoi(local_var_value->number)) {
                                 action_obj->variables[i]->used = true;
@@ -1715,13 +1722,18 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
                 while (content_obj_element) {
                     struct json_object_element_s* content_obj_element_current = content_obj_element;
                     content_obj_element = content_obj_element->next;
-                    if (!strncmp("type", content_obj_element_current->name->string, content_obj_element_current->name->string_size)) {
+                    if (!strncmp("type", content_obj_element_current->name->string, content_obj_element_current->name->string_size) && content_obj_element_current->name->string_size == strlen("type")) {
                         if (content_obj_element_current->value->type != json_type_string) {
                             WARN("Content name must be a string");
                             goto action_generator_fail;
                         }
                         struct json_string_s* content_type = (struct json_string_s*)content_obj_element_current->value->payload;
-                        if (!strncasecmp("ActionReference", content_type->string, content_type->string_size)) {
+                        // Checked at each piece: one object could give several
+                        if (j >= 64 || action_obj->content[j].kind != mascot_action_content_type_none) {
+                            WARN("Content array is too long");
+                            goto action_generator_fail;
+                        }
+                        if (!strncasecmp_whole("ActionReference", content_type->string, content_type->string_size)) {
                             struct config_actionref_parse_result action_reference = parse_action_reference(prototype, content_obj, action_definitions, count);
                             if (action_reference.status != CONFIG_ACTIONREF_PARSE_OK) {
                                 if (!resolving_forward_references || action_reference.status != CONFIG_ACTIONREF_PARSE_ERROR_ACTION_NOT_FOUND)
@@ -1734,7 +1746,7 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
                             action_obj->content[j].kind = mascot_action_content_type_action_reference;
                             action_obj->content[j].value.action_reference = action_reference.actionref;
                             j++;
-                        } else if (!strncasecmp("Animation", content_type->string, content_type->string_size)) {
+                        } else if (!strncasecmp_whole("Animation", content_type->string, content_type->string_size)) {
                             struct mascot_animation* animation = parse_animation(prototype, content_obj);
                             if (!animation) {
                                 WARN("Failed to parse animation");
@@ -1758,13 +1770,13 @@ struct config_action_parse_result action_parse(struct mascot_prototype* prototyp
                 goto action_generator_fail;
             }
             struct json_string_s* border_type = (struct json_string_s*)celement->value->payload;
-            if (!strncasecmp("None", border_type->string, border_type->string_size)) {
+            if (!strncasecmp_whole("None", border_type->string, border_type->string_size)) {
                 action_obj->border_type = environment_border_type_none;
-            } else if (!strncasecmp("Wall", border_type->string, border_type->string_size)) {
+            } else if (!strncasecmp_whole("Wall", border_type->string, border_type->string_size)) {
                 action_obj->border_type = environment_border_type_wall;
-            } else if (!strncasecmp("Floor", border_type->string, border_type->string_size)) {
+            } else if (!strncasecmp_whole("Floor", border_type->string, border_type->string_size)) {
                 action_obj->border_type = environment_border_type_floor;
-            } else if (!strncasecmp("Ceiling", border_type->string, border_type->string_size)) {
+            } else if (!strncasecmp_whole("Ceiling", border_type->string, border_type->string_size)) {
                 action_obj->border_type = environment_border_type_ceiling;
             } else {
                 action_obj->border_type = environment_border_type_any;
@@ -2360,6 +2372,87 @@ static bool display_name_safe(const char* name, size_t size)
     return true;
 }
 
+// JSON from a pack, before it is used: json.h parses nested arrays and objects
+// recursively (a million "[" ran it out of stack), and keeps a key given twice
+// (the parser then handled it twice). No nesting deeper than PACK_JSON_DEPTH,
+// no key twice in an object, no NUL in a key or string (strcmp would stop at
+// it: "name\u0000x" read as "name")
+#define PACK_JSON_DEPTH 64
+
+static bool pack_json_shallow(const char* text, size_t size)
+{
+    int depth = 0;
+    bool in_string = false;
+    for (size_t i = 0; i < size; i++) {
+        char c = text[i];
+        if (in_string) {
+            if (c == '\\') i++;
+            else if (c == '"') in_string = false;
+        } else if (c == '"') {
+            in_string = true;
+        } else if (c == '[' || c == '{') {
+            if (++depth > PACK_JSON_DEPTH) return false;
+        } else if (c == ']' || c == '}') {
+            depth--;
+        }
+    }
+    return true;
+}
+
+static int pack_json_key_order(const void* a, const void* b)
+{
+    const struct json_string_s* x = *(const struct json_string_s* const*)a;
+    const struct json_string_s* y = *(const struct json_string_s* const*)b;
+    if (x->string_size != y->string_size) return x->string_size < y->string_size ? -1 : 1;
+    return memcmp(x->string, y->string, x->string_size);
+}
+
+static bool pack_json_sound(const struct json_value_s* value)
+{
+    if (value->type == json_type_string) {
+        const struct json_string_s* string = (const struct json_string_s*)value->payload;
+        return strlen(string->string) == string->string_size;
+    }
+    if (value->type == json_type_array) {
+        for (struct json_array_element_s* e = ((struct json_array_s*)value->payload)->start; e; e = e->next)
+            if (!pack_json_sound(e->value)) return false;
+        return true;
+    }
+    if (value->type != json_type_object) return true;
+    struct json_object_s* object = (struct json_object_s*)value->payload;
+    if (!object->length) return true;
+    const struct json_string_s** keys = calloc(object->length, sizeof(*keys));
+    if (!keys) return false;
+    size_t count = 0;
+    bool sound = true;
+    for (struct json_object_element_s* e = object->start; e && sound; e = e->next) {
+        sound = count < object->length && strlen(e->name->string) == e->name->string_size && pack_json_sound(e->value);
+        if (sound) keys[count++] = e->name;
+    }
+    if (sound) {
+        qsort(keys, count, sizeof(*keys), pack_json_key_order);
+        for (size_t i = 1; i < count && sound; i++)
+            sound = pack_json_key_order(&keys[i - 1], &keys[i]) != 0;
+    }
+    free(keys);
+    return sound;
+}
+
+static struct json_value_s* pack_json_parse(const char* text, size_t size, const char* path)
+{
+    if (!pack_json_shallow(text, size)) {
+        WARN("%s nests deeper than %d levels", path, PACK_JSON_DEPTH);
+        return NULL;
+    }
+    struct json_value_s* value = json_parse(text, size);
+    if (value && !pack_json_sound(value)) {
+        WARN("%s gives a key twice, or a NUL in a name", path);
+        free(value);
+        return NULL;
+    }
+    return value;
+}
+
 // A file name in a pack's manifest: relative, inside the pack (no "..
 // part), and naming something in it, not the pack itself
 static bool pack_name_safe(const char* name)
@@ -2493,7 +2586,7 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
     }
 
     // One pack's broken manifest only leaves that pack out
-    struct json_value_s* manifest_data = held(buffers, json_parse(buffer, size));
+    struct json_value_s* manifest_data = held(buffers, pack_json_parse(buffer, size, filename_buf));
     if (!manifest_data) {
         WARN("Cannot load prototype from %s: Invalid JSON or out of memory", filename_buf);
         return PROTOTYPE_LOAD_MANIFEST_INVALID;
@@ -2645,7 +2738,7 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
         WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, programs_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_PROGRAMS_NOT_FOUND;
     }
-    struct json_value_s* programs_data = held(buffers, json_parse(progbuf, size));
+    struct json_value_s* programs_data = held(buffers, pack_json_parse(progbuf, size, programs_path));
 
     if (!programs_data) {
         WARN("Cannot load prototype from %s: Failed to parse programs.json", filename_buf);
@@ -2674,7 +2767,7 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
         WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, actions_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_ACTIONS_NOT_FOUND;
     }
-    struct json_value_s* actions_data = held(buffers, json_parse(actbuf, size));
+    struct json_value_s* actions_data = held(buffers, pack_json_parse(actbuf, size, actions_path));
 
     if (!actions_data) {
         WARN("Cannot load prototype from %s: Failed to parse actions.json", filename_buf);
@@ -2703,9 +2796,7 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
         WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, behaviors_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_BEHAVIORS_NOT_FOUND;
     }
-    // struct json_value_s* behaviors_data = json_parse(behbuf, size);
-    struct json_parse_result_s result;
-    struct json_value_s* behaviors_data = held(buffers, json_parse_ex(behbuf, size, 0, NULL, NULL, &result));
+    struct json_value_s* behaviors_data = held(buffers, pack_json_parse(behbuf, size, behaviors_path));
 
     if (!behaviors_data) {
         WARN("Cannot load prototype from %s: Failed to parse behaviors.json", filename_buf);
