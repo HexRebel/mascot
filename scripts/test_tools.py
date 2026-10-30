@@ -256,17 +256,29 @@ class Files(unittest.TestCase):
         # A short password has no key-like look and no word that gives it away: the command it is given to does
         secret = ["mysql -u root -phunter2 shop", "sshpass -p hunter2 ssh pi", "curl -u me:hunter2 https://x.dk",
                   "git clone https://me:hunter2@github.com/me/x", "echo hunter2 | sudo -S pacman -Syu",
-                  "mariadb --user=root -phunter2", "echo hunter2 | sudo -k -S true"]
+                  "mariadb --user=root -phunter2", "echo hunter2 | sudo -k -S true",
+                  "curl -ume:hunter2 https://x.dk", "lftp -u me,hunter2 ftp.x.dk", "redis-cli -a hunter2 ping",
+                  "redis-cli --pass hunter2", "docker login -u me -p hunter2 ghcr.io", "podman login -phunter2 x.io",
+                  "docker login --password hunter2", "smbclient //nas/share -U me%hunter2",
+                  "smbclient -U=me%hunter2 //nas/x", "zip -P hunter2 a.zip f", "unzip -Phunter2 a.zip",
+                  "7z a -phunter2 a.7z f", "wpa_passphrase wifi hunter2", "ssh-keygen -N hunter2 -f k",
+                  "ssh-keygen -p -P old -N hunter2", "openssl enc -k hunter2 -in f", "htpasswd -b f me hunter2",
+                  "mosquitto_pub -u me -P hunter2 -t x"]
         plain = ["mkdir -p src/x", "ssh -p 2222 pi", "curl -u me https://x.dk", "git clone https://github.com/me/x",
                  "ls -p", "sudo pacman -Syu", "sudo pacman -S firefox", "sudo -E pacman -S --needed git",
-                 "socat -u UNIX-CONNECT:/run/x.sock -"]
-        out = self.history(secret)
-        self.assertNotIn("hunter2", out)
-        self.assertEqual(out.count("[hidden"), len(secret), out)
-        out = self.history(plain)
-        self.assertNotIn("[hidden", out)
-        for command in plain:
-            self.assertIn(command, out)
+                 "socat -u UNIX-CONNECT:/run/x.sock -", "docker login ghcr.io", "docker ps -a", "redis-cli ping",
+                 "zip -r a.zip f", "unzip a.zip", "ssh-keygen -t ed25519", "smbclient -L nas -U me", "7z x a.7z",
+                 "lftp -u me ftp.x.dk", "redis-cli -h db -p 6379 get x"]
+        # last_commands shows at most 10
+        for chunk in (secret[i:i + 10] for i in range(0, len(secret), 10)):
+            out = self.history(chunk)
+            self.assertNotIn("hunter2", out)
+            self.assertEqual(out.count("[hidden"), len(chunk), out)
+        for chunk in (plain[i:i + 10] for i in range(0, len(plain), 10)):
+            out = self.history(chunk)
+            self.assertNotIn("[hidden", out)
+            for command in chunk:
+                self.assertIn(command, out)
 
     def test_search_never_finds_a_key(self):
         # Searching for the key itself must not tell, one letter at a time, what it is

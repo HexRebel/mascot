@@ -61,7 +61,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - The bubble quits when `XDG_RUNTIME_DIR` is not set (started by hand with `qs -p`), instead of keeping its socket
   and the mascots' memory in `null/` where it was started, and removing that with `rm -rf`.
 - Security: `last_commands` hides a command that is given a password, however short: `mysql -pPW`, `sshpass -p`,
-  `curl -u user:PW`, `https://user:PW@host`, `echo PW | sudo -S`.
+  `curl -u user:PW` (also `-uuser:PW`), `lftp -u user,PW`, `https://user:PW@host`, `echo PW | sudo -S`, `redis-cli -a`,
+  `docker login -p`, `smbclient -U user%PW`, `zip -P`, `7z -pPW`, `wpa_passphrase`, `ssh-keygen -N`, `openssl -k`,
+  `htpasswd -b` and `mosquitto_pub -P`.
 - The AUR package checks the release tag's checksum, so a tag moved later does not build.
 
 ## 0.8.0 (2026-10-29)

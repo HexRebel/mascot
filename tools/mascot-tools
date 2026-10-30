@@ -997,8 +997,16 @@ RANDOM_LOOKING = re.compile(r"[A-Za-z0-9+/_=-]{32,}")
 # curl -u user:PW, https://user:PW@host, echo PW | sudo -S (sudo's own
 # option, not pacman -S after it)
 PASSWORD_ARGUMENT = re.compile(r"\b(?:mysql\w*|mariadb\w*)\b.*\s-p\S|\bsshpass\b.*\s-p"
-                               r"|\b(?:curl|wget|lftp|svn)\b.*\s(?:-u|--user)[\s=]+[^\s:]+:\S|://[^/\s:@]+:[^/\s@]+@"
-                               r"|\bsudo(?:\s+-\S+)*?\s+(?:-[A-Za-z]*S[A-Za-z]*|--stdin)(?:\s|$)")
+                               r"|\b(?:curl|wget|svn)\b.*\s(?:-u|--user)[\s=]*[^\s:]+:\S|://[^/\s:@]+:[^/\s@]+@"
+                               r"|\blftp\b.*\s(?:-u|--user)[\s=]*[^\s:,]+[:,]\S"
+                               r"|\bsudo(?:\s+-\S+)*?\s+(?:-[A-Za-z]*S[A-Za-z]*|--stdin)(?:\s|$)"
+                               r"|\bredis-cli\b.*\s(?:-a|--pass)[\s=]*\S"
+                               r"|\b(?:docker|podman|nerdctl|buildah|skopeo|helm|oras)\b.*\blogin\b.*\s(?:-p|--password(?![-\w]))[\s=]*\S"
+                               r"|\b(?:smbclient|rpcclient|smbget|smbcacls)\b.*\s(?:-U|--user)[\s=]*[^\s%]+%\S"
+                               r"|\b(?:zip|unzip|zipcloak)\b.*\s(?:-P|--password)[\s=]*\S|\b(?:7z|7za|7zr|rar|unrar)\b.*\s-p\S"
+                               r"|\bwpa_passphrase\s+\S+\s+\S|\bssh-keygen\b.*\s-[NP]\s*\S"
+                               r"|\bopenssl\b.*\s(?:-k\s+\S|-pass(?:in|out)?\s+pass:)|\bhtpasswd\b.*\s-[a-zA-Z]*b"
+                               r"|\bmosquitto_(?:pub|sub|rr)\b.*\s(?:-P|--pw)\s+\S")
 
 
 def looks_secret(command):
