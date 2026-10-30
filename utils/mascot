@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import tempfile
-import struct
-import ipaddress
-import urllib.error
-import urllib.request
-import sys
-import http.client
-import shutil
-from typing import Dict, Optional
-from PIL import Image
-import base64
-import socket
-from dataclasses import dataclass
-import argparse
-import termios
-import time
-import os
-import errno
-import pathlib
 import subprocess
-import xml.etree.ElementTree as ET
-import tarfile
+from dataclasses import dataclass
+import os
+import termios
+import ipaddress
+from typing import Dict, Optional
 import xml
-import stat
-import zipfile
-import urllib.parse
-from xml.etree import ElementTree
-from dataclasses import dataclass, field
-import re
-from typing import Callable, Any
+import tempfile
 import logging
-import random
+import errno
+import argparse
+import shutil
 import html
 import enum
-import json
+import sys
+import time
+import zipfile
+import http.client
+from PIL import Image
+from dataclasses import dataclass, field
+from xml.etree import ElementTree
 import codecs
+import re
 import io
+import base64
+import urllib.request
+import xml.etree.ElementTree as ET
+import tarfile
+import json
+import socket
+import urllib.error
+from typing import Callable, Any
+import stat
+import urllib.parse
+import pathlib
+import random
+import struct
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -2812,6 +2812,14 @@ class Import:
 # --------------------------
 # --------------------------
 
+def packed_text(text: str) -> bytes:
+    """text as the daemon reads it: its length in bytes in one byte, then its UTF-8 (ValueError over 255 bytes)"""
+    data = text.encode("utf-8")
+    if len(data) > 255:
+        raise ValueError(f"longer than 255 bytes: {text[:40]}...")
+    return bytes([len(data)]) + data
+
+
 class Packet:
 
     buffer: bytes
@@ -3122,7 +3130,7 @@ class ReloadPrototype(Packet):
         self.prototype_path = prototype_path
 
     def serialize(self):
-        return struct.pack(f"b{len(self.prototype_path)}s", len(self.prototype_path), self.prototype_path.encode("utf-8"))
+        return packed_text(self.prototype_path)
 
 class ImportPrototype(Packet):
     new_object_id: int
@@ -3200,7 +3208,7 @@ class Spawn(Packet):
         self.spawn_behavior = spawn_behavior
 
     def serialize(self) -> bytes:
-        return struct.pack(f"IIIIb{len(self.spawn_behavior)}s", self.prototype_id, self.environment_id, self.x, self.y, len(self.spawn_behavior), self.spawn_behavior.encode())
+        return struct.pack("IIII", self.prototype_id, self.environment_id, self.x, self.y) + packed_text(self.spawn_behavior)
 
 class Dispose(Packet):
     type: int = 0x2B
@@ -3229,7 +3237,7 @@ class ApplyBehavior(Packet):
         self.behavior = behavior
 
     def serialize(self) -> bytes:
-        return struct.pack(f"b{len(self.behavior)}s", len(self.behavior), self.behavior.encode())
+        return packed_text(self.behavior)
 
 class GetConfigKey(Packet):
     type: int = 0x51
@@ -3240,7 +3248,7 @@ class GetConfigKey(Packet):
         self.key = key
 
     def serialize(self) -> bytes:
-        return struct.pack(f"b{len(self.key)}s", len(self.key), self.key.encode())
+        return packed_text(self.key)
 
 class SetConfigKey(Packet):
     type: int = 0x52
@@ -3253,7 +3261,7 @@ class SetConfigKey(Packet):
         self.value = value
 
     def serialize(self) -> bytes:
-        return struct.pack(f"b{len(self.key)}sb{len(self.value)}s", len(self.key), self.key.encode(), len(self.value), self.value.encode())
+        return packed_text(self.key) + packed_text(self.value)
 
 class ListConfigKeys(Packet):
     type: int = 0x53
@@ -5528,6 +5536,8 @@ def config_value_problem(key, value):
     """None if mascotd would take value for key, else why not"""
     if "\n" in value or "\r" in value:
         return "the value cannot span lines"
+    if len(value.encode("utf-8")) > 255:
+        return "it is longer than 255 bytes, more than mascot can send: write it in mascotd.conf instead"
     if key in CONFIG_BOOLEANS:
         if value.lower() not in ["true", "yes", "on", "1", "false", "no", "off", "0"]:
             return "use true or false"

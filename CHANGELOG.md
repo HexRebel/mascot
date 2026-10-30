@@ -105,6 +105,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - `mascot prototypes import` says why a pack whose header and `manifest.json` give different names was refused,
   instead of "Invalid file format", and a pack with no readable `manifest.json` (missing, not JSON, too deep) says
   that instead. Converting a Shimeji whose name is over 247 bytes says so instead of crashing.
+- `mascot config set` counts a value in bytes: a value of 128 letters or more stopped it with a traceback, and one
+  with `é` or other letters outside ASCII lost a byte at the end for each. Over 255 bytes (more than it can send) it
+  says to write it in mascotd.conf instead.
 - `mascot` starts on Python 3.10 and 3.11 again, as docs/building.md promises: two f-strings had a string with
   their own quote inside, which only Python 3.12 reads (`mascot` stopped with a SyntaxError since 0.8.0).
 - A pack's name, action, behavior or author over 255 bytes is sent to `mascot` cut at 255 (whole characters), not

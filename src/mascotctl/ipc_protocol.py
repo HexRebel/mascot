@@ -262,6 +262,14 @@ class Import:
 
 # --------------------------
 
+def packed_text(text: str) -> bytes:
+    """text as the daemon reads it: its length in bytes in one byte, then its UTF-8 (ValueError over 255 bytes)"""
+    data = text.encode("utf-8")
+    if len(data) > 255:
+        raise ValueError(f"longer than 255 bytes: {text[:40]}...")
+    return bytes([len(data)]) + data
+
+
 class Packet:
 
     buffer: bytes
@@ -571,7 +579,7 @@ class ReloadPrototype(Packet):
         self.prototype_path = prototype_path
 
     def serialize(self):
-        return struct.pack(f"b{len(self.prototype_path)}s", len(self.prototype_path), self.prototype_path.encode("utf-8"))
+        return packed_text(self.prototype_path)
 
 class ImportPrototype(Packet):
     new_object_id: int
@@ -649,7 +657,7 @@ class Spawn(Packet):
         self.spawn_behavior = spawn_behavior
 
     def serialize(self) -> bytes:
-        return struct.pack(f"IIIIb{len(self.spawn_behavior)}s", self.prototype_id, self.environment_id, self.x, self.y, len(self.spawn_behavior), self.spawn_behavior.encode())
+        return struct.pack("IIII", self.prototype_id, self.environment_id, self.x, self.y) + packed_text(self.spawn_behavior)
 
 class Dispose(Packet):
     type: int = 0x2B
@@ -678,7 +686,7 @@ class ApplyBehavior(Packet):
         self.behavior = behavior
 
     def serialize(self) -> bytes:
-        return struct.pack(f"b{len(self.behavior)}s", len(self.behavior), self.behavior.encode())
+        return packed_text(self.behavior)
 
 class GetConfigKey(Packet):
     type: int = 0x51
@@ -689,7 +697,7 @@ class GetConfigKey(Packet):
         self.key = key
 
     def serialize(self) -> bytes:
-        return struct.pack(f"b{len(self.key)}s", len(self.key), self.key.encode())
+        return packed_text(self.key)
 
 class SetConfigKey(Packet):
     type: int = 0x52
@@ -702,7 +710,7 @@ class SetConfigKey(Packet):
         self.value = value
 
     def serialize(self) -> bytes:
-        return struct.pack(f"b{len(self.key)}sb{len(self.value)}s", len(self.key), self.key.encode(), len(self.value), self.value.encode())
+        return packed_text(self.key) + packed_text(self.value)
 
 class ListConfigKeys(Packet):
     type: int = 0x53

@@ -2212,6 +2212,8 @@ def config_value_problem(key, value):
     """None if mascotd would take value for key, else why not"""
     if "\n" in value or "\r" in value:
         return "the value cannot span lines"
+    if len(value.encode("utf-8")) > 255:
+        return "it is longer than 255 bytes, more than mascot can send: write it in mascotd.conf instead"
     if key in CONFIG_BOOLEANS:
         if value.lower() not in ["true", "yes", "on", "1", "false", "no", "off", "0"]:
             return "use true or false"

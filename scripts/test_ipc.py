@@ -143,5 +143,25 @@ class Client(unittest.TestCase):
         self.assertTrue(p.name.startswith("é") and p.description.startswith("é"))
 
 
+    def test_texts_sent_are_counted_in_bytes(self):
+        # Their length byte was signed and counted letters: 128 letters stopped mascot, and each é cut a byte off
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, "src", "mascotctl"))
+        import ipc_protocol
+        value = "Français, réponds brièvement " * 5  # 145 letters, 155 bytes
+        data = ipc_protocol.SetConfigKey("CHAT_ROLE", value).serialize()
+        self.assertEqual(data[0], 9)
+        self.assertEqual(data[10], len(value.encode()))
+        self.assertEqual(data[11:].decode(), value)
+        for packet in (ipc_protocol.GetConfigKey("CHAT_ROLE" * 20), ipc_protocol.ApplyBehavior(1, "Fall" * 50)):
+            data = packet.serialize()
+            self.assertEqual(data[0], len(data) - 1, type(packet).__name__)
+        with self.assertRaises(ValueError):
+            ipc_protocol.SetConfigKey("CHAT_ROLE", "é" * 128).serialize()  # 256 bytes: more than the daemon reads
+        import client
+        self.assertIn("255 bytes", client.config_value_problem("CHAT_ROLES", "x" * 256) or "")
+        self.assertIsNone(client.config_value_problem("CHAT_ROLES", "Robo=robo-role," * 17))
+
+
 if __name__ == "__main__":
     unittest.main()
