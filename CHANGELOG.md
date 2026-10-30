@@ -8,6 +8,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: Robo's tools run only when they are turned on in `CHAT_TOOLS`. aichat runs any of Mascot's tools the
   model asks for, not only the ones the bubble gave it, so with only time, weather and todo on, a local model
   could still read your files, shell history and logs.
+- A listed directory has "- " before each name. gemma4 wrote `nowl.png` for `owl.png` in about half its answers,
+  and never with the dashes.
 
 ## 0.8.0 (2026-10-29)
 

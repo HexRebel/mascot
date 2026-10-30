@@ -47,6 +47,14 @@ class Files(unittest.TestCase):
             self.assertIn("not turned on", out, allowed)
         self.assertIn("secret plans", self.tool("read_file", {"path": "~/notes.txt"}, allowed="list_todos,read_file"))
 
+    def test_listing_does_not_start_lines_with_names(self):
+        # aichat sends the output as JSON, where a name after a line break reads "\nowl.png": gemma4 wrote
+        # nowl.png for owl.png in 11 of 20 answers, and in none of 20 with "- " in front
+        self.write("owl.png", "")
+        out = self.tool("list_directory", {"path": "~"})
+        self.assertIn("\n- owl.png", out)
+        self.assertNotIn("\nowl.png", out)
+
     def test_allowed_dotfile_keys_are_hidden(self):
         # CHAT_DOTFILES lets the mascot see ~/.zshrc (the help's own example); a key in it is still not shown
         self.write(".zshrc", f"alias ll='ls -l'\nexport OPENAI_API_KEY={KEY}\n")

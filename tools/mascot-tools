@@ -284,7 +284,9 @@ def list_directory(args):
         raise ToolError(f"cannot list {shown(asked)}: {e.strerror}")
     if depth == 1:
         names = [name for name, _ in entries]
-        lines = [f"{shown(asked)}:"] + names[:LIST_LIMIT]
+        # aichat sends this as JSON, where a name right after a line break reads
+        # "\nowl.png", and gemma4 copied it as nowl.png: "- " keeps them apart
+        lines = [f"{shown(asked)}:"] + ["- " + name for name in names[:LIST_LIMIT]]
         if len(names) > LIST_LIMIT:
             lines.append(f"... and {len(names) - LIST_LIMIT} more")
         if not names:
