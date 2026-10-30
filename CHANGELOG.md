@@ -62,6 +62,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: a client named `ollama` the tools cannot read (`- {name: ollama, …}`, `'name': "ollama"`) no longer
   lets `OLLAMA_API_BASE` decide where the model is; quoted keys are read. A proxy not on this computer (the client's
   `extra: proxy:`, `HTTPS_PROXY`, `ALL_PROXY`, `HTTP_PROXY`) makes the model not local: the proxy gets what is sent.
+- Security: a mascot's `prompt.md` is read only when it is a regular file of the pack's own: a link (to
+  `~/.ssh/id_ed25519` or aichat's `.env`, in a pack unpacked into the prototypes folder by hand) became the system
+  prompt, sent to a hosted model too, and a FIFO stopped the daemon at the first click.
 - Security: a frame's `image` or `image_right` over 127 bytes refuses the pack. The name was copied into 128 bytes on
   the stack whatever its length, so a pack with a 200-byte name wrote past them, at every start of the daemon (from
   upstream). A frame's numbers (anchor, duration, velocity) are kept within a million either way.

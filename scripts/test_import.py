@@ -420,6 +420,62 @@ int main(int argc, char** argv) {
 }
 """
 
+READ_DRIVER = r"""
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include "io.h"
+void __clog(const char* c, const char* t, const char* f, int l, const char* x, ...) { (void)c; (void)t; (void)f; (void)l; (void)x; }
+// argv[1] a directory, argv[2] a name in it: what io_read_regular_at gives, in 16 bytes
+int main(int argc, char** argv) {
+    (void)argc;
+    int dir = open(argv[1], O_DIRECTORY | O_RDONLY);
+    char buf[16];
+    int got = io_read_regular_at(dir, argv[2], buf, sizeof(buf));
+    printf("%d %s\n", got, got >= 0 ? buf : "");
+    return 0;
+}
+"""
+
+
+class PromptFile(unittest.TestCase):
+    """A pack's prompt.md becomes the mascot's system prompt (sent to a hosted model too): only a regular file of the
+    pack's own is read, not a link to a key or a config, and a FIFO must not stop the daemon"""
+
+    def test_only_a_regular_file_is_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = os.path.join(tmp, "driver.c")
+            with open(driver, "w") as f:
+                f.write(READ_DRIVER)
+            binary = os.path.join(tmp, "driver")
+            built = subprocess.run(["cc", "-std=gnu11", "-fsanitize=address,undefined", "-I", os.path.join(ROOT, "src"),
+                                    "-I", os.path.join(ROOT, "build"), driver, os.path.join(ROOT, "src", "io.c"),
+                                    "-o", binary], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            pack = os.path.join(tmp, "pack")
+            os.mkdir(pack)
+            secret = os.path.join(tmp, "id_ed25519")
+            with open(secret, "w") as f:
+                f.write("PRIVATE KEY")
+            with open(os.path.join(pack, "prompt.md"), "w") as f:
+                f.write("You are Robo, a long prompt")
+            aichat_env = os.path.join(tmp, ".env")  # another file than the hard link's, so only the link is refused
+            with open(aichat_env, "w") as f:
+                f.write("OPENROUTER_API_KEY=x")
+            os.symlink(aichat_env, os.path.join(pack, "link.md"))
+            os.link(secret, os.path.join(pack, "hard.md"))
+            os.mkfifo(os.path.join(pack, "fifo.md"))
+            read = lambda name: subprocess.run([binary, pack, name], capture_output=True, text=True, timeout=10,
+                                               env={"ASAN_OPTIONS": "detect_leaks=1", "PATH": "/usr/bin:/bin"}).stdout.strip()
+            self.assertEqual(read("prompt.md"), "15 You are Robo, a")  # cut to the buffer, NUL-ended
+            for name in ("link.md", "hard.md", "fifo.md", "missing.md"):
+                self.assertEqual(read(name), "-1", name)
+            with open(os.path.join(ROOT, "src", "chat.c")) as f:
+                chat = f.read()
+            self.assertIn('io_read_regular_at(prototype->path_fd, "prompt.md"', chat)
+            self.assertNotIn('openat(prototype->path_fd, "prompt.md"', chat)
+
+
 MANIFEST = {"name": "Shimeji.T", "version": "0.0.1", "programs": "programs.json", "actions": "actions.json",
             "behaviors": "behaviors.json", "assets": "assets"}
 

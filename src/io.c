@@ -735,3 +735,27 @@ int32_t io_buildtreeat(int32_t dirfd, const char *path) {
 int32_t io_buildtree(const char* path) {
     return io_buildtreeat(AT_FDCWD, path);
 }
+
+int32_t io_read_regular_at(int dirfd, const char* name, char* buf, int32_t size)
+{
+    if (!name || !buf || size < 1) return -1;
+    buf[0] = 0;
+    // O_NONBLOCK: a FIFO would block the open itself; O_NOFOLLOW: a link would
+    // read whatever it points at (a key, a config) as the pack's own file
+    int fd = openat(dirfd, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return -1;
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1) {
+        close(fd);
+        return -1;
+    }
+    int32_t got = 0;
+    while (got < size - 1) {
+        ssize_t n = read(fd, buf + got, (size_t)(size - 1 - got));
+        if (n <= 0) break;
+        got += (int32_t)n;
+    }
+    close(fd);
+    buf[got] = 0;
+    return got;
+}

@@ -27,5 +27,8 @@ int32_t io_unlinkat(int32_t fd, const char* path, int32_t flags);
 int32_t io_mkdtempat(int dirfd, char *template);
 int32_t io_buildtree(const char* path);
 int32_t io_buildtreeat(int dirfd, const char* path);
+// A regular file in dirfd, not a link (nor hard-linked elsewhere), FIFO or
+// device, into buf (at most size-1 bytes, then a NUL): bytes read, or -1
+int32_t io_read_regular_at(int dirfd, const char* name, char* buf, int32_t size);
 
 #endif

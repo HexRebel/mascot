@@ -24,6 +24,7 @@
 #define _GNU_SOURCE
 #include "chat.h"
 #include "config.h"
+#include "io.h"
 #include "list.h"
 #include "mascot.h"
 #include "protocol/server.h"
@@ -461,13 +462,11 @@ static void chat_prototype_prompt_json(const struct mascot_prototype* prototype,
 {
     snprintf(dest, size, "null");
     if (!prototype || prototype->path_fd < 0) return;
-    int fd = openat(prototype->path_fd, "prompt.md", O_RDONLY | O_CLOEXEC);
-    if (fd < 0) return;
+    // Only a regular file of the pack's own: a link to a key or a config would
+    // become the system prompt, and a FIFO would stop the daemon here
     char text[4097];
-    ssize_t got = read(fd, text, sizeof(text) - 1);
-    close(fd);
+    int32_t got = io_read_regular_at(prototype->path_fd, "prompt.md", text, sizeof(text));
     if (got <= 0) return;
-    text[got] = 0;
     if (got == sizeof(text) - 1)
         WARN("%s's prompt.md is longer than %zu bytes, cut off", prototype->name, sizeof(text) - 1);
     char escaped[12288];
