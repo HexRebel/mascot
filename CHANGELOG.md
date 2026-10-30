@@ -132,6 +132,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - mascotd started with `-s` and without `XDG_RUNTIME_DIR` says the chat bubble cannot run, instead of starting one
   that quits at once.
 - The AUR package checks the release tag's checksum, so a tag moved later does not build.
+- Security: `look_at_image` sends the image straight to Ollama, never through a proxy. With `HTTP_PROXY` and
+  `NO_PROXY=127.0.0.0/8` aichat keeps off the proxy, so the model counts as local, but Python does not read a
+  range in `NO_PROXY` and the image went to the proxy.
 
 ## 0.8.0 (2026-10-29)
 

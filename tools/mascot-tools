@@ -630,7 +630,8 @@ def look_at_image(args):
                        "stream": False, "think": False}).encode()
     request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(request, timeout=180) as response:
+        # Straight to Ollama on this computer, never through a proxy (the image is private)
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=180) as response:
             answer = json.loads(response.read())
     except urllib.error.HTTPError as e:
         try:

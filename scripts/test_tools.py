@@ -186,6 +186,33 @@ class Files(unittest.TestCase):
             f.write("    extra:\n      proxy: socks5://10.0.0.1:1080\n")
         self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
 
+    def test_image_goes_to_ollama_not_a_proxy(self):
+        # NO_PROXY=127.0.0.0/8 keeps aichat off the proxy, so the model is local; Python's urllib does not read a
+        # CIDR there and sent the image to the proxy
+        with open(os.path.join(self.home, "cat.png"), "wb") as f:
+            f.write(b"\x89PNG picture")
+        base = self.fake_ollama({"gemma4:12b": {"response": "a cat on a mat"}})
+        self.aichat_config(base + "/v1")
+        asked = []
+
+        class Proxy(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                asked.append(self.path)
+                self.send_response(502)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        proxy = http.server.HTTPServer(("127.0.0.2", 0), Proxy)
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        self.addCleanup(proxy.shutdown)
+        out = self.tool("look_at_image", {"path": "~/cat.png"}, MASCOT_VISION_MODEL="gemma4:12b", OLLAMA_HOST=base,
+                        AICHAT_CONFIG_DIR=os.path.join(self.home, "aichat"),
+                        HTTP_PROXY=f"http://127.0.0.2:{proxy.server_port}", NO_PROXY="127.0.0.0/8")
+        self.assertEqual(asked, [])
+        self.assertIn("a cat on a mat", out)
+
     def test_flow_yaml_is_explained(self):
         # aichat reads clients: [{...}] too, but the tools do not: they say so instead of only refusing
         self.write("notes.txt", "secret plans\n")
