@@ -32,10 +32,16 @@ int32_t ipc_packet_write_uint16 (ipc_packet_t* packet, uint16_t value);
 int32_t ipc_packet_write_uint32 (ipc_packet_t* packet, uint32_t value);
 int32_t ipc_packet_write_uint64 (ipc_packet_t* packet, uint64_t value);
 int32_t ipc_packet_write_string (ipc_packet_t* packet, const char* str);
+// A text over 255 bytes as strings one after the other, each at most 255
+// bytes: one string for one up to 255 (a config value, see protocol.md)
+int32_t ipc_packet_write_long_string(ipc_packet_t* packet, const char* str);
 int32_t ipc_packet_write_bytes  (ipc_packet_t* packet, const void* data, uint16_t length);
 int32_t ipc_packet_write_float  (ipc_packet_t* packet, float value);
 int32_t ipc_packet_write_double (ipc_packet_t* packet, double value);
 int32_t ipc_packet_put_fd       (ipc_packet_t* packet, int32_t fd);
+
+// Whether bytes are left to read after what was read
+bool ipc_packet_has_more(ipc_packet_t* packet);
 
 // Readers
 int32_t ipc_packet_read_uint8  (ipc_packet_t* packet, uint8_t* value);

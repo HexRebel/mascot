@@ -845,11 +845,34 @@ PanelWindow {
     // aichat --info names (CHAT_COMMAND may give aichat its own)
     property var localModels: ({})
 
+    // The config file local_model reads, read again for each check (it is small)
+    FileView {
+        id: aichatConfigView
+
+        blockLoading: true
+        blockAllReads: true
+        printErrors: false
+    }
+
+    // What the config says now ("" when it cannot be read), so a check
+    // remembered is only used while the config is the same
+    function aichatConfigText(path: string): string {
+        if (aichatConfigView.path === path)
+            aichatConfigView.reload();
+        else
+            aichatConfigView.path = path;
+        return aichatConfigView.text() ?? "";
+    }
+
     function localCheck(info: string, c: QtObject, done: var): void {
         const name = Local.localModel(info, bubble.ollamaHost);
-        // Per config: the same name may be sent elsewhere by another one
-        const key = JSON.stringify([name, Local.configFile(info)]);
-        if (!name || Date.now() - (bubble.localModels[key] ?? 0) < 60000) {
+        const config = Local.configFile(info);
+        // Per config and what it says: the same name may be sent elsewhere by
+        // another one, or by this one once its api_base or proxy is changed.
+        // The rest that decides (OLLAMA_API_BASE, the proxy variables) is the
+        // bubble's own environment, which does not change while it runs
+        const key = name && config ? JSON.stringify([name, config, aichatConfigText(config)]) : "";
+        if (!name || (key && Date.now() - (bubble.localModels[key] ?? 0) < 60000)) {
             done(name);
             return;
         }
@@ -858,7 +881,7 @@ PanelWindow {
             const local = ok && out.trim() === "1";
             // Only local is remembered, and for a minute: "not local" may be
             // Ollama not running yet, and the config may change meanwhile
-            if (local)
+            if (local && key)
                 bubble.localModels[key] = Date.now();
             done(local ? name : "");
         }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: "local_model", MASCOT_VISION_MODEL: name,

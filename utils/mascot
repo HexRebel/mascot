@@ -1,43 +1,44 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import urllib.request
-import struct
-import socket
-import io
-import argparse
-import tarfile
 from PIL import Image
-import stat
-import errno
-import termios
-import codecs
-import re
 from dataclasses import dataclass
-import json
-import ipaddress
-import random
-import sys
-from typing import Dict, Optional
-import zipfile
-import urllib.error
-import base64
-import subprocess
 from dataclasses import dataclass, field
+from typing import Callable, Any
+from typing import Dict, Optional
+from xml.etree import ElementTree
+import argparse
+import base64
+import codecs
+import enum
+import errno
+import html
+import http.client
+import io
+import ipaddress
+import json
 import logging
 import os
-from xml.etree import ElementTree
-import urllib.parse
-import shutil
-import xml
-import http.client
-import enum
-import time
-import tempfile
 import pathlib
-import html
-from typing import Callable, Any
+import random
+import re
+import shutil
+import socket
+import stat
+import struct
+import subprocess
+import sys
+import tarfile
+import tempfile
+import termios
+import time
+import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml
 import xml.etree.ElementTree as ET
+import zipfile
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -2812,11 +2813,25 @@ class Import:
 # --------------------------
 # --------------------------
 
-def packed_text(text: str) -> bytes:
-    """text as the daemon reads it: its length in bytes in one byte, then its UTF-8 (ValueError over 255 bytes)"""
-    data = text.encode("utf-8")
+# The longest value a setting may have (CONFIG_VALUE_MAX in src/config.h): with its key it fits a line of mascotd.conf
+# The longest value a setting may have (CONFIG_VALUE_MAX in src/config.h): with its key it fits a line of mascotd.conf
+CONFIG_VALUE_MAX = 1000
+
+
+class TextNotSent(ValueError):
+    """A text the daemon cannot read: over 255 bytes (its length is one byte), or not one (a lone surrogate)"""
+
+
+def packed_text(text: str, what: str = "a text") -> bytes:
+    """text as the daemon reads it: its length in bytes in one byte, then its UTF-8 (TextNotSent over 255 bytes).
+    A name from the command line that is not UTF-8 (surrogateescape) is sent as its own bytes"""
+    try:
+        data = text.encode("utf-8", "surrogateescape")
+    except UnicodeEncodeError:
+        raise TextNotSent(f"{what} is not text mascotd can read: {text[:40]!r}") from None
     if len(data) > 255:
-        raise ValueError(f"longer than 255 bytes: {text[:40]}...")
+        raise TextNotSent(f"{what} is {len(data)} bytes, and mascotd reads at most 255: "
+                          f"{data[:40].decode('utf-8', 'replace')}...")
     return bytes([len(data)]) + data
 
 
@@ -3130,7 +3145,7 @@ class ReloadPrototype(Packet):
         self.prototype_path = prototype_path
 
     def serialize(self):
-        return packed_text(self.prototype_path)
+        return packed_text(self.prototype_path, "the mascot's path")
 
 class ImportPrototype(Packet):
     new_object_id: int
@@ -3208,7 +3223,7 @@ class Spawn(Packet):
         self.spawn_behavior = spawn_behavior
 
     def serialize(self) -> bytes:
-        return struct.pack("IIII", self.prototype_id, self.environment_id, self.x, self.y) + packed_text(self.spawn_behavior)
+        return struct.pack("IIII", self.prototype_id, self.environment_id, self.x, self.y) + packed_text(self.spawn_behavior, "the behavior's name")
 
 class Dispose(Packet):
     type: int = 0x2B
@@ -3237,7 +3252,7 @@ class ApplyBehavior(Packet):
         self.behavior = behavior
 
     def serialize(self) -> bytes:
-        return packed_text(self.behavior)
+        return packed_text(self.behavior, "the behavior's name")
 
 class GetConfigKey(Packet):
     type: int = 0x51
@@ -3248,7 +3263,7 @@ class GetConfigKey(Packet):
         self.key = key
 
     def serialize(self) -> bytes:
-        return packed_text(self.key)
+        return packed_text(self.key, "the key")
 
 class SetConfigKey(Packet):
     type: int = 0x52
@@ -3261,7 +3276,18 @@ class SetConfigKey(Packet):
         self.value = value
 
     def serialize(self) -> bytes:
-        return packed_text(self.key) + packed_text(self.value)
+        # A value over 255 bytes in more strings, as many as it takes (mascotd 0.8.1 joins them, up to
+        # A value over 255 bytes in more strings, as many as it takes (mascotd 0.8.1 joins them, up to
+        # CONFIG_VALUE_MAX); each whole bytes, which mascotd joins before it reads them as text
+        # CONFIG_VALUE_MAX); each whole bytes, which mascotd joins before it reads them as text
+        try:
+            data = self.value.encode("utf-8")
+        except UnicodeEncodeError:
+            raise TextNotSent(f"the value is not text mascotd can read: {self.value[:40]!r}") from None
+        if len(data) > CONFIG_VALUE_MAX:
+            raise TextNotSent(f"the value is {len(data)} bytes, and a setting is at most {CONFIG_VALUE_MAX}")
+        parts = [data[i:i + 255] for i in range(0, len(data), 255)] or [b""]
+        return packed_text(self.key, "the key") + b"".join(bytes([len(p)]) + p for p in parts)
 
 class ListConfigKeys(Packet):
     type: int = 0x53
@@ -3276,8 +3302,15 @@ class ConfigKey(Packet):
     def deserialize(self):
         key_len = self.read_values("B")[0]
         self.key = self.read_values(f"{key_len}s")[0].decode("utf-8", "replace")
-        value_len = self.read_values("B")[0]
-        self.value = self.read_values(f"{value_len}s")[0].decode("utf-8", "replace")
+        # The value, over 255 bytes in more strings to the end (mascotd 0.8.1; an older one cut it)
+        # The value, over 255 bytes in more strings to the end (mascotd 0.8.1; an older one cut it)
+        value = b""
+        while True:
+            value_len = self.read_values("B")[0]
+            value += self.read_values(f"{value_len}s")[0]
+            if self.read_position >= len(self.buffer):
+                break
+        self.value = value.decode("utf-8", "replace")
 
 class ClickEventExpired(Packet): ...
 
@@ -3304,7 +3337,7 @@ class PluginRestoreWindows(Packet):
         Packet.__init__(self, self.type, 0, 0, b'')
 
 
-ServerHello, ClientHello, Notice, StartSession, EnvironmentAnnouncement, EnvironmentChanged, EnvironmentMascot, EnvironmentWithdrawn, StartPrototype, PrototypeName, PrototypeDisplayName, PrototypePath, PrototypeFD, PrototypeAddAction, PrototypeAddBehavior, PrototypeIcon, PrototypeAuthor, PrototypeVersion, CommitPrototypes, MascotMigrated, MascotDisposed, MascotInfo, MascotClicked, SelectionDone, SelectionCancelled, ImportFailed, ImportStarted, ImportFinished, ImportProgress, ExportFailed, ExportFinished, ConfigKey, ClickEventExpired, PrototypeWithdraw, ReloadPrototype, Spawn, MascotGetInfo, MascotInfo, ApplyBehavior, Stop, Sync, SyncDone, GetConfigKey, ListConfigKeys, SetConfigKey, ConfigKey, Disconnect,\
+ServerHello, ClientHello, Notice, StartSession, EnvironmentAnnouncement, EnvironmentChanged, EnvironmentMascot, EnvironmentWithdrawn, StartPrototype, PrototypeName, PrototypeDisplayName, PrototypePath, PrototypeFD, PrototypeAddAction, PrototypeAddBehavior, PrototypeIcon, PrototypeAuthor, PrototypeVersion, CommitPrototypes, MascotMigrated, MascotDisposed, MascotInfo, MascotClicked, SelectionDone, SelectionCancelled, ImportFailed, ImportStarted, ImportFinished, ImportProgress, ExportFailed, ExportFinished, ConfigKey, ClickEventExpired, PrototypeWithdraw, ReloadPrototype, Spawn, MascotGetInfo, MascotInfo, ApplyBehavior, Stop, Sync, SyncDone, GetConfigKey, ListConfigKeys, SetConfigKey, ConfigKey, Disconnect, TextNotSent, CONFIG_VALUE_MAX,\
 Prototype, Environment, Mascot, Selection, Import, Export, PluginRestoreWindows,\
 objects, prototypes, environments, mascots, active_selection, imports, exports
 
@@ -3462,6 +3495,7 @@ class Client:
         strings = {
             "config.warning.get": "Config has no key named \"{}\"",
             "config.warning.set": "Config has no key named \"{}\"",
+            "config.warning.long": f"Not set: the value for {{}} is more than mascotd takes ({CONFIG_VALUE_MAX} bytes)",
             "prototype.error.no_behavior": "Prototype has no behavior named \"{}\"",
             "apply_behavior.error.no_mascot": "Mascot not found"
         }
@@ -3583,7 +3617,14 @@ class Client:
             self.socket.settimeout(previous)
 
     def queue_packet(self, packet: Packet):
-        socket.send_fds(self.socket, [packet.encode()], packet.fds)
+        try:
+            data = packet.encode()
+        except TextNotSent as e:
+            # A name, path or value from the command line the daemon cannot read: say so, no traceback
+            # A name, path or value from the command line the daemon cannot read: say so, no traceback
+            print(f"Not sent: {e}", file=sys.stderr)
+            exit(1)
+        socket.send_fds(self.socket, [data], packet.fds)
         # print(f"Sending packet {packet}, {packet.fds}, {packet.buffer}")
         # print(f"Sending packet {packet}, {packet.fds}, {packet.buffer}")
 
@@ -3671,9 +3712,21 @@ INVISIBLE_LETTERS = "\u115f\u1160\u17b4\u17b5\u3164\uffa0"
 
 def display_name_of(text: str) -> str:
     """text as a name the daemon takes (it is the mascot's name in the bubble's prompt): letters, digits, spaces
-    and - ' . _ only, at most 48 bytes; "" if nothing is left"""
-    kept = "".join(c if (c.isalnum() and c not in INVISIBLE_LETTERS) or c in " -'._" else " " for c in text)
-    kept = " ".join(kept.split())
+    and - ' . _ only, at most 48 bytes; "" if nothing is left. Accents written apart are joined to their letter
+    first (NFC); a combining mark that is left (Thai's vowels, Devanagari's virama) is kept on a letter or digit,
+    at most two on one, as mascotd takes them (src/mascot_config_parser.c)"""
+    kept, marks = [], -1
+    for c in unicodedata.normalize("NFC", text):
+        if unicodedata.category(c) in ("Mn", "Me") and c not in "\u034f\u180b\u180c\u180d\u180f" \
+                and not "\ufe00" <= c <= "\ufe0f":
+            if 0 <= marks < 2:
+                kept.append(c)
+                marks += 1
+            continue
+        letter = c.isalnum() and c not in INVISIBLE_LETTERS
+        kept.append(c if letter or c in " -'._" else " ")
+        marks = 0 if letter else -1
+    kept = " ".join("".join(kept).split())
     while len(kept.encode("utf-8")) > 48:
         kept = kept[:-1].rstrip()
     return kept
@@ -5162,7 +5215,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     5: "Invalid mascot version",
                     6: "FD points not to a file",
                     7: "FD opened in invalid mode",
-                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot",
+                    8: "its manifest.json does not give the name its header gives: it gives another (which could replace "
+                       "another mascot), none, one that is not text, or more than one",
                     9: "it has no manifest.json that can be read (missing, not a JSON object, over 1 MiB or nested too deep)",
                     10: "it unpacks to more than 256 MiB or 4096 files and directories"
                 }
@@ -5609,8 +5663,16 @@ def config_value_problem(key, value):
     """None if mascotd would take value for key, else why not"""
     if "\n" in value or "\r" in value:
         return "the value cannot span lines"
-    if len(value.encode("utf-8")) > 255:
-        return "it is longer than 255 bytes, more than mascot can send: write it in mascotd.conf instead"
+    if "\0" in value:
+        return "the value cannot hold a NUL"
+    try:
+        size = len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        return "the value is not UTF-8 text"
+    # The same for mascotd running or not: it fits a line of mascotd.conf with its key (1023 bytes)
+    # The same for mascotd running or not: it fits a line of mascotd.conf with its key (1023 bytes)
+    if size > CONFIG_VALUE_MAX:
+        return f"it is {size} bytes, and a setting is at most {CONFIG_VALUE_MAX}"
     if key in CONFIG_BOOLEANS:
         if value.lower() not in ["true", "yes", "on", "1", "false", "no", "off", "0"]:
             return "use true or false"
@@ -5682,6 +5744,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
     }
     starttime = time.time()
     wait_until_null_null = False
+    sent = None  # the value set, to see that mascotd kept it whole
 
     def received_config_key(client: Client, packet: ConfigKey):
         if len(packet.key) == 0:
@@ -5690,6 +5753,12 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         key = name_cast.get(packet.key, packet.key)
 
         print(f"  - {key} ({packet.key}) = {packet.value}")
+        if sent is not None and len(sent.encode("utf-8")) > 255 and packet.value != sent:
+            # A mascotd before 0.8.1 reads 255 bytes of a value and leaves the rest
+            # A mascotd before 0.8.1 reads 255 bytes of a value and leaves the rest
+            print("mascotd kept only part of it: it is older than this mascot. Restart it (mascot stop) and set it "
+                  "again", file=sys.stderr)
+            exit(1)
         if not wait_until_null_null:
             exit(0)
 
@@ -5711,7 +5780,8 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
             if problem:
                 print(f"Not set: {problem}")
                 exit(1)
-            packet = SetConfigKey(arguments.key, arguments.value.strip())
+            sent = arguments.value.strip()
+            packet = SetConfigKey(arguments.key, sent)
             client.queue_packet(packet)
             client.dispatch_events(until=lambda: time.time() - starttime > 5)
             print("Timeout.")

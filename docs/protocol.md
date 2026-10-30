@@ -473,7 +473,7 @@ Error:
   - 5: Mascot version is not supported
   - 6: File is not file
   - 7: File is not opened in right mode (Expected read or readwrite)
-  - 8: The pack's `manifest.json` names another mascot than its header (or names one twice)
+  - 8: The pack's `manifest.json` does not give the name its header gives: it gives another name, none, one that is not a string, or more than one
   - 9: The pack has no `manifest.json` that can be read (missing, not a JSON object, over 1 MiB or nested too deep)
   - 10: The pack unpacks to more than 256 MiB or 4096 members (files and directories), counted as it is unpacked
 
@@ -775,6 +775,7 @@ Sets config key value, schedules callback to get updated value
 |-------|------|-------------|-------|
 | Key | string | Config key to set value for | |
 | Value | string | Value to set | Will be converted on server to appropriate type |
+| More | string... | The rest of a value over 255 bytes, in strings to the end of the message | Since 0.8.1; joined as bytes, at most 1000 bytes in all (else notice `config.warning.long`) |
 
 # List config keys - 0x53
 
@@ -789,6 +790,7 @@ Get config key value.
 |-------|------|-------------|-------|
 | Key | string | Config key to get value for | |
 | Value | string | Value to get | Note: Client should present values as appropriate types |
+| More | string... | The rest of a value over 255 bytes, in strings to the end of the message | Since 0.8.1 (before, the value was cut); join them as bytes |
 
 # click_event.expired() - 0x55
 

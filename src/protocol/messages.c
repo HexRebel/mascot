@@ -502,12 +502,14 @@ ipc_packet_t* protocol_builder_click_event_expired(protocol_click_event_t* event
 
 ipc_packet_t* protocol_builder_config_key(const char* key, const char* value)
 {
-    ipc_packet_t* packet = ipc_allocate_packet(512);
+    // The key, then the value whole: over 255 bytes in more strings (it may be
+    // up to a line of mascotd.conf, 1023 bytes)
+    ipc_packet_t* packet = ipc_allocate_packet(256 + 1024 + 8);
 
     ipc_packet_set_type(packet, 0x54);
 
     ENSURE_MARSHALLER(ipc_packet_write_string(packet, key));
-    ENSURE_MARSHALLER(ipc_packet_write_string(packet, value));
+    ENSURE_MARSHALLER(ipc_packet_write_long_string(packet, value));
 
     return packet;
 }
@@ -1145,12 +1147,29 @@ bool protocol_handler_popup_dismiss(struct protocol_client* client, ipc_packet_t
 bool protocol_handler_set_config_key(struct protocol_client* client, ipc_packet_t* packet)
 {
     char key[256] = {0};
-    char value[256] = {0};
+    char value[CONFIG_VALUE_MAX + 1] = {0};
     uint8_t key_len = 255;
-    uint8_t value_len = 255;
+    size_t length = 0;
+    bool too_long = false;
 
     ENSURE_MARSHALLER(ipc_packet_read_string(packet, key, &key_len));
-    ENSURE_MARSHALLER(ipc_packet_read_string(packet, value, &value_len));
+    // The value, and over 255 bytes the rest of it in more strings
+    do {
+        char part[256] = {0};
+        uint8_t part_len = 255;
+        ENSURE_MARSHALLER(ipc_packet_read_string(packet, part, &part_len));
+        if (length + part_len > CONFIG_VALUE_MAX) too_long = true;
+        else {
+            memcpy(value + length, part, part_len);
+            length += part_len;
+        }
+    } while (ipc_packet_has_more(packet));
+    // A NUL inside would set less than was sent
+    if (too_long || strlen(value) != length) {
+        ipc_packet_t* error = protocol_builder_notice(NOTICE_SEVERITY_ERROR, "config.warning.long", (const char* []){(const char*)key}, 1, true);
+        ipc_connector_send(client->connector, error);
+        return true;
+    }
 
     bool res = config_set_by_key(key, value);
     if (!res) {
@@ -1169,8 +1188,9 @@ bool protocol_handler_get_config_key(struct protocol_client* client, ipc_packet_
     uint8_t key_len = 255;
 
     ENSURE_MARSHALLER(ipc_packet_read_string(packet, key, &key_len));
-    char value[256] = {0};
-    bool res = config_get_by_key(key, value, 255);
+    // Whole: a value from mascotd.conf may be up to 1023 bytes
+    char value[1024] = {0};
+    bool res = config_get_by_key(key, value, sizeof(value));
     if (!res) {
         ipc_packet_t* error = protocol_builder_notice(NOTICE_SEVERITY_ERROR, "config.warning.get", (const char* []){(const char*)key}, 1, true);
         ipc_connector_send(client->connector, error);
@@ -1185,8 +1205,8 @@ bool protocol_handler_list_config_keys(struct protocol_client* client, ipc_packe
     UNUSED(packet);
     for (uint32_t i = 0; i < sizeof(config_keys) / sizeof(config_keys[0]); i++) {
         if (config_keys[i] != NULL) {
-            char value[256] = {0};
-            bool res = config_get_by_key(config_keys[i], value, 255);
+            char value[1024] = {0};
+            bool res = config_get_by_key(config_keys[i], value, sizeof(value));
             if (!res) {
                 ipc_packet_t* error = protocol_builder_notice(NOTICE_SEVERITY_ERROR, "config.warning.get", (const char* []){(const char*)config_keys[i]}, 1, true);
                 ipc_connector_send(client->connector, error);

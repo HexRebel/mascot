@@ -445,7 +445,7 @@ static const char* chat_prototype_name(const struct mascot_prototype* prototype)
 static void chat_role_json(const struct mascot_prototype* prototype, char* dest, size_t size)
 {
     char buffer[256], escaped[504];
-    const char* role = config_get_chat_role_for(prototype->name, buffer, sizeof(buffer));
+    const char* role = config_get_chat_role_for(prototype->name, prototype->display_name, buffer, sizeof(buffer));
     if (!role) {
         snprintf(dest, size, "null");
         return;

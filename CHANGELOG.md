@@ -3,7 +3,7 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## Unreleased
+## 0.8.1 (2026-10-30)
 
 - Security: Robo's tools run only when they are turned on in `CHAT_TOOLS`. aichat runs any of Mascot's tools the
   model asks for, not only the ones the bubble gave it, so with only time, weather and todo on, a local model
@@ -149,6 +149,44 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - mascotd keeps running when a client goes while mascotd writes to it: a message to its socket, or an export to
   a pipe, gave `SIGPIPE`, which ended the daemon. A pack is only imported from a regular file (a FIFO or socket
   passed the check), and a client's messages are sent under a lock, as an import's thread sends too.
+- Tools: masking is linear in a line's length (`search_file` reads up to 1 MiB): `password:` and 100000 spaces took
+  88 s, `'<a '*20000` 10 s; each now well under a second.
+- Tools: zsh's `.zhistory` and `~/.local/state/zsh`, fish's `~/.config/fish/fish_history` and other programs'
+  histories (`.lesshst`, `.node_repl_history`, `.shada`...) are private.
+- Tools: masked text hides `mysql -pPW`, `sshpass -p PW`, `curl -u user:PW`, `redis-cli -a PW`, a token as a URL's
+  user (`https://ghp_…@github.com`), ODBC's `PWD=`, `*_HEADER=`, `<add value=".." key="Password"/>`,
+  `{"password": """…"""`, a quoted value over lines and all of `p@ss` in `postgres://u:p@ss@host`.
+- Tools: `last_commands` hides commands with `NAME=` by the same names masking uses (`STRIPE_KEY=`, `HF_KEY=`,
+  `MY_PASSPHRASE=`), `sqlplus -S user/pw@db` and `wpa_cli set_network … psk`.
+- Tools: `read_file`, `search_file` and `look_at_image` no longer wait forever on a FIFO (`O_NONBLOCK`, and only
+  regular files are read).
+- Tools: a NUL or lone surrogate in the arguments gives an error, not a traceback; a todo or reminder change that
+  fails leaves no `.tmp` file.
+- `read_log`: a log message is not masked as a setting (`token=abc rejected for …` kept its words),
+  `TOKEN EXPIRED after 30 minutes` is shown, programs with spaces (`Web Content[123]`) keep their YAML's
+  indentation, and "since" is only said when journalctl's `-n` (messages, not lines) cut the boot short.
+- Security: the bubble remembers a model as local (for a minute, to answer faster) only while aichat's config says
+  what it said then: changing its `api_base` or proxy took up to a minute to count, and until then the mascot's
+  memory and a private session went on with a model that was no longer on this computer.
+- `make uninstall` removes `ui/local.js` too, and with it `share/mascot/ui` and `share/mascot` when they are empty.
+- `utils/mascot` is the same each build: its imports were in a set, whose order changes with each run.
+- A `CHAT_ROLES` name in other letters than the mascot's (`robo` for Robo), or the name a pack shows, gives no role
+  since 0.8.0 without a word: mascotd's log now says how to write it, once. A Shimeji with a dot in its name
+  (`Shimeji.Mr. Bean`) needs its full name there, since `Mr. Bean` could be another pack's full name; the log says
+  that too.
+- `mascot prototypes reload`, `config get`, `summon --behavior` and `set-behavior` with a text over 255 bytes (or a
+  lone surrogate) say what cannot be sent instead of a traceback. A path that is not UTF-8 is sent as its bytes.
+- A setting may be up to 1000 bytes, with mascotd running or not: `mascot config set` sends a longer value in
+  parts (it said to write one over 255 bytes in mascotd.conf, even when it was writing mascotd.conf itself, so
+  `CHAT_ROLES` for 20 mascots could not be set), and `config get` and `list` show the whole value (they cut it at
+  254 bytes). A line of mascotd.conf over 1023 bytes is left out with a warning, instead of cut, with its rest read
+  as a line of its own. A mascotd older than mascot that keeps only part of a long value is said.
+- A pack's display name has no format characters (Arabic number signs, Egyptian hieroglyph format controls and the
+  other `Cf`), and a combining mark only on a letter or digit, at most two on one: none alone, after a space or
+  piled up. Converting a Shimeji joins accents written apart (NFC) and keeps marks on their letter (Thai, Devanagari)
+  instead of making them spaces.
+- `mascot prototypes import` and protocol.md say all of import error 8: the pack's `manifest.json` gives another
+  name than its header, none, one that is not text, or more than one.
 
 ## 0.8.0 (2026-10-29)
 

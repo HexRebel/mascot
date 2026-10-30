@@ -181,7 +181,9 @@ until you pick a role again or `qs` restarts.
 To give each kind of mascot its own role, set `CHAT_ROLES` to `<mascot>=<role>` pairs separated by
 `;`, e.g. `mascot config set CHAT_ROLES 'Shimeji=my-role;Example=other-role'`. A name without a dot
 is a Shimeji's short name (`Robo` for `Shimeji.Robo`, letter case as the name has it), one with a dot the full name, as
-`mascot prototypes list` shows it. Not the name a pack shows, so a pack from the net that calls itself Robo
+`mascot prototypes list` shows it (so a Shimeji with a dot in its name, `Shimeji.Mr. Bean`, needs the full name: `Mr. Bean`
+could just as well be a pack's full name). A name that only differs in letter case, or that is the name a mascot shows,
+gives no role; mascotd's log then says how to write it. Not the name a pack shows, so a pack from the net that calls itself Robo
 does not get Robo's role; a mascot that is not in the list gets `CHAT_ROLE`, and an
 empty role (`Shimeji=`) gives that mascot Mascot's prompt instead. Swapping
 with `.mascot` switches to the new mascot's role.

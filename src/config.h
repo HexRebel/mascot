@@ -25,6 +25,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+// The longest value a setting may have, in bytes: with its key it fits a line
+// of mascotd.conf (1023 bytes), and mascot sends it to mascotd whole
+#define CONFIG_VALUE_MAX 1000
+
 #define CONFIG_PARAM_BREEDING "BREEDING"
 #define CONFIG_PARAM_DRAGGING "DRAGGING"
 #define CONFIG_PARAM_IE_INTERACTIONS "WINDOW_INTERACTIONS"
@@ -157,8 +161,10 @@ const char* config_get_chat_role();
 bool config_set_chat_roles(const char* value);
 const char* config_get_chat_roles();
 // The role from CHAT_ROLES for this prototype, else CHAT_ROLE; NULL if neither,
-// or if CHAT_ROLES gives it an empty role. May return dest
-const char* config_get_chat_role_for(const char* name, char* dest, size_t size);
+// or if CHAT_ROLES gives it an empty role. May return dest. display_name (may
+// be NULL) never gives a role; a key that is it, or the name in other letters,
+// is warned about
+const char* config_get_chat_role_for(const char* name, const char* display_name, char* dest, size_t size);
 // A random mascot says something on its own every N to 2N minutes; 0 = never
 bool config_set_chat_remarks(int32_t value);
 int32_t config_get_chat_remarks();
@@ -186,7 +192,7 @@ int32_t config_get_bubble_enabled();
 // NULL if unset (then mascotd uses qs on the installed ui/)
 const char* config_get_bubble_command();
 
-bool config_get_by_key(const char* key, char* dest, uint8_t size);
+bool config_get_by_key(const char* key, char* dest, size_t size);
 bool config_set_by_key(const char* key, const char* value);
 
 __attribute((unused)) static const char* config_keys[] = {

@@ -110,8 +110,8 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 # Rule to build mascot
-# py-compose inlines every module client.py imports, so any of them changes the output
-$(UTILS_DIR)/mascot: $(SRCDIR)/mascotctl/client.py $(shell find $(SRCDIR)/mascotctl -name "*.py")
+# py-compose inlines every module client.py imports, so any of them (or py-compose) changes the output
+$(UTILS_DIR)/mascot: $(SRCDIR)/mascotctl/client.py $(shell find $(SRCDIR)/mascotctl -name "*.py") scripts/py-compose.py
 	@mkdir -p $(UTILS_DIR)
 	$(PYTHON3) scripts/py-compose.py -s $< -o $@
 
@@ -127,6 +127,9 @@ clean:
 # The bubble's read-only tools (tools/bin/<tool> links to tools/mascot-tools)
 TOOLS := get_current_weather list_directory read_file search_file look_at_image list_todos add_todo remove_todo edit_todo \
 	set_reminder list_reminders cancel_reminder due_reminders last_commands sleep_mode context_size local_model check_system read_log
+
+# The bubble's files, the same for install and uninstall (ui/local.js was left behind, and with it ui/)
+UI_FILES := $(notdir $(wildcard ui/*.qml ui/*.js)) prompt.md
 
 .PHONY: install
 install: all
@@ -144,7 +147,7 @@ install: all
 	install -m644 src/plugins.h $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
 	install -m644 src/master_header.h $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/ui/
-	install -m644 ui/*.qml ui/*.js ui/prompt.md $(DESTDIR)$(PREFIX)/share/mascot/ui/
+	install -m644 $(addprefix ui/,$(UI_FILES)) $(DESTDIR)$(PREFIX)/share/mascot/ui/
 	install -d $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/
 	install -m755 tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/
 	install -m755 tools/mascot-guide $(DESTDIR)$(PREFIX)/share/mascot/tools/
@@ -166,10 +169,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/lib/mascot/*.so
 	rm -f $(DESTDIR)$(PREFIX)/include/mascot/plugins.h
 	rm -f $(DESTDIR)$(PREFIX)/include/mascot/master_header.h
-	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Bubble.qml
-	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/shell.qml
-	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/Menu.qml
-	rm -f $(DESTDIR)$(PREFIX)/share/mascot/ui/prompt.md
+	rm -f $(addprefix $(DESTDIR)$(PREFIX)/share/mascot/ui/,$(UI_FILES))
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-guide $(DESTDIR)$(PREFIX)/share/mascot/tools/functions.json
 	for tool in $(TOOLS); do rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done
 	rm -rf $(DESTDIR)$(PREFIX)/share/mascot/prototypes

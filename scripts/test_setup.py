@@ -777,5 +777,35 @@ class OldPython(unittest.TestCase):
                                         f"{os.path.basename(path)}:{token.start[0]}: {token.string} inside an f-string")
 
 
+class Compose(unittest.TestCase):
+    def test_utils_mascot_is_the_same_each_build(self):
+        # py-compose kept the imports in a set, so their order in utils/mascot changed with each build
+        outputs = []
+        with tempfile.TemporaryDirectory() as tmp:
+            for seed in ("1", "2", "3", "4"):
+                out = os.path.join(tmp, f"mascot{seed}")
+                done = subprocess.run([sys.executable, "-I", os.path.join(ROOT, "scripts", "py-compose.py"), "-s",
+                                       os.path.join(ROOT, "src", "mascotctl", "client.py"), "-o", out],
+                                      env=dict(os.environ, PYTHONHASHSEED=seed), capture_output=True, text=True,
+                                      timeout=60)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                with open(out, encoding="utf-8") as f:
+                    outputs.append(f.read())
+        self.assertEqual(len(set(outputs)), 1)
+        with open(os.path.join(ROOT, "utils", "mascot"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), outputs[0], "utils/mascot is not what py-compose makes now (make all)")
+
+
+class Version(unittest.TestCase):
+    def test_changelog_names_the_version_mascotd_says(self):
+        # The release's heading in CHANGELOG.md ("## 0.8.1 (2026-10-30)") and MASCOTD_VERSION go together
+        import re
+        with open(os.path.join(ROOT, "CHANGELOG.md")) as f:
+            heading = next(line for line in f if line.startswith("## "))
+        with open(os.path.join(ROOT, "src", "master_header.h")) as f:
+            version = re.search(r'#define MASCOTD_VERSION "([^"]+)"', f.read())[1]
+        self.assertRegex(heading, rf"^## {re.escape(version)} \(\d{{4}}-\d{{2}}-\d{{2}}\)$")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -262,11 +262,24 @@ class Import:
 
 # --------------------------
 
-def packed_text(text: str) -> bytes:
-    """text as the daemon reads it: its length in bytes in one byte, then its UTF-8 (ValueError over 255 bytes)"""
-    data = text.encode("utf-8")
+# The longest value a setting may have (CONFIG_VALUE_MAX in src/config.h): with its key it fits a line of mascotd.conf
+CONFIG_VALUE_MAX = 1000
+
+
+class TextNotSent(ValueError):
+    """A text the daemon cannot read: over 255 bytes (its length is one byte), or not one (a lone surrogate)"""
+
+
+def packed_text(text: str, what: str = "a text") -> bytes:
+    """text as the daemon reads it: its length in bytes in one byte, then its UTF-8 (TextNotSent over 255 bytes).
+    A name from the command line that is not UTF-8 (surrogateescape) is sent as its own bytes"""
+    try:
+        data = text.encode("utf-8", "surrogateescape")
+    except UnicodeEncodeError:
+        raise TextNotSent(f"{what} is not text mascotd can read: {text[:40]!r}") from None
     if len(data) > 255:
-        raise ValueError(f"longer than 255 bytes: {text[:40]}...")
+        raise TextNotSent(f"{what} is {len(data)} bytes, and mascotd reads at most 255: "
+                          f"{data[:40].decode('utf-8', 'replace')}...")
     return bytes([len(data)]) + data
 
 
@@ -579,7 +592,7 @@ class ReloadPrototype(Packet):
         self.prototype_path = prototype_path
 
     def serialize(self):
-        return packed_text(self.prototype_path)
+        return packed_text(self.prototype_path, "the mascot's path")
 
 class ImportPrototype(Packet):
     new_object_id: int
@@ -657,7 +670,7 @@ class Spawn(Packet):
         self.spawn_behavior = spawn_behavior
 
     def serialize(self) -> bytes:
-        return struct.pack("IIII", self.prototype_id, self.environment_id, self.x, self.y) + packed_text(self.spawn_behavior)
+        return struct.pack("IIII", self.prototype_id, self.environment_id, self.x, self.y) + packed_text(self.spawn_behavior, "the behavior's name")
 
 class Dispose(Packet):
     type: int = 0x2B
@@ -686,7 +699,7 @@ class ApplyBehavior(Packet):
         self.behavior = behavior
 
     def serialize(self) -> bytes:
-        return packed_text(self.behavior)
+        return packed_text(self.behavior, "the behavior's name")
 
 class GetConfigKey(Packet):
     type: int = 0x51
@@ -697,7 +710,7 @@ class GetConfigKey(Packet):
         self.key = key
 
     def serialize(self) -> bytes:
-        return packed_text(self.key)
+        return packed_text(self.key, "the key")
 
 class SetConfigKey(Packet):
     type: int = 0x52
@@ -710,7 +723,16 @@ class SetConfigKey(Packet):
         self.value = value
 
     def serialize(self) -> bytes:
-        return packed_text(self.key) + packed_text(self.value)
+        # A value over 255 bytes in more strings, as many as it takes (mascotd 0.8.1 joins them, up to
+        # CONFIG_VALUE_MAX); each whole bytes, which mascotd joins before it reads them as text
+        try:
+            data = self.value.encode("utf-8")
+        except UnicodeEncodeError:
+            raise TextNotSent(f"the value is not text mascotd can read: {self.value[:40]!r}") from None
+        if len(data) > CONFIG_VALUE_MAX:
+            raise TextNotSent(f"the value is {len(data)} bytes, and a setting is at most {CONFIG_VALUE_MAX}")
+        parts = [data[i:i + 255] for i in range(0, len(data), 255)] or [b""]
+        return packed_text(self.key, "the key") + b"".join(bytes([len(p)]) + p for p in parts)
 
 class ListConfigKeys(Packet):
     type: int = 0x53
@@ -725,8 +747,14 @@ class ConfigKey(Packet):
     def deserialize(self):
         key_len = self.read_values("B")[0]
         self.key = self.read_values(f"{key_len}s")[0].decode("utf-8", "replace")
-        value_len = self.read_values("B")[0]
-        self.value = self.read_values(f"{value_len}s")[0].decode("utf-8", "replace")
+        # The value, over 255 bytes in more strings to the end (mascotd 0.8.1; an older one cut it)
+        value = b""
+        while True:
+            value_len = self.read_values("B")[0]
+            value += self.read_values(f"{value_len}s")[0]
+            if self.read_position >= len(self.buffer):
+                break
+        self.value = value.decode("utf-8", "replace")
 
 class ClickEventExpired(Packet): ...
 

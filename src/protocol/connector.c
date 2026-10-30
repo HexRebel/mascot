@@ -163,6 +163,34 @@ int32_t ipc_packet_write_string(ipc_packet_t *packet, const char* str)
     return 0;
 }
 
+int32_t ipc_packet_write_long_string(ipc_packet_t *packet, const char* str)
+{
+    size_t left = str ? strlen(str) : 0;
+    do {
+        // Each string cut before a UTF-8 character that would not fit whole
+        size_t length = left;
+        if (length > 255) {
+            length = 255;
+            while (length && ((uint8_t)str[length] & 0xC0) == 0x80) length--;
+            if (!length) length = 255;
+        }
+        if ((size_t)(packet->allocated_length - packet->header->length) < length + 1) {
+            WARN("[BUG] ipc_packet_write_long_string: Not enough space in packet");
+            return -1;
+        }
+        ipc_packet_write_uint8(packet, (uint8_t)length);
+        if (length) ipc_packet_copy_to(packet, str, (uint16_t)length);
+        str += length;
+        left -= length;
+    } while (left);
+    return 0;
+}
+
+bool ipc_packet_has_more(ipc_packet_t *packet)
+{
+    return packet->reader_position < packet->header->length;
+}
+
 int32_t ipc_packet_write_bytes(ipc_packet_t *packet, const void *data, uint16_t length)
 {
     if (packet->allocated_length - packet->header->length < length + 1) {

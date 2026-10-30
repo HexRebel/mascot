@@ -354,6 +354,11 @@ class Cli(unittest.TestCase):
         self.assertEqual(fit("x" * 60), "x" * 48)
         self.assertEqual(fit("!!!"), "")
         self.assertEqual(fit("Ro\u3164bo\u00ad\ufe0f"), "Ro bo")  # letters that do not show are not kept
+        # Accents written apart are joined (NFC) and kept, as are marks on their letter; none alone, piled up or
+        # a format character (mascotd refuses those)
+        self.assertEqual(fit("Rene\u0301"), "René")
+        self.assertEqual(fit("\u0e19\u0e49\u0e33"), "\u0e19\u0e49\u0e33")
+        self.assertEqual(fit("\u0301Ro\u0600bo q\u0301\u0301\u0301"), "Ro bo q\u0301\u0301")
 
     def test_long_name_refused(self):
         # The header gives the name one length byte: "Shimeji." and 248 more did not fit, and converting crashed
@@ -757,8 +762,17 @@ class Pack(Manifest):
                         # Invisible, some of them letters: soft hyphen, combining grapheme joiner, Arabic letter mark,
                         # Hangul fillers, Khmer vowels, Mongolian separators, variation selectors
                         "Ro\u00adbo", "Ro\u034fbo", "Ro\u061cbo", "Ro\u3164bo", "Ro\u115fbo", "Ro\uffa0bo",
-                        "Ro\u17b4bo", "Ro\u180ebo", "Ro\ufe0fbo"):
+                        "Ro\u17b4bo", "Ro\u180ebo", "Ro\ufe0fbo",
+                        # Other format characters (Cf): Arabic number signs, Syriac abbreviation mark, Kaithi and
+                        # Egyptian hieroglyph format controls, shorthand format controls
+                        *(f"Ro{chr(c)}bo" for c in (0x600, 0x605, 0x6dd, 0x70f, 0x890, 0x891, 0x8e2, 0x110bd,
+                                                    0x110cd, 0x13430, 0x1343f, 0x1bca0, 0x1bca3)),
+                        # Combining marks alone, after a space or piled up on one letter
+                        "\u0301Robo", "Ro \u0301bo", "Ro-\u0301bo", "Ro\u0301\u0301\u0301bo", "R\u20dd\u20dd\u20ddobo"):
             self.assertEqual(manifest(display), "Robo", repr(display))  # the end of its name
+        # A mark on its letter is part of a name: written apart (NFD), Thai's vowels, Devanagari's virama
+        for display in ("Rene\u0301", "Vie\u0323\u0302t", "\u0e19\u0e49\u0e33", "\u0938\u094d\u0924\u094d\u0930\u0940"):
+            self.assertEqual(manifest(display), display, repr(display))
         self.assertIsNone(manifest("Robo\u0000Evil"))  # a NUL anywhere: the pack is refused
         # Without a display name, not its name either: only checked to be a directory name
         path = self.robo("NoDisplay", "behaviors.json", lambda data: data)
@@ -943,17 +957,40 @@ CHAT_ROLES_DRIVER = r"""
 #include <stdarg.h>
 #include <stdio.h>
 #include "config.h"
-void __warn(const char* f, int l, const char* x, ...) { (void)f; (void)l; (void)x; }
+void __warn(const char* f, int l, const char* x, ...) {
+    (void)f; (void)l;
+    va_list args;
+    va_start(args, x);
+    fprintf(stderr, "WARN: ");
+    vfprintf(stderr, x, args);
+    fprintf(stderr, "\n");
+    va_end(args);
+}
 int main(int argc, char** argv) {
-    (void)argc;
     char buffer[256];
     config_set_chat_roles(argv[1]);
-    const char* role = config_get_chat_role_for(argv[2], buffer, sizeof(buffer));
-    printf("%s\n", role ? role : "(none)");
+    // Asked twice, as two taps: a warning is said once
+    for (int i = 0; i < 2; i++) {
+        const char* role = config_get_chat_role_for(argv[2], argc > 3 ? argv[3] : NULL, buffer, sizeof(buffer));
+        if (!i) printf("%s\n", role ? role : "(none)");
+    }
     return 0;
 }
 """
 
+
+class ImportErrors(unittest.TestCase):
+    def test_error_8_says_every_case(self):
+        # WLSHM_MANIFEST_OTHER is also a manifest.json with no name (or one that is not text), but mascot and
+        # protocol.md only said "another name, or two"
+        with open(os.path.join(ROOT, "src", "mascotctl", "client.py")) as f:
+            client = f.read()
+        said = client[client.index("8: \"its manifest.json"):client.index("9: \"it has no manifest.json")]
+        with open(os.path.join(ROOT, "docs", "protocol.md")) as f:
+            doc = next(line for line in f if line.startswith("  - 8: "))
+        for text in (said, doc):
+            for case in ("another", "none", "more than one"):
+                self.assertIn(case, text)
 
 class ChatRoles(unittest.TestCase):
     """CHAT_ROLES: a short key is a Shimeji's short name, a key with a dot the full name. Not the display name a
@@ -969,7 +1006,8 @@ class ChatRoles(unittest.TestCase):
                                     "-I", os.path.join(ROOT, "build"), driver, os.path.join(ROOT, "src", "config.c"),
                                     "-o", binary], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            role = lambda roles, name: subprocess.run([binary, roles, name], capture_output=True, text=True).stdout.strip()
+            role = lambda roles, name, *display: subprocess.run([binary, roles, name, *display], capture_output=True,
+                                                                text=True).stdout.strip()
             self.assertEqual(role("Robo=robo-role", "Shimeji.Robo"), "robo-role")
             self.assertEqual(role("Black Bunny=b", "Shimeji.Black Bunny"), "b")
             # Written as the name is: the store keeps Shimeji.ROBO as another pack, which must not get Robo's role
@@ -980,6 +1018,27 @@ class ChatRoles(unittest.TestCase):
             for name in ("Shimeji.Evil", "EvilRobo", "Robo", "Evil.Robo", "x.Robo", "Shimeji.Robo.x"):
                 self.assertEqual(role("Robo=robo-role", name), "(none)", name)
             self.assertEqual(role("Evil.Robo=e", "Evil.Robo"), "e")
+            self.assertEqual(role("Robo=robo-role", "Shimeji.Robo", "Robo"), "robo-role")
+
+            # An older CHAT_ROLES (any letter case, or the display name, matched) lost its role without a word.
+            # Still no role, but a warning, once, that says how to write it
+            def warned(roles, name, display=None):
+                out = subprocess.run([binary, roles, name] + ([display] if display else []),
+                                     capture_output=True, text=True)
+                self.assertEqual(out.stdout.strip(), "(none)", (roles, name))
+                return [line for line in out.stderr.splitlines() if line.startswith("WARN")]
+            for roles, name, display, write in (("robo=r", "Shimeji.Robo", None, '"Robo"'),
+                                                ("shimeji.robo=r", "Shimeji.Robo", None, '"Robo"'),
+                                                ("evil.robo=r", "Evil.Robo", None, '"Evil.Robo"'),
+                                                ("Bunny=r", "Shimeji.Black Bunny", "Bunny", '"Black Bunny"'),
+                                                ("Mr. Bean=r", "Shimeji.Mr. Bean", None, '"Shimeji.Mr. Bean"')):
+                lines = warned(roles, name, display)
+                self.assertEqual(len(lines), 1, (roles, name, lines))
+                self.assertIn(f"write it {write}", lines[0])
+            self.assertIn("full name", warned("Mr. Bean=r", "Shimeji.Mr. Bean")[0])
+            # Nothing to say for a key meant for another mascot, or one that names it
+            self.assertEqual(warned("Other=r;Shimeji.X=y", "Shimeji.Robo", "Robo2"), [])
+            self.assertEqual(role("Shimeji.Mr. Bean=bean", "Shimeji.Mr. Bean"), "bean")
 
 
 if __name__ == "__main__":

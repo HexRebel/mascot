@@ -21,6 +21,7 @@
 #define _GNU_SOURCE
 
 #include "mascot_config_parser.h"
+#include "display_name_tables.h"
 #include "environment.h"
 #include "expressions.h"
 #include "mascot.h"
@@ -2405,19 +2406,38 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
 
 // A pack's display name is the mascot's name in the bubble's prompt: only a
 // short name (letters, digits, spaces and - ' . _; beyond ASCII valid UTF-8,
-// without control characters, line or paragraph separators, invisible or
-// direction marks), so a pack cannot write instructions there; else the last
-// part of its name, or "Mascot"
+// without control or format characters, line or paragraph separators,
+// invisible or direction marks), so a pack cannot write instructions there;
+// else the last part of its name, or "Mascot". A combining mark (an accent
+// written apart, Thai's vowels, Devanagari's virama) only on a character
+// beyond ASCII or an ASCII letter or digit, at most DISPLAY_NAME_MARKS on one:
+// none alone or piled up over the text around it
 #define DISPLAY_NAME_MAX 48
+#define DISPLAY_NAME_MARKS 2
+
+static bool display_name_in(const uint32_t ranges[][2], size_t count, uint32_t point)
+{
+    size_t low = 0, high = count;
+    while (low < high) {
+        size_t middle = (low + high) / 2;
+        if (point < ranges[middle][0]) high = middle;
+        else if (point > ranges[middle][1]) low = middle + 1;
+        else return true;
+    }
+    return false;
+}
 
 static bool display_name_safe(const char* name, size_t size)
 {
     if (!size || size > DISPLAY_NAME_MAX || strlen(name) != size) return false;
     const unsigned char* s = (const unsigned char*)name;
+    // Marks on the character before; -1: none may go on it (none yet, a space or - ' . _)
+    int marks = -1;
     for (size_t i = 0; i < size; ) {
         unsigned char c = s[i];
         if (c < 0x80) {
             if (!isalnum(c) && !strchr(" -'._", c)) return false;
+            marks = isalnum(c) ? 0 : -1;
             i++;
             continue;
         }
@@ -2439,6 +2459,14 @@ static bool display_name_safe(const char* name, size_t size)
             || point == 0x17B4 || point == 0x17B5 || (point >= 0x180B && point <= 0x180F) || point == 0x3164
             || (point >= 0xFE00 && point <= 0xFE0F) || point == 0xFFA0 || (point >= 0x1D173 && point <= 0x1D17A))
             return false;
+        // The rest that does not show (Arabic number signs, Egyptian hieroglyph format controls, ...)
+        if (display_name_in(display_name_format, sizeof(display_name_format) / sizeof(*display_name_format), point))
+            return false;
+        if (display_name_in(display_name_marks, sizeof(display_name_marks) / sizeof(*display_name_marks), point)) {
+            if (marks < 0 || ++marks > DISPLAY_NAME_MARKS) return false;
+        } else {
+            marks = 0;
+        }
         i += length;
     }
     return true;

@@ -93,8 +93,27 @@ class Local(unittest.TestCase):
         check = check[:check.index("\n    }\n")]
         self.assertIn("AICHAT_CONFIG_FILE: Local.configFile(info)", check)
         # and only for a minute: the config may be changed while the bubble is open
-        self.assertRegex(check, r"if \(local\)\s*bubble\.localModels\[key\] = Date\.now\(\);")
+        self.assertRegex(check, r"if \(local && key\)\s*bubble\.localModels\[key\] = Date\.now\(\);")
         self.assertIn("Date.now() - (bubble.localModels[key] ?? 0) < 60000", check)
+
+    def test_local_check_remembered_only_while_the_config_says_the_same(self):
+        # The key was [name, path]: an api_base or proxy changed in aichat's config still counted as local for
+        # up to a minute (memory and private sessions). What the config says now is part of the key, read
+        # again for each check, and with no config named nothing is remembered
+        with open(os.path.join(ROOT, "ui", "Bubble.qml")) as f:
+            qml = f.read()
+        check = qml[qml.index("function localCheck("):]
+        check = check[:check.index("\n    }\n")]
+        self.assertIn("JSON.stringify([name, config, aichatConfigText(config)])", check)
+        self.assertIn("const key = name && config ?", check)
+        read = qml[qml.index("function aichatConfigText("):]
+        read = read[:read.index("\n    }\n")]
+        self.assertIn("aichatConfigView.reload()", read)
+        view = qml[qml.rindex("FileView {", 0, qml.index("function aichatConfigText(")):qml.index("function aichatConfigText(")]
+        self.assertIn("id: aichatConfigView", view)
+        # Read at once, not when the event loop gets to it: the check needs the text now
+        self.assertIn("blockLoading: true", view)
+        self.assertIn("blockAllReads: true", view)
 
     def test_ollama_host_is_only_ollama_host(self):
         # ollamaHost was put between dataDir's two lines: without OLLAMA_HOST it was the data directory's path
@@ -119,6 +138,23 @@ class NoRuntimeDir(unittest.TestCase):
         self.assertTrue(removals)
         for line in removals:
             self.assertIn("if (bubble.memoryDir)", line)
+
+
+@unittest.skipUnless(shutil.which("make") and os.path.exists(os.path.join(ROOT, "build", "mascotd"))
+                     and os.path.exists(os.path.join(ROOT, "utils", "mascot")), "needs make and a build (make all)")
+class Install(unittest.TestCase):
+    def test_uninstall_removes_what_install_put_there(self):
+        # ui/local.js was installed (ui/*.js) but never removed, so share/mascot/ui and share/mascot stayed
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            make = ["make", "-s", "-C", ROOT, "-o", "all", f"DESTDIR={root}", "PREFIX=/usr"]
+            for target in ("install", "uninstall"):
+                out = subprocess.run(make + [target], capture_output=True, text=True, timeout=120)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                if target == "install":
+                    self.assertTrue(os.path.exists(os.path.join(root, "usr/share/mascot/ui/local.js")))
+            left = sorted(os.path.relpath(os.path.join(d, n), root) for d, ds, fs in os.walk(root) for n in ds + fs)
+            self.assertFalse([p for p in left if "mascot" in p], left)
 
 
 class Network(unittest.TestCase):

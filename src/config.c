@@ -178,6 +178,14 @@ bool config_parse(const char* path)
 
     char line[1024] = {0};
     while (fgets(line, sizeof(line), file)) {
+        // A line is at most 1023 bytes: a longer one is left out whole, not
+        // cut (its rest was read as a line of its own)
+        if (!strchr(line, '\n') && !feof(file)) {
+            WARN("%s: a line over %zu bytes is left out: %.40s...", path, sizeof(line) - 1, line);
+            int c;
+            while ((c = fgetc(file)) != EOF && c != '\n');
+            continue;
+        }
         if (line[0] == '#') {
             continue;
         }
@@ -939,8 +947,30 @@ static bool chat_role_key_names(const char* key, const char* name)
     return !strncmp(name, "Shimeji.", 8) && !strcmp(name + 8, key);
 }
 
-const char* config_get_chat_role_for(const char* name, char* dest, size_t size)
+// Why a CHAT_ROLES key that does not name this mascot was likely meant for it,
+// or NULL: written in other letters (an older Mascot matched any case), its
+// display name (which an older Mascot matched too), or the short form of a
+// name with a dot in it (Shimeji.Mr. Bean), which a key with a dot cannot be
+static const char* chat_role_key_near(const char* key, const char* name, const char* display_name)
 {
+    if (!name) return NULL;
+    bool shimeji = !strncmp(name, "Shimeji.", 8);
+    if (strchr(key, '.') && shimeji && !strcmp(key, name + 8))
+        return "a name with a dot is the full name";
+    if (!strcasecmp(key, name) || (shimeji && !strcasecmp(key, name + 8)))
+        return "its letters are not the name's own";
+    if (display_name && !strcasecmp(key, display_name))
+        return "that is the name it shows, not its name";
+    return NULL;
+}
+
+const char* config_get_chat_role_for(const char* name, const char* display_name, char* dest, size_t size)
+{
+    // A key that looks meant for this mascot but does not name it: said once
+    // for that key and mascot, not at every tap (again after another's)
+    static char warned[600];
+    char near_key[256] = "";
+    const char* near_why = NULL;
     for (const char* entry = config.chat_roles; entry && *entry; ) {
         const char* end = strchr(entry, ';');
         size_t len = end ? (size_t)(end - entry) : strlen(entry);
@@ -956,8 +986,23 @@ const char* config_get_chat_role_for(const char* name, char* dest, size_t size)
                 snprintf(dest, size, "%s", r);
                 return dest;
             }
+            const char* why = *k && !near_why ? chat_role_key_near(k, name, display_name) : NULL;
+            if (why) {
+                near_why = why;
+                snprintf(near_key, sizeof(near_key), "%s", k);
+            }
         }
         entry = end ? end + 1 : NULL;
+    }
+    if (near_why) {
+        char said[sizeof(warned)];
+        snprintf(said, sizeof(said), "%s\n%s", near_key, name);
+        if (strcmp(said, warned)) {
+            snprintf(warned, sizeof(warned), "%s", said);
+            bool short_name = !strncmp(name, "Shimeji.", 8) && !strchr(name + 8, '.');
+            WARN("CHAT_ROLES: \"%s\" does not give %s its role (%s); write it \"%s\" if it is meant for it",
+                 near_key, name, near_why, short_name ? name + 8 : name);
+        }
     }
     return config.chat_role;
 }
@@ -986,7 +1031,7 @@ const char* config_get_bubble_command()
     return config.bubble_command;
 }
 
-bool config_get_by_key(const char* key, char* dest, uint8_t size)
+bool config_get_by_key(const char* key, char* dest, size_t size)
 {
     if (!strcmp(key, CONFIG_PARAM_BREEDING)) {
         snprintf(dest, size, "%s", config.breeding ? "true" : "false");

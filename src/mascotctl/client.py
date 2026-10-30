@@ -7,6 +7,7 @@ import sys
 import re
 import shutil
 import struct
+import unicodedata
 import random
 from typing import Callable, Any
 import argparse
@@ -34,7 +35,7 @@ import random
 import logging
 
 from ipc_protocol import Packet,\
-ServerHello, ClientHello, Notice, StartSession, EnvironmentAnnouncement, EnvironmentChanged, EnvironmentMascot, EnvironmentWithdrawn, StartPrototype, PrototypeName, PrototypeDisplayName, PrototypePath, PrototypeFD, PrototypeAddAction, PrototypeAddBehavior, PrototypeIcon, PrototypeAuthor, PrototypeVersion, CommitPrototypes, MascotMigrated, MascotDisposed, MascotInfo, MascotClicked, SelectionDone, SelectionCancelled, ImportFailed, ImportStarted, ImportFinished, ImportProgress, ExportFailed, ExportFinished, ConfigKey, ClickEventExpired, PrototypeWithdraw, ReloadPrototype, Spawn, MascotGetInfo, MascotInfo, ApplyBehavior, Stop, Sync, SyncDone, GetConfigKey, ListConfigKeys, SetConfigKey, ConfigKey, Disconnect,\
+ServerHello, ClientHello, Notice, StartSession, EnvironmentAnnouncement, EnvironmentChanged, EnvironmentMascot, EnvironmentWithdrawn, StartPrototype, PrototypeName, PrototypeDisplayName, PrototypePath, PrototypeFD, PrototypeAddAction, PrototypeAddBehavior, PrototypeIcon, PrototypeAuthor, PrototypeVersion, CommitPrototypes, MascotMigrated, MascotDisposed, MascotInfo, MascotClicked, SelectionDone, SelectionCancelled, ImportFailed, ImportStarted, ImportFinished, ImportProgress, ExportFailed, ExportFinished, ConfigKey, ClickEventExpired, PrototypeWithdraw, ReloadPrototype, Spawn, MascotGetInfo, MascotInfo, ApplyBehavior, Stop, Sync, SyncDone, GetConfigKey, ListConfigKeys, SetConfigKey, ConfigKey, Disconnect, TextNotSent, CONFIG_VALUE_MAX,\
 Prototype, Environment, Mascot, Selection, Import, Export, PluginRestoreWindows,\
 objects, prototypes, environments, mascots, active_selection, imports, exports
 
@@ -191,6 +192,7 @@ class Client:
         strings = {
             "config.warning.get": "Config has no key named \"{}\"",
             "config.warning.set": "Config has no key named \"{}\"",
+            "config.warning.long": f"Not set: the value for {{}} is more than mascotd takes ({CONFIG_VALUE_MAX} bytes)",
             "prototype.error.no_behavior": "Prototype has no behavior named \"{}\"",
             "apply_behavior.error.no_mascot": "Mascot not found"
         }
@@ -308,7 +310,13 @@ class Client:
             self.socket.settimeout(previous)
 
     def queue_packet(self, packet: Packet):
-        socket.send_fds(self.socket, [packet.encode()], packet.fds)
+        try:
+            data = packet.encode()
+        except TextNotSent as e:
+            # A name, path or value from the command line the daemon cannot read: say so, no traceback
+            print(f"Not sent: {e}", file=sys.stderr)
+            exit(1)
+        socket.send_fds(self.socket, [data], packet.fds)
         # print(f"Sending packet {packet}, {packet.fds}, {packet.buffer}")
 
     def dispatch_events(self, until: Callable | None = None):
@@ -391,9 +399,21 @@ INVISIBLE_LETTERS = "\u115f\u1160\u17b4\u17b5\u3164\uffa0"
 
 def display_name_of(text: str) -> str:
     """text as a name the daemon takes (it is the mascot's name in the bubble's prompt): letters, digits, spaces
-    and - ' . _ only, at most 48 bytes; "" if nothing is left"""
-    kept = "".join(c if (c.isalnum() and c not in INVISIBLE_LETTERS) or c in " -'._" else " " for c in text)
-    kept = " ".join(kept.split())
+    and - ' . _ only, at most 48 bytes; "" if nothing is left. Accents written apart are joined to their letter
+    first (NFC); a combining mark that is left (Thai's vowels, Devanagari's virama) is kept on a letter or digit,
+    at most two on one, as mascotd takes them (src/mascot_config_parser.c)"""
+    kept, marks = [], -1
+    for c in unicodedata.normalize("NFC", text):
+        if unicodedata.category(c) in ("Mn", "Me") and c not in "\u034f\u180b\u180c\u180d\u180f" \
+                and not "\ufe00" <= c <= "\ufe0f":
+            if 0 <= marks < 2:
+                kept.append(c)
+                marks += 1
+            continue
+        letter = c.isalnum() and c not in INVISIBLE_LETTERS
+        kept.append(c if letter or c in " -'._" else " ")
+        marks = 0 if letter else -1
+    kept = " ".join("".join(kept).split())
     while len(kept.encode("utf-8")) > 48:
         kept = kept[:-1].rstrip()
     return kept
@@ -1847,7 +1867,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     5: "Invalid mascot version",
                     6: "FD points not to a file",
                     7: "FD opened in invalid mode",
-                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot",
+                    8: "its manifest.json does not give the name its header gives: it gives another (which could replace "
+                       "another mascot), none, one that is not text, or more than one",
                     9: "it has no manifest.json that can be read (missing, not a JSON object, over 1 MiB or nested too deep)",
                     10: "it unpacks to more than 256 MiB or 4096 files and directories"
                 }
@@ -2280,8 +2301,15 @@ def config_value_problem(key, value):
     """None if mascotd would take value for key, else why not"""
     if "\n" in value or "\r" in value:
         return "the value cannot span lines"
-    if len(value.encode("utf-8")) > 255:
-        return "it is longer than 255 bytes, more than mascot can send: write it in mascotd.conf instead"
+    if "\0" in value:
+        return "the value cannot hold a NUL"
+    try:
+        size = len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        return "the value is not UTF-8 text"
+    # The same for mascotd running or not: it fits a line of mascotd.conf with its key (1023 bytes)
+    if size > CONFIG_VALUE_MAX:
+        return f"it is {size} bytes, and a setting is at most {CONFIG_VALUE_MAX}"
     if key in CONFIG_BOOLEANS:
         if value.lower() not in ["true", "yes", "on", "1", "false", "no", "off", "0"]:
             return "use true or false"
@@ -2353,6 +2381,7 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
     }
     starttime = time.time()
     wait_until_null_null = False
+    sent = None  # the value set, to see that mascotd kept it whole
 
     def received_config_key(client: Client, packet: ConfigKey):
         if len(packet.key) == 0:
@@ -2361,6 +2390,11 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
         key = name_cast.get(packet.key, packet.key)
 
         print(f"  - {key} ({packet.key}) = {packet.value}")
+        if sent is not None and len(sent.encode("utf-8")) > 255 and packet.value != sent:
+            # A mascotd before 0.8.1 reads 255 bytes of a value and leaves the rest
+            print("mascotd kept only part of it: it is older than this mascot. Restart it (mascot stop) and set it "
+                  "again", file=sys.stderr)
+            exit(1)
         if not wait_until_null_null:
             exit(0)
 
@@ -2382,7 +2416,8 @@ def config_handler(arguments: argparse.Namespace, client: Client, parser):
             if problem:
                 print(f"Not set: {problem}")
                 exit(1)
-            packet = SetConfigKey(arguments.key, arguments.value.strip())
+            sent = arguments.value.strip()
+            packet = SetConfigKey(arguments.key, sent)
             client.queue_packet(packet)
             client.dispatch_events(until=lambda: time.time() - starttime > 5)
             print("Timeout.")

@@ -69,7 +69,7 @@ with open(args.output, 'w') as output_file:
         output_file.write('#!/usr/bin/env python3\n\n')
     imports.remove('from __future__ import annotations\n')
     output_file.write('from __future__ import annotations\n')
-    output_file.writelines(imports)
+    output_file.writelines(sorted(imports))  # a set's order changes with each run (hash randomisation)
     output_file.write('\n')
     output_file.writelines(output_lines)
 

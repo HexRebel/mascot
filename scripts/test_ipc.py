@@ -544,6 +544,110 @@ class Transfers(unittest.TestCase):
             self.assertIn("signal(SIGPIPE, SIG_IGN);", f.read())
 
 
+CONFIG_DRIVER = r"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include "config.h"
+#include "protocol/connector.h"
+#include "protocol/messages.h"
+#include "protocol/server.h"
+
+static int sv[2];
+
+// What mascotd answers: "value <the value's strings joined>" or "notice <message>"
+static void answer(void) {
+    uint8_t data[4096];
+    for (;;) {
+        ssize_t got = recv(sv[1], data, sizeof(data), MSG_DONTWAIT);
+        if (got < 8) return;
+        size_t at = 8;
+        if (data[0] == 0x54) {
+            at += 1 + data[at];
+            printf("value ");
+            while (at < (size_t)got) {
+                fwrite(data + at + 1, 1, data[at], stdout);
+                at += 1 + data[at];
+            }
+            printf("\n");
+        } else if (data[0] == 0x03) {
+            at += 2;
+            printf("notice %.*s\n", data[at], (char*)data + at + 1);
+        }
+    }
+}
+
+// A request as mascot sends it: the key, then the value in strings of at most `part` bytes
+static ipc_packet_t* request(uint8_t type, const char* key, const char* value, size_t part) {
+    ipc_packet_t* packet = ipc_allocate_packet(4000);
+    ipc_packet_set_type(packet, type);
+    ipc_packet_write_string(packet, key);
+    for (size_t left = value ? strlen(value) : 0, i = 0; value && (i == 0 || left); ) {
+        size_t n = left < part ? left : part;
+        ipc_packet_write_uint8(packet, (uint8_t)n);
+        if (n) ipc_packet_copy_to(packet, value, (uint16_t)n);
+        value += n; left -= n; i++;
+    }
+    return packet;
+}
+
+// argv[1]: mascotd.conf; argv[2]: a value to set as CHAT_ROLES (sent 255 bytes a string), then get
+int main(int argc, char** argv) {
+    (void)argc;
+    config_parse(argv[1]);
+    printf("read chat_roles %s, chat_role %s\n", config_get_chat_roles() ? "set" : "(none)",
+           config_get_chat_role() ? config_get_chat_role() : "(none)");
+    socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sv);
+    int epfd = epoll_create1(0);
+    ipc_connector_t* connector = ipc_initialize_connector(sv[0], epfd, NULL);
+    struct protocol_client* client = protocol_accept_connection(connector);
+    answer();
+    ipc_packet_t* packet = request(0x52, "CHAT_ROLES", argv[2], 255);
+    protocol_handler_set_config_key(client, packet);
+    ipc_free_packet(packet);
+    answer();
+    packet = request(0x51, "CHAT_ROLES", NULL, 255);
+    protocol_handler_get_config_key(client, packet);
+    ipc_free_packet(packet);
+    answer();
+    protocol_disconnect_client(client);
+    ipc_destroy_connector(connector);
+    close(sv[1]);
+    close(epfd);
+    return 0;
+}
+"""
+
+
+class Config(unittest.TestCase):
+    def test_long_values_go_whole_both_ways(self):
+        # mascot sent at most 255 bytes, so CHAT_ROLES with 20 pairs could only be written in mascotd.conf (which
+        # takes lines of 1023), and config get cut every value at 254. Now a value goes in strings of 255 to
+        # CONFIG_VALUE_MAX (1000) both ways; more is refused, and a line of mascotd.conf over 1023 bytes is left
+        # out with a warning instead of being cut (its rest was read as a line of its own)
+        roles = ";".join(f"Mascot{i}=rôle-{i}" for i in range(30))  # 30 pairs, with UTF-8 cut between strings
+        self.assertGreater(len(roles.encode()), 255)
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = os.path.join(tmp, "mascotd.conf")
+            binary = build_driver(tmp, CONFIG_DRIVER, (*PROTOCOL, "config.c"))
+            self.assertTrue(os.path.isfile(binary), binary)
+
+            def run(value):
+                with open(conf, "w") as f:
+                    f.write("chat_roles=" + "x=y;" * 300 + "\nchat_role=after\n")
+                out = run_driver(binary, conf, value)
+                self.assertEqual(out.returncode, 0, out.stderr[-3000:])
+                return out.stdout
+            self.assertEqual(run(roles), f"read chat_roles (none), chat_role after\nvalue {roles}\nvalue {roles}\n")
+            with open(conf) as f:
+                self.assertIn(f"chat_roles={roles}\n", f.read())  # and mascotd writes it whole in mascotd.conf
+            self.assertEqual(run("a" * 1001).splitlines()[1:], ["notice config.warning.long", "value "])
+            self.assertEqual(run("a" * 1000).splitlines()[1:], ["value " + "a" * 1000] * 2)
+
+
 class Client(unittest.TestCase):
     """How the mascot command reads the daemon's texts: a length byte of 128-255 and bytes that are not UTF-8
     (a pack's action and behavior names, its author) are read, not a crash"""
@@ -582,11 +686,52 @@ class Client(unittest.TestCase):
         for packet in (ipc_protocol.GetConfigKey("CHAT_ROLE" * 20), ipc_protocol.ApplyBehavior(1, "Fall" * 50)):
             data = packet.serialize()
             self.assertEqual(data[0], len(data) - 1, type(packet).__name__)
+        # Over 255 bytes in more strings, which mascotd 0.8.1 joins (each whole bytes: é may be cut between them)
+        data = ipc_protocol.SetConfigKey("CHAT_ROLE", "é" * 128).serialize()
+        self.assertEqual((data[10], data[11 + 255], len(data)), (255, 1, 11 + 255 + 2))
+        self.assertEqual((data[11:11 + 255] + data[11 + 256:]).decode(), "é" * 128)
         with self.assertRaises(ValueError):
-            ipc_protocol.SetConfigKey("CHAT_ROLE", "é" * 128).serialize()  # 256 bytes: more than the daemon reads
+            ipc_protocol.SetConfigKey("CHAT_ROLE", "x" * 1001).serialize()  # more than a setting may be
+        # What mascotd sends back is joined the same way; an older one sent one string
+        p = ipc_protocol.ConfigKey(0, 0, 1, b"\0" * 8 + bytes([3]) + b"KEY" + bytes([255]) + b"a" * 255 + bytes([2]) + b"bc")
+        p.decode()
+        self.assertEqual((p.key, p.value), ("KEY", "a" * 255 + "bc"))
         import client
-        self.assertIn("255 bytes", client.config_value_problem("CHAT_ROLES", "x" * 256) or "")
+        # The same with mascotd running or not: mascotd.conf takes the line, and mascot sends it whole
+        self.assertIsNone(client.config_value_problem("CHAT_ROLES", "x" * 1000))
+        self.assertIn("at most 1000", client.config_value_problem("CHAT_ROLES", "x" * 1001) or "")
+        self.assertNotIn("mascotd.conf instead", client.config_value_problem("CHAT_ROLES", "x" * 1001) or "")
+        self.assertIsNone(client.config_value_problem("CHAT_ROLES", ";".join(f"Mascot{i}=role-{i}" for i in range(20))))
         self.assertIsNone(client.config_value_problem("CHAT_ROLES", "Robo=robo-role," * 17))
+        self.assertIn("UTF-8", client.config_value_problem("CHAT_ROLE", "a\udcff") or "")
+
+
+    def test_too_long_to_send_is_said_not_a_traceback(self):
+        # mascot prototypes reload, config get, summon --behavior and set-behavior with a text over 255 bytes
+        # stopped with a ValueError traceback
+        import contextlib
+        import io
+        import socket
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, "src", "mascotctl"))
+        import client
+        import ipc_protocol
+        packets = (ipc_protocol.ReloadPrototype("/x" * 200), ipc_protocol.GetConfigKey("K" * 256),
+                   ipc_protocol.Spawn(1, 1, 0, 0, "Fall" * 64), ipc_protocol.ApplyBehavior(1, "Fall" * 64),
+                   ipc_protocol.ReloadPrototype("\ud800"))
+        a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        with a, b:
+            c = client.Client.__new__(client.Client)
+            c.socket = a
+            for packet in packets:
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as stop:
+                    c.queue_packet(packet)
+                self.assertEqual(stop.exception.code, 1, type(packet).__name__)
+                self.assertTrue(err.getvalue().startswith("Not sent: "), err.getvalue())
+            # A path from the command line that is not UTF-8 is sent as its own bytes
+            c.queue_packet(ipc_protocol.ReloadPrototype("/tmp/\udcff"))
+            self.assertEqual(b.recv(100)[8:], bytes([6]) + b"/tmp/\xff")
 
 
 if __name__ == "__main__":
