@@ -35,6 +35,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   name (`"password": …`, `'password' => …`) and in YAML and INI files; quoted values whole; passwords in URLs
   (`postgres://bob:…@db`), `<password>…</password>`, `Authorization: …`, `--password word`, netrc's `password word`
   and `Bearer word`. Everything 0.8.0 hid is still hidden; `bypass = no` and `key = ...` in code are no longer.
+- Security: a mascot's pictures are at most 2048 pixels a side and 256 MiB together (the biggest that ships is 181
+  pixels and 13 MiB), checked from the header before a file is read. A pack of a few big pictures was read and
+  decoded whole, up to 1.6 GB each, and overflowed the 32-bit Wayland pool, which took the daemon down.
 - Security: a mascot pack's `programs`, `actions` and `behaviors` files are checked before they are used. An empty
   programs file, a behavior that is not an object, a count larger than its list (`next_behavior_list_count`,
   `content_count`, `frame_count`) or more than 128 next behaviors crashed the daemon at every start, since it loads

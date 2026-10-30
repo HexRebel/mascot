@@ -32,6 +32,24 @@
 #define QOI_IMPLEMENTATION
 #include "third_party/qoi/qoi.h"
 
+// A QOI file's header, before it is read whole: no bigger than
+// MASCOT_ATLAS_MAX_SIDE a side, and no longer than such a picture can be
+static bool qoi_fits(const char* path)
+{
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return false;
+    struct stat st;
+    uint8_t header[QOI_HEADER_SIZE];
+    bool read_whole = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && read(fd, header, sizeof(header)) == (ssize_t)sizeof(header);
+    close(fd);
+    if (!read_whole || memcmp(header, "qoif", 4)) return false;
+    uint64_t width = (uint64_t)header[4] << 24 | header[5] << 16 | header[6] << 8 | header[7];
+    uint64_t height = (uint64_t)header[8] << 24 | header[9] << 16 | header[10] << 8 | header[11];
+    if (!width || !height || width > MASCOT_ATLAS_MAX_SIDE || height > MASCOT_ATLAS_MAX_SIDE) return false;
+    // At most 5 bytes a pixel (QOI_OP_RGBA), then the end marker
+    return (uint64_t)st.st_size <= QOI_HEADER_SIZE + width * height * 5 + sizeof(qoi_padding);
+}
+
 void _find_ireg(const uint8_t* buffer, uint32_t width, uint32_t height, uint32_t* out_x, uint32_t* out_y, uint32_t* out_width, uint32_t* out_height) {
     uint32_t minX = UINT32_MAX;
     uint32_t minY = UINT32_MAX;
@@ -183,6 +201,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
     }
 
     uint32_t local_ecount = 0;
+    uint64_t atlas_bytes = 0;
     for (uint32_t i = 0; i < file_count; i++) {
         if (is_sprite(file_paths[i])) {
             if (local_ecount >= sprite_count) break;
@@ -190,10 +209,25 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
             char fullpath[PATH_MAX] = {0};
             size_t printed = snprintf(fullpath, sizeof(fullpath), "%s/%s", dirname, file_paths[i]);
             UNUSED(printed);
+            if (!qoi_fits(fullpath)) {
+                WARN("Could not create atlas from dir \"%s\": \"%s\" is not a QOI picture of at most %d pixels a side", dirname, file_paths[i], MASCOT_ATLAS_MAX_SIDE);
+                goto fail_free_qoi_ctxs;
+            }
             pixels[local_ecount-1] = qoi_read(fullpath, &qois[local_ecount-1], 4);
             if (!pixels[local_ecount-1])
             {
                 WARN("Could not create atlas from dir \"%s\": Failed to read QOI file \"%s\"", dirname, file_paths[i]);
+                goto fail_free_qoi_ctxs;
+            }
+            // Read again after qoi_fits: the file may have changed in between
+            if (qois[local_ecount-1].width > MASCOT_ATLAS_MAX_SIDE || qois[local_ecount-1].height > MASCOT_ATLAS_MAX_SIDE) {
+                WARN("Could not create atlas from dir \"%s\": \"%s\" is bigger than %d pixels a side", dirname, file_paths[i], MASCOT_ATLAS_MAX_SIDE);
+                goto fail_free_qoi_ctxs;
+            }
+            // Twice: each picture is kept mirrored too
+            atlas_bytes += (uint64_t)qois[local_ecount-1].width * qois[local_ecount-1].height * 4 * 2;
+            if (atlas_bytes > MASCOT_ATLAS_MAX_BYTES) {
+                WARN("Could not create atlas from dir \"%s\": its pictures take more than %u MiB", dirname, MASCOT_ATLAS_MAX_BYTES / 1024 / 1024);
                 goto fail_free_qoi_ctxs;
             }
             namelist[local_ecount-1] = strdup(file_paths[i]);

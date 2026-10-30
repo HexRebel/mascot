@@ -285,20 +285,54 @@ int main(int argc, char** argv) {
 QOI = b"qoif" + (1).to_bytes(4, "big") + (1).to_bytes(4, "big") + bytes([4, 0, 0xFE, 1, 2, 3]) + bytes(7) + b"\x01"
 
 
+def big_qoi(width, height):
+    """A QOI picture of one opaque black, small on disk however big: runs of 62 pixels"""
+    pixels = width * height
+    return (b"qoif" + width.to_bytes(4, "big") + height.to_bytes(4, "big") + bytes([4, 0])
+            + bytes([0xFD]) * (pixels // 62) + (bytes([0xC0 | (pixels % 62 - 1)]) if pixels % 62 else b"")
+            + bytes(7) + b"\x01")
+
+
 class Atlas(unittest.TestCase):
+    def driver(self, tmp):
+        driver = os.path.join(tmp, "driver.c")
+        with open(driver, "w") as f:
+            f.write(ATLAS_DRIVER)
+        binary = os.path.join(tmp, "driver")
+        built = subprocess.run(["cc", "-std=gnu11", "-Wall", "-fsanitize=address,undefined", "-I",
+                                os.path.join(ROOT, "src"), "-I", os.path.join(ROOT, "build"), driver,
+                                os.path.join(ROOT, "src", "mascot_atlas.c"), os.path.join(ROOT, "src", "io.c"),
+                                "-o", binary], capture_output=True, text=True)
+        self.assertEqual(built.returncode, 0, built.stderr)
+        return binary
+
+    def atlas(self, binary, sprites):
+        out = subprocess.run([binary, sprites], capture_output=True, text=True, timeout=120,
+                             env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
+        self.assertEqual(out.returncode, 0, out.stdout[-300:] + out.stderr[-1500:])
+        return out.stdout.strip().splitlines()[-1]
+
+    def test_picture_size_has_a_ceiling(self):
+        # Each picture was read whole and decoded up to 400 million pixels (1.6 GB, twice over for the mirrored
+        # copy), and the Wayland pool's size is 32 bits: a pack of a few big pictures took the daemon down
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = self.driver(tmp)
+            for name, pictures, expected in (("fits", [(2048, 2048)], "sprites 1"), ("wide", [(2049, 1)], "refused"),
+                                             ("big", [(3000, 3000)], "refused"),
+                                             ("many", [(2048, 2048)] * 9, "refused"),
+                                             ("lie", [(1, 1, 64 * 1024 * 1024)], "refused")):
+                sprites = os.path.join(tmp, name)
+                os.mkdir(sprites)
+                for i, (width, height, *padding) in enumerate(pictures):
+                    with open(os.path.join(sprites, f"{i}.qoi"), "wb") as f:
+                        f.write(big_qoi(width, height) + bytes(padding[0] if padding else 0))
+                self.assertEqual(self.atlas(binary, sprites), expected, name)
+
     def test_sprite_count_has_a_ceiling(self):
         # The count was a uint16_t and the loops ran to sprite_count*2 as an int: with more than 32767 sprites
         # they never ended and wrote past the sprites (a pack from the net can hold that many files)
         with tempfile.TemporaryDirectory() as tmp:
-            driver = os.path.join(tmp, "driver.c")
-            with open(driver, "w") as f:
-                f.write(ATLAS_DRIVER)
-            binary = os.path.join(tmp, "driver")
-            built = subprocess.run(["cc", "-std=gnu11", "-Wall", "-fsanitize=address,undefined", "-I",
-                                    os.path.join(ROOT, "src"), "-I", os.path.join(ROOT, "build"), driver,
-                                    os.path.join(ROOT, "src", "mascot_atlas.c"), os.path.join(ROOT, "src", "io.c"),
-                                    "-o", binary], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stderr)
+            binary = self.driver(tmp)
             for count, expected in ((3, "sprites 3"), (4096, "sprites 4096"), (4097, "refused"), (32768, "refused")):
                 sprites = os.path.join(tmp, f"img{count}")
                 os.mkdir(sprites)

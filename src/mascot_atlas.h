@@ -44,6 +44,11 @@ struct mascot_sprite {
 // The most sprites an atlas loads: sprite_count and the indexes are 16 bits,
 // and UINT16_MAX means "no such sprite"
 #define MASCOT_ATLAS_MAX_SPRITES 4096
+// The biggest picture (the biggest that ships is 181 pixels a side), and the
+// most an atlas's pictures may take decoded, mirrored copies included (the
+// Wayland pool they go in is 32 bits)
+#define MASCOT_ATLAS_MAX_SIDE 2048
+#define MASCOT_ATLAS_MAX_BYTES (256u * 1024 * 1024)
 
 struct mascot_atlas {
     struct mascot_sprite* sprites; // Array has following layout: buffers[x] -> left image; buffers[x+1] -> right image
