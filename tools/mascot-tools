@@ -187,7 +187,70 @@ def on_the_way(path):
                for candidate in (os.path.normpath(path), os.path.realpath(path)) for a in allowed)
 
 
+def yaml_scalar(text):
+    """A plain or quoted YAML value as text, without a comment after it"""
+    text = text.strip()
+    if text[:1] in ("'", '"') and text[:1] in text[1:]:
+        return text[1:text.index(text[0], 1)]
+    return re.sub(r"\s+#.*$", "", text)
+
+
+def aichat_ollama_base():
+    """Where aichat (0.30) sends an ollama: model: the api_base of its client
+    named ollama in its config (AICHAT_CONFIG_FILE, else config.yaml in
+    AICHAT_CONFIG_DIR or ~/.config/aichat), else OLLAMA_API_BASE; None if
+    neither says. The tools run under aichat, so they have its environment.
+    Only those two lines of the config are read"""
+    directory = os.environ.get("AICHAT_CONFIG_DIR") or os.path.join(
+        os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "aichat")
+    path = os.environ.get("AICHAT_CONFIG_FILE") or os.path.join(directory, "config.yaml")
+    try:
+        with open(path, encoding="utf-8") as file:
+            lines = file.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        lines = []
+    clients, in_clients, item, keys = [], False, None, None
+    for line in lines:
+        text = line.strip()
+        if not text or text.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0 and not text.startswith("- "):
+            in_clients = text == "clients:"
+            item = None
+            continue
+        if not in_clients:
+            continue
+        if text.startswith("- ") and (item is None or indent == item):
+            item, keys = indent, indent + 2
+            clients.append({})
+            text, indent = text[2:].lstrip(), keys
+        if clients and indent == keys and (m := re.fullmatch(r"(name|api_base):\s*(.*)", text)):
+            clients[-1].setdefault(m[1], yaml_scalar(m[2]))
+    client = next((c for c in clients if c.get("name") == "ollama"), {})
+    return client.get("api_base") or os.environ.get("OLLAMA_API_BASE") or None
+
+
+def loopback(url):
+    """Whether url's host is this computer (only localhost and loopback addresses)"""
+    try:
+        host = urllib.parse.urlsplit(url if "://" in url else "http://" + url).hostname or ""
+    except ValueError:
+        return False
+    if host == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_unspecified
+
+
 def ollama_url(endpoint):
+    # The Ollama aichat talks to, else OLLAMA_HOST (e.g. for the bubble's own .todo)
+    base = aichat_ollama_base()
+    if base:
+        return re.sub(r"/v1/?$", "", base.rstrip("/")) + endpoint
     host = os.environ.get("OLLAMA_HOST", "") or "127.0.0.1:11434"
     return (host if "://" in host else "http://" + host).rstrip("/") + endpoint
 
@@ -1678,11 +1741,13 @@ def main():
         # ones the bubble chose for this answer run (none without the list)
         if name not in os.environ.get("MASCOT_TOOLS_ALLOWED", "").split(","):
             raise ToolError(f"{name} is not turned on; do not try other ways to get what it would give")
-        # A local name can be a copy of one of Ollama's cloud models (ollama cp
-        # x:cloud mine), which runs at ollama.com: then the local-only tools refuse
+        # Local is where aichat sends the model (its api_base, not OLLAMA_HOST),
+        # and not a copy of one of Ollama's cloud models (ollama cp x:cloud
+        # mine), which runs at ollama.com: else the local-only tools refuse
         model = os.environ.get("MASCOT_VISION_MODEL", "")
         if os.environ.get("MASCOT_TOOLS_LOCAL") == "1" and model:
-            show = ollama_show(model)
+            base = aichat_ollama_base()
+            show = ollama_show(model) if base and loopback(base) else None
             if show is None or show.get("remote_host") or show.get("remote_model"):
                 os.environ["MASCOT_TOOLS_LOCAL"] = "0"
         try:

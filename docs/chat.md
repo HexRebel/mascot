@@ -251,7 +251,7 @@ The file, todo, reminder, shell and system tools keep to what is yours to share:
   file the mascot is told to use `search_file`, which finds the lines with what you ask about (e.g.
   *which font does kitty use?*) and a line around each.
 - Pictures: a tool can only hand the model text, so `look_at_image` shows the picture to the same
-  local model itself, through Ollama's API (`OLLAMA_HOST`, else `127.0.0.1:11434`), and gives the
+  local model itself, through Ollama's API (where aichat reaches it, see below), and gives the
   model its description. The model must be able to see (Ollama lists `vision` under
   *capabilities* in `ollama show <model>`).
 - Shell history: `last_commands` reads the end of the history file written last, whichever shell
@@ -274,8 +274,9 @@ The file, todo, reminder, shell and system tools keep to what is yours to share:
   *api_key* and the like is shown as *[hidden]*. When they found nothing to go on, the mascot shows it
   does not know while it answers (Robo's "?").
 - Only with a local model, one of aichat's `ollama` client (`ollama:…`), so what they read stays on
-  your computer. Not Ollama's cloud models (`…-cloud`, `…:cloud`: they run at ollama.com), and not when
-  `OLLAMA_HOST` is another machine. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
+  your computer. Not Ollama's cloud models (`…-cloud`, `…:cloud`, or a copy of one: they run at ollama.com),
+  and not when the `ollama` client's `api_base` in aichat's config (else `OLLAMA_API_BASE`, where aichat sends
+  it) or `OLLAMA_HOST` is another machine. With any other model (e.g. after `.model openrouter:…`) the mascot has neither, and
   its memory starts over first, so nothing it read goes along (`.todo` and `.remind` still work).
 - In a `.session` (it outlives Mascot) only when it is private: a session whose first message went to
   a local model is private, has these tools, and only local models may go on with it - the bubble

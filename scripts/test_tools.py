@@ -45,13 +45,8 @@ class Files(unittest.TestCase):
         self.tool("add_todo", {"item": "secret plans"}, MASCOT_TODO_FILE=todo)
         self.assertEqual(os.stat(todo).st_mode & 0o777, 0o600)
 
-    def test_copy_of_a_cloud_model_is_not_local(self):
-        # ollama cp gpt-oss:120b-cloud mine: a local name, but Ollama sends it to ollama.com (its /api/show has
-        # remote_host); the files must not go there. Ollama not answering: not local either
-        self.write("notes.txt", "secret plans\n")
-        shows = {"mine": {"remote_host": "https://ollama.com:443", "remote_model": "gpt-oss:120b"},
-                 "gemma4:12b": {"parameters": "num_ctx 16384"}}
-
+    def fake_ollama(self, shows):
+        """An Ollama answering /api/show with shows[model] ({} for others); its address"""
         class Ollama(http.server.BaseHTTPRequestHandler):
             def do_POST(self):
                 model = json.loads(self.rfile.read(int(self.headers["Content-Length"])))["model"]
@@ -66,14 +61,62 @@ class Files(unittest.TestCase):
         server = http.server.HTTPServer(("127.0.0.1", 0), Ollama)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.shutdown)
-        host = f"127.0.0.1:{server.server_port}"
-        read = lambda model, ollama=host: self.tool("read_file", {"path": "~/notes.txt"}, MASCOT_VISION_MODEL=model,
-                                                    OLLAMA_HOST=ollama)
-        self.assertIn("secret plans", read("gemma4:12b"))
-        out = read("mine")
+        return f"http://127.0.0.1:{server.server_port}"
+
+    def aichat_config(self, api_base, name="config.yaml", client="ollama"):
+        """An aichat config dir (or file) whose client reaches Ollama at api_base (none: no api_base line)"""
+        os.makedirs(os.path.join(self.home, "aichat"), exist_ok=True)
+        path = os.path.join(self.home, "aichat", name)
+        with open(path, "w") as f:
+            f.write("model: ollama:gemma4:12b\nclients:\n  - type: openai-compatible\n"
+                    f"    name: {client}\n" + (f"    api_base: {api_base}\n" if api_base else "")
+                    + "    models:\n      - name: gemma4:12b\n")
+        return path
+
+    def read_as(self, model, **env):
+        return self.tool("read_file", {"path": "~/notes.txt"}, MASCOT_VISION_MODEL=model, **env)
+
+    def test_copy_of_a_cloud_model_is_not_local(self):
+        # ollama cp gpt-oss:120b-cloud mine: a local name, but Ollama sends it to ollama.com (its /api/show has
+        # remote_host); the files must not go there. Ollama not answering: not local either
+        self.write("notes.txt", "secret plans\n")
+        base = self.fake_ollama({"mine": {"remote_host": "https://ollama.com:443", "remote_model": "gpt-oss:120b"},
+                                 "gemma4:12b": {"parameters": "num_ctx 16384"}})
+        self.aichat_config(base + "/v1")
+        cfg = os.path.join(self.home, "aichat")
+        self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
+        out = self.read_as("mine", AICHAT_CONFIG_DIR=cfg)
         self.assertNotIn("secret plans", out)
         self.assertIn("local model", out)
-        self.assertNotIn("secret plans", read("gemma4:12b", "127.0.0.1:9"))
+        self.aichat_config("http://127.0.0.1:9/v1")
+        self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
+
+    def test_local_means_where_aichat_sends_it(self):
+        # aichat sends an ollama: model to its client's api_base (else OLLAMA_API_BASE), not to OLLAMA_HOST
+        self.write("notes.txt", "secret plans\n")
+        base = self.fake_ollama({})
+        cfg = os.path.join(self.home, "aichat")
+        mine = lambda **env: self.read_as("gemma4:12b", OLLAMA_HOST=base, **env)
+        for elsewhere in ("http://192.168.1.20:11434/v1", "https://ollama.example.com/v1",
+                          "http://127.0.0.1@evil.com:11434/v1", "http://127.attacker.example/v1"):
+            self.aichat_config(elsewhere)
+            self.assertNotIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg), elsewhere)
+        self.aichat_config(f'"{base}/v1"')  # quoted, as YAML allows
+        self.assertIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg))
+        # The config's api_base wins over OLLAMA_API_BASE; without it, OLLAMA_API_BASE is used
+        self.assertIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg, OLLAMA_API_BASE="http://192.168.1.20:11434/v1"))
+        self.aichat_config(None)
+        self.assertNotIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg, OLLAMA_API_BASE="http://192.168.1.20:11434/v1"))
+        self.assertIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg, OLLAMA_API_BASE=base + "/v1"))
+        self.assertNotIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg))  # no address at all
+        # AICHAT_CONFIG_FILE wins over the directory; without either, ~/.config/aichat (XDG_CONFIG_HOME)
+        self.aichat_config(base + "/v1")
+        other = self.aichat_config("http://192.168.1.20:11434/v1", name="other.yaml")
+        self.assertNotIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg, AICHAT_CONFIG_FILE=other))
+        self.assertIn("secret plans", mine(XDG_CONFIG_HOME=self.home))
+        # Another client with the right address does not count: ollama: models go to the one named ollama
+        self.aichat_config(base + "/v1", client="local")
+        self.assertNotIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg))
 
     def test_weather_sends_only_a_place_name(self):
         # The place goes into wttr.in's URL, also for a model that is not local: a file or the shell history as

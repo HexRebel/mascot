@@ -19,6 +19,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   shell tools went to a model somewhere else. Now only localhost and loopback addresses count.
 - Security: a local copy of one of Ollama's cloud models (`ollama cp gpt-oss:120b-cloud mine`) does not get the file,
   todo and shell tools: they ask Ollama first, and refuse when it says the model runs elsewhere.
+- Security: a model counts as local only where aichat sends it, the `ollama` client's `api_base` in aichat's config
+  (else `OLLAMA_API_BASE`), not only `OLLAMA_HOST`: a client pointed at another machine got the file, todo and shell
+  tools.
 
 ## 0.8.0 (2026-10-29)
 
