@@ -36,6 +36,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   name (`"password": …`, `'password' => …`) and in YAML and INI files; quoted values whole; passwords in URLs
   (`postgres://bob:…@db`), `<password>…</password>`, `Authorization: …`, `--password word`, netrc's `password word`
   and `Bearer word`. Everything 0.8.0 hid is still hidden; `bypass = no` and `key = ...` in code are no longer.
+- Security: the chat guide quotes Ollama's model names in the aichat config it writes, and leaves out a name with a
+  line break. A model called `x\n    api_base: …` could point Mascot's aichat somewhere else, and `- item` or `a: b`
+  broke the file.
 - Security: a pack's `display_name` is the mascot's name in the bubble's prompt, so it must be a short name (at most
   48 bytes of letters, digits, spaces and `- ' . _`); otherwise the pack's name is used. A pack could write
   instructions to the model there. `CHAT_ROLES` finds a mascot by that name only when it ends its full name

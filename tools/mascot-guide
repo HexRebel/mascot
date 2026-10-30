@@ -72,6 +72,8 @@ def chat_models():
     for name in names:
         if re.search(r"[-:]cloud$", name):  # Ollama's cloud models run at ollama.com, not on this computer
             continue
+        if not name or any(ord(c) < 0x20 or ord(c) == 0x7F for c in name):  # no name, in YAML or a menu
+            continue
         try:
             show = ollama("/api/show", {"model": name})
         except (OSError, ValueError):
@@ -102,11 +104,19 @@ def status():
     return {"state": "choose", "config": "", "models": models}
 
 
+def yaml_str(value):
+    """value as a YAML scalar: plain when that is safe, else double-quoted (as
+    mascotctl's chatsetup.yaml_str): a model's name is Ollama's, not ours"""
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]*", value):
+        return value
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def config_text(default, models):
-    lines = [f"model: ollama:{default}", "clients:", "  - type: openai-compatible", "    name: ollama",
-             f"    api_base: {ollama_url()}/v1", "    models:"]
+    lines = [f"model: {yaml_str('ollama:' + default)}", "clients:", "  - type: openai-compatible", "    name: ollama",
+             f"    api_base: {yaml_str(ollama_url() + '/v1')}", "    models:"]
     for m in models:
-        lines.append(f"      - name: {m['name']}")
+        lines.append(f"      - name: {yaml_str(m['name'])}")
         # Only where Ollama says the model can: one that cannot fails with "does not support tools"
         if m["tools"]:
             lines.append("        supports_function_calling: true")

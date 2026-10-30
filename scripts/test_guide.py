@@ -195,6 +195,23 @@ class Guide(unittest.TestCase):
                               stdin=subprocess.DEVNULL)
         self.assertRegex(info.stdout, r"(?m)^model\s+ollama:llama2:7b$")
 
+    def test_odd_model_names_stay_names(self):
+        # Ollama's names go into the YAML: one must not add a setting (another api_base) or break the file
+        odd = ["x\n    api_base: http://attacker.example/v1", "a: b", "#c", "q\"uote", "back\\slash", "- item"]
+        MODELS.update({"llama2:7b": ["completion"], **{name: ["completion"] for name in odd}})
+        out = self.guide("write", "llama2:7b")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        import yaml
+        with open(self.mascot_config()) as f:
+            config = yaml.safe_load(f)
+        client = config["clients"][0]
+        self.assertEqual(client["api_base"], f"http://127.0.0.1:{self.port}/v1")
+        names = [m["name"] for m in client["models"]]
+        self.assertIn("llama2:7b", names)
+        self.assertNotIn(odd[0], names)  # a line break is no name: left out
+        for name in odd[1:]:
+            self.assertIn(name, names)
+
     def test_write_refuses_with_own_config(self):
         """The user's own config came while the list was shown: it wins, nothing is written"""
         self.choose_models()
