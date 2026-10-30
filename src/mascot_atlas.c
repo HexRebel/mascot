@@ -130,7 +130,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
     if (!strlen(dirname)) return NULL;
 
     qoi_desc* qois = NULL;
-    uint16_t sprite_count = 0;
+    uint32_t sprite_count = 0;
     struct mascot_atlas* atlas = NULL;
     char** file_paths = NULL;
     uint32_t file_count = 0;
@@ -160,6 +160,13 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
         WARN("Could not create atlas from dir \"%s\": No sprites found", dirname);
         return NULL;
     }
+    // A pack from the net can hold any number: the count and the indexes are 16 bits wide
+    if (sprite_count > MASCOT_ATLAS_MAX_SPRITES) {
+        for (uint32_t i = 0; i < file_count; i++) free(file_paths[i]);
+        free(file_paths);
+        WARN("Could not create atlas from dir \"%s\": %u sprites, at most %u", dirname, sprite_count, MASCOT_ATLAS_MAX_SPRITES);
+        return NULL;
+    }
 
     qois = calloc(sprite_count, sizeof(qoi_desc));
     char ** namelist = calloc(sprite_count, sizeof(char*));
@@ -175,7 +182,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
         ERROR("Could not create atlas from dir \"%s\": Allocation failed for filelists", dirname);
     }
 
-    uint16_t local_ecount = 0;
+    uint32_t local_ecount = 0;
     for (uint32_t i = 0; i < file_count; i++) {
         if (is_sprite(file_paths[i])) {
             if (local_ecount >= sprite_count) break;
@@ -205,7 +212,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
     atlas->sprites = calloc(2*sprite_count, sizeof(struct mascot_sprite));
     if (!atlas->sprites) ERROR("Could not create atlas from dir \"%s\": Allocation failed for atlas sprites array", dirname);
 
-    for (uint16_t sprite_i = 0; sprite_i < sprite_count; sprite_i ++) {
+    for (uint32_t sprite_i = 0; sprite_i < sprite_count; sprite_i ++) {
         uint64_t buffer_factory_offset = buffer_factory_pos;
         uint32_t input_x, input_y, input_width, input_height;
 
@@ -242,7 +249,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
 
     environment_buffer_factory_done(buffer_factory);
 
-    for (uint16_t mascot_sprite = 0; mascot_sprite < sprite_count*(uint16_t)2; mascot_sprite ++) {
+    for (uint32_t mascot_sprite = 0; mascot_sprite < sprite_count*2; mascot_sprite ++) {
         atlas->sprites[mascot_sprite].buffer = environment_buffer_factory_create_buffer(buffer_factory, atlas->sprites[mascot_sprite].width, atlas->sprites[mascot_sprite].height, atlas->sprites[mascot_sprite].width*4, atlas->sprites[mascot_sprite].offset);
         environment_buffer_add_to_input_region(atlas->sprites[mascot_sprite].buffer, atlas->sprites[mascot_sprite].ireg.x, atlas->sprites[mascot_sprite].ireg.y, atlas->sprites[mascot_sprite].ireg.w, atlas->sprites[mascot_sprite].ireg.h);
         if (mascot_sprite%2 == 0) DEBUG("Atlas \"%s\": Created sprite \"%s\"", dirname, namelist[mascot_sprite/2]);
@@ -254,7 +261,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
     atlas->name_order = namelist;
     atlas->sprite_count = sprite_count;
 
-    for (uint16_t i = 0; i < sprite_count; i++) free(pixels[i]);
+    for (uint32_t i = 0; i < sprite_count; i++) free(pixels[i]);
     for (uint32_t i = 0; i < file_count; i++) free(file_paths[i]);
     free(file_paths);
     free(qois);
@@ -266,8 +273,8 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
 
 fail_free_qoi_ctxs:
     free(atlas);
-    for (uint16_t i = 0; i < sprite_count; i++) free(pixels[i]);
-    for (uint16_t i = 0; i < sprite_count; i++) free(namelist[i]);
+    for (uint32_t i = 0; i < sprite_count; i++) free(pixels[i]);
+    for (uint32_t i = 0; i < sprite_count; i++) free(namelist[i]);
     for (uint32_t i = 0; i < file_count; i++) free(file_paths[i]);
     free(qois);
     free(namelist);
@@ -279,7 +286,7 @@ void mascot_atlas_destroy(struct mascot_atlas* atlas)
 {
     if (!atlas) return;
 
-    for (uint16_t i = 0; i < atlas->sprite_count*(uint16_t)2; i++) {
+    for (uint32_t i = 0; i < (uint32_t)atlas->sprite_count*2; i++) {
         if (i % 2 == 0) free(atlas->name_order[i/2]);
         environment_buffer_destroy(atlas->sprites[i].buffer);
     }

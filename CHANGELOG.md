@@ -22,6 +22,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: a model counts as local only where aichat sends it, the `ollama` client's `api_base` in aichat's config
   (else `OLLAMA_API_BASE`), not only `OLLAMA_HOST`: a client pointed at another machine got the file, todo and shell
   tools.
+- A mascot with more than 32767 pictures hung the daemon when it loaded (a pack from the net can hold that many).
+  An atlas now loads at most 4096 (the biggest that ships has 101).
 
 ## 0.8.0 (2026-10-29)
 

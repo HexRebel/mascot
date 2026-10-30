@@ -216,5 +216,68 @@ class Cli(unittest.TestCase):
         self.assertEqual(len(self.client.wlshm_header("a" * 400, "1" * 400)), 512)
 
 
+ATLAS_DRIVER = r"""
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include "mascot_atlas.h"
+
+// The daemon's log and Wayland buffers, not needed to load sprites
+void __error(const char* f, int l, const char* x, ...) { (void)f; (void)l; (void)x; abort(); }
+void __warn(const char* f, int l, const char* x, ...) { (void)f; (void)l; va_list a; va_start(a, x); vprintf(x, a); va_end(a); printf("\n"); }
+void __info(const char* f, int l, const char* x, ...) { (void)f; (void)l; (void)x; }
+void __debug(const char* f, int l, const char* x, ...) { (void)f; (void)l; (void)x; }
+static int factory, buffer;
+environment_buffer_factory_t* environment_buffer_factory_new() { return (environment_buffer_factory_t*)&factory; }
+void environment_buffer_factory_destroy(environment_buffer_factory_t* f) { (void)f; }
+bool environment_buffer_factory_write(environment_buffer_factory_t* f, const void* d, size_t s) { (void)f; (void)d; (void)s; return true; }
+void environment_buffer_factory_done(environment_buffer_factory_t* f) { (void)f; }
+environment_buffer_t* environment_buffer_factory_create_buffer(environment_buffer_factory_t* f, int32_t w, int32_t h, uint32_t s, uint32_t o) { (void)f; (void)w; (void)h; (void)s; (void)o; return (environment_buffer_t*)&buffer; }
+void environment_buffer_add_to_input_region(environment_buffer_t* b, int32_t x, int32_t y, int32_t w, int32_t h) { (void)b; (void)x; (void)y; (void)w; (void)h; }
+void environment_buffer_destroy(environment_buffer_t* b) { (void)b; }
+
+int main(int argc, char** argv) {
+    (void)argc;
+    struct mascot_atlas* atlas = mascot_atlas_new(argv[1]);
+    if (!atlas) { printf("refused\n"); return 0; }
+    printf("sprites %u\n", (unsigned)atlas->sprite_count);
+    mascot_atlas_destroy(atlas);
+    return 0;
+}
+"""
+
+# A 1x1 QOI picture: header, one RGBA pixel, end marker
+QOI = b"qoif" + (1).to_bytes(4, "big") + (1).to_bytes(4, "big") + bytes([4, 0, 0xFE, 1, 2, 3]) + bytes(7) + b"\x01"
+
+
+class Atlas(unittest.TestCase):
+    def test_sprite_count_has_a_ceiling(self):
+        # The count was a uint16_t and the loops ran to sprite_count*2 as an int: with more than 32767 sprites
+        # they never ended and wrote past the sprites (a pack from the net can hold that many files)
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = os.path.join(tmp, "driver.c")
+            with open(driver, "w") as f:
+                f.write(ATLAS_DRIVER)
+            binary = os.path.join(tmp, "driver")
+            built = subprocess.run(["cc", "-std=gnu11", "-Wall", "-fsanitize=address,undefined", "-I",
+                                    os.path.join(ROOT, "src"), "-I", os.path.join(ROOT, "build"), driver,
+                                    os.path.join(ROOT, "src", "mascot_atlas.c"), os.path.join(ROOT, "src", "io.c"),
+                                    "-o", binary], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            for count, expected in ((3, "sprites 3"), (4096, "sprites 4096"), (4097, "refused"), (32768, "refused")):
+                sprites = os.path.join(tmp, f"img{count}")
+                os.mkdir(sprites)
+                for i in range(count):
+                    with open(os.path.join(sprites, f"{i}.qoi"), "wb") as f:
+                        f.write(QOI)
+                try:
+                    out = subprocess.run([binary, sprites], capture_output=True, text=True, timeout=60,
+                                         env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
+                except subprocess.TimeoutExpired:
+                    self.fail(f"{count} sprites: no end")
+                self.assertEqual((out.returncode, out.stdout.strip().splitlines()[-1:]), (0, [expected]),
+                                 f"{count}: " + out.stdout[-300:] + out.stderr[-1500:])
+
+
 if __name__ == "__main__":
     unittest.main()

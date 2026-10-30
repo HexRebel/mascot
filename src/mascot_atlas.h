@@ -41,6 +41,10 @@ struct mascot_sprite {
     } ireg;
 };
 
+// The most sprites an atlas loads: sprite_count and the indexes are 16 bits,
+// and UINT16_MAX means "no such sprite"
+#define MASCOT_ATLAS_MAX_SPRITES 4096
+
 struct mascot_atlas {
     struct mascot_sprite* sprites; // Array has following layout: buffers[x] -> left image; buffers[x+1] -> right image
     uint16_t sprite_count;
