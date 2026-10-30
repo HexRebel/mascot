@@ -76,16 +76,20 @@ bool wlshm_manifest_names(int dirfd, const char* name)
     close(fd);
     if (!text)
         return false;
+    // Exactly one name, a string: json.h keeps a second one, and the loader
+    // refuses it too, so no name but this one can be loaded
     bool same = false;
+    int names = 0;
     struct json_value_s* root = json_parse(text, got);
     if (root && root->type == json_type_object) {
         for (struct json_object_element_s* e = ((struct json_object_s*)root->payload)->start; e; e = e->next) {
-            if (!strcmp(e->name->string, "name") && e->value->type == json_type_string) {
-                same = !strcmp(((struct json_string_s*)e->value->payload)->string, name);
-                break;
-            }
+            if (strcmp(e->name->string, "name"))
+                continue;
+            names++;
+            same = e->value->type == json_type_string && !strcmp(((struct json_string_s*)e->value->payload)->string, name);
         }
     }
+    same = same && names == 1;
     free(root);
     free(text);
     return same;

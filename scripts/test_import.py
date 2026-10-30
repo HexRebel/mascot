@@ -136,6 +136,9 @@ int main(void) {
     manifest("name not text", "{\"name\": 1}", "1", false);
     manifest("not JSON", "{name: Shimeji.Robo", "Shimeji.Robo", false);
     manifest("not an object", "[\"Shimeji.Robo\"]", "Shimeji.Robo", false);
+    // json.h keeps both: the loader took the last, this the first
+    manifest("two names", "{\"name\": \"Innocent\", \"name\": \"Shimeji.Robo\"}", "Innocent", false);
+    manifest("two names, header the last", "{\"name\": \"Innocent\", \"name\": \"Shimeji.Robo\"}", "Shimeji.Robo", false);
     if (!failed)
         printf("ok\n");
     return failed;
@@ -397,6 +400,11 @@ class Manifest(unittest.TestCase):
         os.unlink(os.path.join(manifest_fifo, "manifest.json"))
         os.mkfifo(os.path.join(manifest_fifo, "manifest.json"))
         self.assertIn(self.load("ManifestFifo"), (5, 6))
+
+    def test_one_name_only(self):
+        # The import checks the header against one name: a second one must not be the one loaded
+        self.pack("Two", {}, manifest_text=json.dumps(MANIFEST)[:-1] + ', "name": "Shimeji.Robo"}')
+        self.assertEqual(self.load("Two"), 6)
 
     def test_broken_manifest_does_not_stop_the_daemon(self):
         # ERROR() ends the daemon: one bad pack must only be left out

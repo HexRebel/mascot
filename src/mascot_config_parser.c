@@ -2406,6 +2406,11 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
                 WARN("Cannot load prototype from %s: Invalid JSON: name expected to be a string", filename_buf);
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
+            // A second name would be loaded instead of the one an import checked
+            if (prototype->name) {
+                WARN("Cannot load prototype from %s: Invalid JSON: more than one name", filename_buf);
+                return PROTOTYPE_LOAD_MANIFEST_INVALID;
+            }
             prototype->name = strdup(((struct json_string_s*)(element->value->payload))->string);
         } else if (!strcmp(element->name->string, "version")) {
             if (element->value->type != json_type_string) {

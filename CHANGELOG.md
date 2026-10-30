@@ -29,7 +29,7 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   was read into a buffer of one byte. A broken `manifest.json` leaves out that mascot instead of stopping the daemon.
 - Security: an imported pack whose header and `manifest.json` give different names is refused. The header's name
   decided what may be replaced, the manifest's what was loaded, so a pack called `Innocent` could replace Robo
-  without `-f`.
+  without `-f`. A `manifest.json` with more than one `name` is refused too.
 - Security: keys are hidden by their name, wherever the word is in it (`AWS_SECRET_ACCESS_KEY`, `apiKey`,
   `db.password`), quoted values whole, and netrc's `password word` and `Bearer word`. `bypass = no` and
   `key = ...` in code are no longer hidden.
