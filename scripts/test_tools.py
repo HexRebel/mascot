@@ -177,6 +177,16 @@ class Files(unittest.TestCase):
             self.assertIn(line, out)
         self.assertIn("AWS_SECRET_ACCESS_KEY=[hidden]", out)
 
+    def history(self, commands):
+        with open(os.path.join(self.home, ".zsh_history"), "w") as f:
+            f.write("".join(f": {1700000000 + i}:0;{c}\n" for i, c in enumerate(commands)))
+        return self.tool("last_commands", {"count": len(commands)})
+
+    def test_shell_history(self):
+        out = self.history(["ls -la", "git status"])
+        self.assertIn("git status  <- the last command", out)
+        self.assertIn("ls -la", out)
+
     def test_search_never_finds_a_key(self):
         # Searching for the key itself must not tell, one letter at a time, what it is
         self.write(".zshrc", f"export OPENAI_API_KEY={KEY}\n")
