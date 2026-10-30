@@ -849,16 +849,17 @@ PanelWindow {
         const name = Local.localModel(info, bubble.ollamaHost);
         // Per config: the same name may be sent elsewhere by another one
         const key = JSON.stringify([name, Local.configFile(info)]);
-        if (!name || bubble.localModels[key]) {
+        if (!name || Date.now() - (bubble.localModels[key] ?? 0) < 60000) {
             done(name);
             return;
         }
         const path = `${bubble.toolsDir}/bin/local_model`.replace(/'/g, "'\\''");
         run(["{}"], false, "", (out, ok) => {
             const local = ok && out.trim() === "1";
-            // Only local is remembered: "not local" may be Ollama not running yet
+            // Only local is remembered, and for a minute: "not local" may be
+            // Ollama not running yet, and the config may change meanwhile
             if (local)
-                bubble.localModels[key] = true;
+                bubble.localModels[key] = Date.now();
             done(local ? name : "");
         }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: "local_model", MASCOT_VISION_MODEL: name,
                              AICHAT_CONFIG_FILE: Local.configFile(info) });

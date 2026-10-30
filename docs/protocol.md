@@ -473,6 +473,8 @@ Error:
   - 5: Mascot version is not supported
   - 6: File is not file
   - 7: File is not opened in right mode (Expected read or readwrite)
+  - 8: The pack's `manifest.json` names another mascot than its header (or names one twice)
+  - 9: The pack has no `manifest.json` that can be read (missing, not a JSON object, over 1 MiB or nested too deep)
 
 # import.started() - 0x24
 

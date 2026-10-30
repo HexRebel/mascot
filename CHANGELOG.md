@@ -68,7 +68,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: the bubble's memory and private sessions count a model as local the same way the tools do (where aichat
   sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
   with the memory of what the tools had read, and could go on with a private session. It reads the config
-  `aichat --info` names, so one `CHAT_COMMAND` gives aichat counts, and Ollama not yet running is not remembered.
+  `aichat --info` names, so one `CHAT_COMMAND` gives aichat counts; a local answer is remembered for a minute (the
+  config may change while the bubble is open), and Ollama not yet running is not remembered.
 - Security: a client named `ollama` the tools cannot read (`- {name: ollama, …}`, `'name': "ollama"`) no longer
   lets `OLLAMA_API_BASE` decide where the model is; quoted keys are read, and a list item with more spaces after
   its `-`. A proxy not on this computer makes the model not local, as aichat 0.30 picks it (measured): the client's

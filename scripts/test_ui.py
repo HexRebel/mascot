@@ -92,7 +92,9 @@ class Local(unittest.TestCase):
         check = qml[qml.index("function localCheck("):]
         check = check[:check.index("\n    }\n")]
         self.assertIn("AICHAT_CONFIG_FILE: Local.configFile(info)", check)
-        self.assertRegex(check, r"if \(local\)\s*bubble\.localModels\[key\] = true;")
+        # and only for a minute: the config may be changed while the bubble is open
+        self.assertRegex(check, r"if \(local\)\s*bubble\.localModels\[key\] = Date\.now\(\);")
+        self.assertIn("Date.now() - (bubble.localModels[key] ?? 0) < 60000", check)
 
     def test_ollama_host_is_only_ollama_host(self):
         # ollamaHost was put between dataDir's two lines: without OLLAMA_HOST it was the data directory's path
