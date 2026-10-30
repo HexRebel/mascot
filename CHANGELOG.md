@@ -14,8 +14,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   model cannot send a file or a command to wttr.in as the "city". With the local tools on it is looked up once an
   answer, so what a file said cannot go out 64 letters at a time.
 - Security: Mascot's data directory is made private (700) each time mascotd and `mascot setup` run, and the todo
-  list and reminders are written 600. `make install PREFIX=~/.local` made it 755, so others on the computer could
-  read the todo list and the chat sessions.
+  list and reminders are written 600 when they are made or rewritten. `make install PREFIX=~/.local` made it 755,
+  so others on the computer could read the todo list and the chat sessions. Files already there keep their mode,
+  but no one else can reach them inside the private directory.
 - Security: `OLLAMA_HOST=127.0.0.1@evil.com` or `127.attacker.example` counted as this computer, so the file, todo and
   shell tools went to a model somewhere else. Now only localhost and loopback addresses count.
 - Security: a local copy of one of Ollama's cloud models (`ollama cp gpt-oss:120b-cloud mine`) does not get the file,
