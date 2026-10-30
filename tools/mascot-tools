@@ -1062,8 +1062,15 @@ def sleep_mode(args):
 SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine", "power")
 LOG_LINES = 60  # lines of the log read_log shows, the newest
 LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
-SECRET_VALUE = re.compile(r"((?:pass(?:wd|word)?|secret|token|api[_-]?key|apikey|auth[_-]?key|bearer|credential)"
-                          r"\s*[=:]\s*)\S+", re.I)
+# name = value or name: value, the value quoted or one word; secret when one
+# of the name's words (GITHUB_TOKEN, db.password) is one of SECRET_WORDS, or
+# it ends in key (AWS_SECRET_ACCESS_KEY, apiKey; not key or keyNavigation, as
+# in code). Then "password word" on a netrc line, and "Bearer word"
+ASSIGNMENT = re.compile(r"""\b([A-Za-z_][\w.-]*)(\s*[=:]\s*)("[^"]*"?|'[^']*'?|\S+)""")
+SECRET_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "secret", "token", "apikey", "credential",
+                "credentials", "bearer"}
+NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I | re.M)
+BEARER = re.compile(r"\b(bearer\s+)([^\s=:]{8,})", re.I)
 SINCE = re.compile(r"^(\d+)\s*(s|m|min|h|t|d)$", re.I)
 
 
@@ -1082,7 +1089,13 @@ def run(*command, timeout=8):
 
 def masked(line):
     """A log line without what looks like a password or key in it"""
-    line = SECRET_VALUE.sub(r"\1[hidden]", line)
+    def assignment(m):
+        words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", m[1])]
+        secret = any(w in SECRET_WORDS for w in words) or (len(words) > 1 and words[-1] == "key")
+        return m[1] + m[2] + "[hidden]" if secret else m[0]
+    line = ASSIGNMENT.sub(assignment, line)
+    line = NETRC_PASSWORD.sub(r"\1[hidden]", line)
+    line = BEARER.sub(r"\1[hidden]", line)
     return RANDOM_LOOKING.sub(lambda m: "[hidden]" if re.search(r"\d", m[0]) and re.search(r"[A-Za-z]", m[0])
                               and "/" not in m[0] else m[0], line)
 

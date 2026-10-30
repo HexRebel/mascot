@@ -157,6 +157,26 @@ class Files(unittest.TestCase):
         self.assertIn("OPENAI_API_KEY=[hidden]", out)
         self.assertNotIn(KEY[:12], out)
 
+    def test_keys_by_their_name_are_hidden(self):
+        # The name tells it is secret even when the word is not right before "=" (AWS_SECRET_ACCESS_KEY), the value
+        # has a "/" or a space, or netrc writes "password word"; words that only contain "key" or "pass" are not
+        secrets = {"AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": "K7MDENG",
+                   "machine example.com login me password s3cr3tWord": "s3cr3tWord",
+                   "export GITHUB_TOKEN='ghp abc def'": "ghp abc",
+                   "  apiKey: abcdefabcdef": "abcdefabcdef",
+                   'db.password = "open sesame"': "sesame",
+                   "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9": "eyJhbG",
+                   "STRIPE_KEY: pk/live/abc": "pk/live",
+                   "client_secret=hunter2": "hunter2"}
+        plain = ["keyboard=us", "kb_layout = dk", "bypass = no", "monkey: banana", "passthrough=yes"]
+        self.write("notes.txt", "\n".join(list(secrets) + plain) + "\n")
+        out = self.tool("read_file", {"path": "~/notes.txt"})
+        for line, value in secrets.items():
+            self.assertNotIn(value, out, line)
+        for line in plain:
+            self.assertIn(line, out)
+        self.assertIn("AWS_SECRET_ACCESS_KEY=[hidden]", out)
+
     def test_search_never_finds_a_key(self):
         # Searching for the key itself must not tell, one letter at a time, what it is
         self.write(".zshrc", f"export OPENAI_API_KEY={KEY}\n")
