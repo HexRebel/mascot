@@ -73,6 +73,24 @@ int main(void) {
         failed = 1;
     }
 
+    // The length is one byte: a longer text (a pack's names) is cut at 255 bytes, before a character that does
+    // not fit whole, and what follows it is still read right
+    ipc_packet_t* out = ipc_allocate_packet(1024);
+    char long_text[301];
+    for (int i = 0; i < 300; i += 2) memcpy(long_text + i, "\xc3\xa9", 2);  // é 150 times
+    long_text[300] = 0;
+    ipc_packet_write_string(out, long_text);
+    ipc_packet_write_uint8(out, 7);
+    char text[256];
+    uint8_t length = 0;
+    after = 0;
+    if (ipc_packet_read_string(out, text, &length) || length != 254 || memcmp(text, long_text, 254)
+        || ipc_packet_read_uint8(out, &after) || after != 7) {
+        printf("a long text was written as %u bytes, then %d\n", length, after);
+        failed = 1;
+    }
+    ipc_free_packet(out);
+
     if (!failed)
         printf("ok\n");
     return failed;
@@ -98,6 +116,31 @@ class Receive(unittest.TestCase):
                                  env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
             self.assertEqual((out.returncode, out.stdout.strip().splitlines()[-1:]), (0, ["ok"]),
                              out.stdout + out.stderr[-1500:])
+
+
+class Client(unittest.TestCase):
+    """How the mascot command reads the daemon's texts: a length byte of 128-255 and bytes that are not UTF-8
+    (a pack's action and behavior names, its author) are read, not a crash"""
+
+    def test_long_and_odd_texts_are_read(self):
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, "src", "mascotctl"))
+        import ipc_protocol
+        text = "é".encode() * 100 + b"\xff\xfe"  # 202 bytes, the last two not UTF-8
+        one = bytes([len(text)]) + text
+        for packet, read in ((ipc_protocol.PrototypeName, "name"), (ipc_protocol.PrototypeDisplayName, "display_name"),
+                             (ipc_protocol.PrototypePath, "path"), (ipc_protocol.PrototypeAddAction, "action"),
+                             (ipc_protocol.PrototypeAddBehavior, "behavior"), (ipc_protocol.PrototypeAuthor, "author"),
+                             (ipc_protocol.ImportFinished, "relative_path")):
+            p = packet(0, 0, 1, b"\0" * 8 + one)
+            p.decode()
+            self.assertTrue(getattr(p, read).startswith("é" * 100), packet.__name__)
+        p = ipc_protocol.ConfigKey(0, 0, 1, b"\0" * 8 + one + one)
+        p.decode()
+        self.assertTrue(p.key.startswith("é") and p.value.startswith("é"))
+        p = ipc_protocol.EnvironmentChanged(0, 0, 1, b"\0" * 8 + one + one + bytes(16) + bytes(4))
+        p.decode()
+        self.assertTrue(p.name.startswith("é") and p.description.startswith("é"))
 
 
 if __name__ == "__main__":

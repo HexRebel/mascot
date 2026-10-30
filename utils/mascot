@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import tarfile
-import html
-import urllib.error
-import base64
-import io
+import xml.etree.ElementTree as ET
 import ipaddress
-import tempfile
-import os
-import xml
-import urllib.parse
-import pathlib
-import sys
-import time
-from dataclasses import dataclass, field
-from typing import Dict, Optional
-import re
-import errno
-import zipfile
-from xml.etree import ElementTree
-import json
-import subprocess
-import shutil
-from typing import Callable, Any
+from PIL import Image
 import random
-from dataclasses import dataclass
-import argparse
-import urllib.request
-import socket
-import logging
-import stat
 import http.client
 import struct
-from PIL import Image
-import enum
-import termios
-import xml.etree.ElementTree as ET
+import socket
+import zipfile
+import shutil
+import argparse
+import re
+import urllib.error
+import subprocess
+import logging
+from dataclasses import dataclass, field
+from typing import Callable, Any
+from typing import Dict, Optional
+import io
+import urllib.parse
+import urllib.request
+import pathlib
+import html
+import errno
+import xml
+from dataclasses import dataclass
+import tempfile
+import sys
+import time
+import stat
+import base64
+import os
 import codecs
+import termios
+import tarfile
+from xml.etree import ElementTree
+import enum
+import json
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -2895,13 +2895,13 @@ class Notice(Packet):
         self.formating_values = []
 
     def deserialize(self):
-        self.severity, self.alert, message_length = self.read_values("bbb")
-        self.message = self.read_values(f"{message_length}s")[0].decode()
-        formating_values_count = self.read_values("b")[0]
+        self.severity, self.alert, message_length = self.read_values("bbB")
+        self.message = self.read_values(f"{message_length}s")[0].decode("utf-8", "replace")
+        formating_values_count = self.read_values("B")[0]
         for _ in range(formating_values_count):
-            value_length = self.read_values("b")[0]
+            value_length = self.read_values("B")[0]
             value = self.read_values(f"{value_length}s")[0]
-            self.formating_values.append(value.decode())
+            self.formating_values.append(value.decode("utf-8", "replace"))
 
 
 class StartSession(Packet): ...
@@ -2916,11 +2916,11 @@ class EnvironmentAnnouncement(Packet):
     scale: float
 
     def deserialize(self):
-        self.new_id, name_len = self.read_values("Ib")
-        self.name, description_len = self.read_values(f"{name_len}sb")
+        self.new_id, name_len = self.read_values("IB")
+        self.name, description_len = self.read_values(f"{name_len}sB")
         self.description, self.x, self.y, self.width, self.height, self.scale = self.read_values(f"{description_len}sIIIIf")
-        self.name = self.name.decode('utf-8')
-        self.description = self.description.decode('utf-8')
+        self.name = self.name.decode("utf-8", "replace")
+        self.description = self.description.decode("utf-8", "replace")
 
 class EnvironmentChanged(Packet):
     name: str
@@ -2932,11 +2932,11 @@ class EnvironmentChanged(Packet):
     scale: float
 
     def deserialize(self):
-        name_len = self.read_values("b")[0]
-        self.name, description_len = self.read_values(f"{name_len}sb")
+        name_len = self.read_values("B")[0]
+        self.name, description_len = self.read_values(f"{name_len}sB")
         self.description, self.x, self.y, self.width, self.height, self.scale = self.read_values(f"{description_len}sIIIIf")
-        self.name = self.name.decode('utf-8')
-        self.description = self.description.decode('utf-8')
+        self.name = self.name.decode("utf-8", "replace")
+        self.description = self.description.decode("utf-8", "replace")
 
 class EnvironmentMascot(Packet):
     mascot_new_id: int
@@ -2957,22 +2957,22 @@ class PrototypeName(Packet):
     name: str
 
     def deserialize(self) -> None:
-        name_len = self.read_values("b")[0]
-        self.name = self.read_values(f"{name_len}s")[0].decode()
+        name_len = self.read_values("B")[0]
+        self.name = self.read_values(f"{name_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeDisplayName(Packet):
     display_name: str
 
     def deserialize(self) -> None:
-        name_len = self.read_values("b")[0]
-        self.display_name = self.read_values(f"{name_len}s")[0].decode()
+        name_len = self.read_values("B")[0]
+        self.display_name = self.read_values(f"{name_len}s")[0].decode("utf-8", "replace")
 
 class PrototypePath(Packet):
     path: str
 
     def deserialize(self) -> None:
-        path_len = self.read_values("b")[0]
-        self.path = self.read_values(f"{path_len}s")[0].decode()
+        path_len = self.read_values("B")[0]
+        self.path = self.read_values(f"{path_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeFD(Packet):
     fd: int
@@ -2984,15 +2984,15 @@ class PrototypeAddAction(Packet):
     action: str
 
     def deserialize(self) -> None:
-        action_len = self.read_values("b")[0]
-        self.action = self.read_values(f"{action_len}s")[0].decode()
+        action_len = self.read_values("B")[0]
+        self.action = self.read_values(f"{action_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeAddBehavior(Packet):
     behavior: str
 
     def deserialize(self) -> None:
-        behavior_len = self.read_values("b")[0]
-        self.behavior = self.read_values(f"{behavior_len}s")[0].decode()
+        behavior_len = self.read_values("B")[0]
+        self.behavior = self.read_values(f"{behavior_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeIcon(Packet):
     iconfd: int
@@ -3005,7 +3005,7 @@ class PrototypeAuthor(Packet):
 
     def deserialize(self) -> None:
         author_len = self.read_values("B")[0]
-        self.author = self.read_values(f"{author_len}s")[0].decode()
+        self.author = self.read_values(f"{author_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeVersion(Packet):
     version: str
@@ -3149,8 +3149,8 @@ class ImportFinished(Packet):
     relative_path: str
 
     def deserialize(self) -> None:
-        relative_path_len = self.read_values(f"b")[0]
-        self.relative_path = self.read_values(f"{relative_path_len}s")[0].decode()
+        relative_path_len = self.read_values("B")[0]
+        self.relative_path = self.read_values(f"{relative_path_len}s")[0].decode("utf-8", "replace")
 
 class ImportProgress(Packet):
     progress: float
@@ -3266,10 +3266,10 @@ class ConfigKey(Packet):
     value: str
 
     def deserialize(self):
-        key_len = self.read_values("b")[0]
-        self.key = self.read_values(f"{key_len}s")[0].decode()
-        value_len = self.read_values("b")[0]
-        self.value = self.read_values(f"{value_len}s")[0].decode()
+        key_len = self.read_values("B")[0]
+        self.key = self.read_values(f"{key_len}s")[0].decode("utf-8", "replace")
+        value_len = self.read_values("B")[0]
+        self.value = self.read_values(f"{value_len}s")[0].decode("utf-8", "replace")
 
 class ClickEventExpired(Packet): ...
 
@@ -5344,16 +5344,16 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 print(f"Mascot id {packet.object_id} (Type {prototype.name}:")
                 print(f"Environment: {packet.environment_id}")
                 print(f"Current state: {packet.current_state}")
-                print(f"Current action: {packet.current_action_name.decode()}")
+                print(f"Current action: {packet.current_action_name.decode("utf-8", "replace")}")
                 print(f"Current action index: {packet.current_action_index}")
-                print(f"Current behavior: {packet.current_behavior_name.decode()}")
-                print(f"Affordance: {packet.current_affordance_name.decode()}")
+                print(f"Current behavior: {packet.current_behavior_name.decode("utf-8", "replace")}")
+                print(f"Affordance: {packet.current_affordance_name.decode("utf-8", "replace")}")
                 print("Action stack:")
                 for action_name, action_index in packet.actions:
-                    print(f"  {action_name.decode()}, stored index: {action_index}")
+                    print(f"  {action_name.decode("utf-8", "replace")}, stored index: {action_index}")
                 print("Behavior pool:")
                 for behavior_name, frequency in packet.behaviors:
-                    print(f"  {behavior_name.decode()}, frequency: {frequency}")
+                    print(f"  {behavior_name.decode("utf-8", "replace")}, frequency: {frequency}")
 
                 print(f"Position: {packet.variables[0].value}, {packet.variables[1].value}")
                 # print(f"Target: {packet.variables[2].value}, {packet.variables[3].value}")

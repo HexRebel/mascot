@@ -142,6 +142,13 @@ int32_t ipc_packet_write_uint64(ipc_packet_t *packet, uint64_t value)
 int32_t ipc_packet_write_string(ipc_packet_t *packet, const char* str)
 {
     ssize_t length = str ? strlen(str) : 0;
+    // Its length is one byte: a longer text (a pack's names) is cut, before a
+    // UTF-8 character that would not fit whole; written whole, the length's
+    // byte would say less than came and the rest be read as what follows
+    if (length > 255) {
+        length = 255;
+        while (length && ((uint8_t)str[length] & 0xC0) == 0x80) length--;
+    }
 
     if (packet->allocated_length - packet->header->length < length + 1) {
         WARN("[BUG] ipc_packet_write_string: Not enough space in packet");

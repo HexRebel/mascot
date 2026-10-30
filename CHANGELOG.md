@@ -96,6 +96,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - `mascot prototypes import` says why a pack whose header and `manifest.json` give different names was refused,
   instead of "Invalid file format", and a pack with no readable `manifest.json` (missing, not JSON, too deep) says
   that instead. Converting a Shimeji whose name is over 247 bytes says so instead of crashing.
+- A pack's name, action, behavior or author over 255 bytes is sent to `mascot` cut at 255 (whole characters), not
+  whole after a length byte that said less, which made the rest of the message read wrong. `mascot` reads names of
+  128-255 bytes and names that are not UTF-8 instead of stopping with an error.
 - mascotd started with `-s` and without `XDG_RUNTIME_DIR` says the chat bubble cannot run, instead of starting one
   that quits at once.
 - The AUR package checks the release tag's checksum, so a tag moved later does not build.

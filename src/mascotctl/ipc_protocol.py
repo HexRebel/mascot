@@ -345,13 +345,13 @@ class Notice(Packet):
         self.formating_values = []
 
     def deserialize(self):
-        self.severity, self.alert, message_length = self.read_values("bbb")
-        self.message = self.read_values(f"{message_length}s")[0].decode()
-        formating_values_count = self.read_values("b")[0]
+        self.severity, self.alert, message_length = self.read_values("bbB")
+        self.message = self.read_values(f"{message_length}s")[0].decode("utf-8", "replace")
+        formating_values_count = self.read_values("B")[0]
         for _ in range(formating_values_count):
-            value_length = self.read_values("b")[0]
+            value_length = self.read_values("B")[0]
             value = self.read_values(f"{value_length}s")[0]
-            self.formating_values.append(value.decode())
+            self.formating_values.append(value.decode("utf-8", "replace"))
 
 
 class StartSession(Packet): ...
@@ -366,11 +366,11 @@ class EnvironmentAnnouncement(Packet):
     scale: float
 
     def deserialize(self):
-        self.new_id, name_len = self.read_values("Ib")
-        self.name, description_len = self.read_values(f"{name_len}sb")
+        self.new_id, name_len = self.read_values("IB")
+        self.name, description_len = self.read_values(f"{name_len}sB")
         self.description, self.x, self.y, self.width, self.height, self.scale = self.read_values(f"{description_len}sIIIIf")
-        self.name = self.name.decode('utf-8')
-        self.description = self.description.decode('utf-8')
+        self.name = self.name.decode("utf-8", "replace")
+        self.description = self.description.decode("utf-8", "replace")
 
 class EnvironmentChanged(Packet):
     name: str
@@ -382,11 +382,11 @@ class EnvironmentChanged(Packet):
     scale: float
 
     def deserialize(self):
-        name_len = self.read_values("b")[0]
-        self.name, description_len = self.read_values(f"{name_len}sb")
+        name_len = self.read_values("B")[0]
+        self.name, description_len = self.read_values(f"{name_len}sB")
         self.description, self.x, self.y, self.width, self.height, self.scale = self.read_values(f"{description_len}sIIIIf")
-        self.name = self.name.decode('utf-8')
-        self.description = self.description.decode('utf-8')
+        self.name = self.name.decode("utf-8", "replace")
+        self.description = self.description.decode("utf-8", "replace")
 
 class EnvironmentMascot(Packet):
     mascot_new_id: int
@@ -407,22 +407,22 @@ class PrototypeName(Packet):
     name: str
 
     def deserialize(self) -> None:
-        name_len = self.read_values("b")[0]
-        self.name = self.read_values(f"{name_len}s")[0].decode()
+        name_len = self.read_values("B")[0]
+        self.name = self.read_values(f"{name_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeDisplayName(Packet):
     display_name: str
 
     def deserialize(self) -> None:
-        name_len = self.read_values("b")[0]
-        self.display_name = self.read_values(f"{name_len}s")[0].decode()
+        name_len = self.read_values("B")[0]
+        self.display_name = self.read_values(f"{name_len}s")[0].decode("utf-8", "replace")
 
 class PrototypePath(Packet):
     path: str
 
     def deserialize(self) -> None:
-        path_len = self.read_values("b")[0]
-        self.path = self.read_values(f"{path_len}s")[0].decode()
+        path_len = self.read_values("B")[0]
+        self.path = self.read_values(f"{path_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeFD(Packet):
     fd: int
@@ -434,15 +434,15 @@ class PrototypeAddAction(Packet):
     action: str
 
     def deserialize(self) -> None:
-        action_len = self.read_values("b")[0]
-        self.action = self.read_values(f"{action_len}s")[0].decode()
+        action_len = self.read_values("B")[0]
+        self.action = self.read_values(f"{action_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeAddBehavior(Packet):
     behavior: str
 
     def deserialize(self) -> None:
-        behavior_len = self.read_values("b")[0]
-        self.behavior = self.read_values(f"{behavior_len}s")[0].decode()
+        behavior_len = self.read_values("B")[0]
+        self.behavior = self.read_values(f"{behavior_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeIcon(Packet):
     iconfd: int
@@ -455,7 +455,7 @@ class PrototypeAuthor(Packet):
 
     def deserialize(self) -> None:
         author_len = self.read_values("B")[0]
-        self.author = self.read_values(f"{author_len}s")[0].decode()
+        self.author = self.read_values(f"{author_len}s")[0].decode("utf-8", "replace")
 
 class PrototypeVersion(Packet):
     version: str
@@ -598,8 +598,8 @@ class ImportFinished(Packet):
     relative_path: str
 
     def deserialize(self) -> None:
-        relative_path_len = self.read_values(f"b")[0]
-        self.relative_path = self.read_values(f"{relative_path_len}s")[0].decode()
+        relative_path_len = self.read_values("B")[0]
+        self.relative_path = self.read_values(f"{relative_path_len}s")[0].decode("utf-8", "replace")
 
 class ImportProgress(Packet):
     progress: float
@@ -715,10 +715,10 @@ class ConfigKey(Packet):
     value: str
 
     def deserialize(self):
-        key_len = self.read_values("b")[0]
-        self.key = self.read_values(f"{key_len}s")[0].decode()
-        value_len = self.read_values("b")[0]
-        self.value = self.read_values(f"{value_len}s")[0].decode()
+        key_len = self.read_values("B")[0]
+        self.key = self.read_values(f"{key_len}s")[0].decode("utf-8", "replace")
+        value_len = self.read_values("B")[0]
+        self.value = self.read_values(f"{value_len}s")[0].decode("utf-8", "replace")
 
 class ClickEventExpired(Packet): ...
 
