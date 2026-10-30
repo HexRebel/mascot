@@ -77,15 +77,15 @@ static bool json_shallow(const char* text, size_t size)
     return true;
 }
 
-bool wlshm_manifest_names(int dirfd, const char* name)
+int wlshm_manifest_names(int dirfd, const char* name)
 {
     int fd = openat(dirfd, "manifest.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0)
-        return false;
+        return WLSHM_MANIFEST_UNREAD;
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size > WLSHM_MANIFEST_MAX) {
         close(fd);
-        return false;
+        return WLSHM_MANIFEST_UNREAD;
     }
     char* text = calloc(1, (size_t)st.st_size + 1);
     size_t got = 0;
@@ -97,13 +97,14 @@ bool wlshm_manifest_names(int dirfd, const char* name)
     }
     close(fd);
     if (!text)
-        return false;
+        return WLSHM_MANIFEST_UNREAD;
     // Exactly one name, a string: json.h keeps a second one, and the loader
     // refuses it too, so no name but this one can be loaded
     bool same = false;
     int names = 0;
     struct json_value_s* root = json_shallow(text, got) ? json_parse(text, got) : NULL;
-    if (root && root->type == json_type_object) {
+    bool object = root && root->type == json_type_object;
+    if (object) {
         for (struct json_object_element_s* e = ((struct json_object_s*)root->payload)->start; e; e = e->next) {
             if (strcmp(e->name->string, "name"))
                 continue;
@@ -114,5 +115,5 @@ bool wlshm_manifest_names(int dirfd, const char* name)
     same = same && names == 1;
     free(root);
     free(text);
-    return same;
+    return !object ? WLSHM_MANIFEST_UNREAD : same ? WLSHM_MANIFEST_NAMES : WLSHM_MANIFEST_OTHER;
 }

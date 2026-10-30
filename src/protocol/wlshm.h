@@ -30,6 +30,11 @@ bool wlshm_member_is_prompt(const char* path);
 
 // Whether the manifest.json unpacked in dirfd (a regular file) names the pack as its header does: the header's
 // name chooses which prototype is replaced, the manifest's is the one loaded
-bool wlshm_manifest_names(int dirfd, const char* name);
+enum wlshm_manifest {
+    WLSHM_MANIFEST_NAMES,  // exactly one name, the header's
+    WLSHM_MANIFEST_OTHER,  // a JSON object, but with another name, none or two
+    WLSHM_MANIFEST_UNREAD, // missing, not a regular file, over WLSHM_MANIFEST_MAX, not a JSON object, too deep
+};
+int wlshm_manifest_names(int dirfd, const char* name);
 
 #endif

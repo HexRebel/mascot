@@ -918,14 +918,14 @@ void* protocol_import_thread(void* arg) {
     int32_t store_fd = mascot_prototype_store_get_fd(server_state->prototypes);
     // The header's name chose what is replaced; the manifest's is what gets loaded (and
     // replaces the prototype of that name): a pack whose two differ is refused
-    bool named = unpacked && wlshm_manifest_names(newfd, mascot_name);
-    if (!named) {
+    int manifest = unpacked ? wlshm_manifest_names(newfd, mascot_name) : WLSHM_MANIFEST_UNREAD;
+    if (!unpacked || manifest != WLSHM_MANIFEST_NAMES) {
         io_unlinkat(store_fd, tmpdirname, IO_RECURSIVE);
         mascot_prototype_unlink(old_prototype);
         close(newfd);
         archive_read_free(archive);
-        // 8: unpacked, but its names differ (or manifest.json has more than one)
-        ipc_packet_t* error = protocol_builder_import_failed(import, unpacked ? 8 : 1);
+        // 8: unpacked, but its names differ (or manifest.json has more than one); 9: no manifest.json is read
+        ipc_packet_t* error = protocol_builder_import_failed(import, !unpacked ? 1 : manifest == WLSHM_MANIFEST_OTHER ? 8 : 9);
         ipc_connector_send(client->connector, error);
         protocol_client_remove_object(client, import->id);
         pthread_mutex_unlock(&import->thread_mutex);

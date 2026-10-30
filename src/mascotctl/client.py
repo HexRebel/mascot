@@ -1780,7 +1780,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     5: "Invalid mascot version",
                     6: "FD points not to a file",
                     7: "FD opened in invalid mode",
-                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot"
+                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot",
+                    9: "it has no manifest.json that can be read (missing, not a JSON object, over 1 MiB or nested too deep)"
                 }
 
                 label = getattr(import_object, "label", f"id {packet.object_id}")

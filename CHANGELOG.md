@@ -91,7 +91,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   `ldapsearch -w`, `transmission-remote -n`, `sqlcmd -P`, `MYSQL_PWD=…`, `sudo -u bob -S`, `su … <<< …` and a
   command split over lines with `\`.
 - `mascot prototypes import` says why a pack whose header and `manifest.json` give different names was refused,
-  instead of "Invalid file format". Converting a Shimeji whose name is over 247 bytes says so instead of crashing.
+  instead of "Invalid file format", and a pack with no readable `manifest.json` (missing, not JSON, too deep) says
+  that instead. Converting a Shimeji whose name is over 247 bytes says so instead of crashing.
 - mascotd started with `-s` and without `XDG_RUNTIME_DIR` says the chat bubble cannot run, instead of starting one
   that quits at once.
 - The AUR package checks the release tag's checksum, so a tag moved later does not build.

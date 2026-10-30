@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-import logging
-import sys
-import argparse
-import xml.etree.ElementTree as ET
-import urllib.parse
-import time
-import enum
-import zipfile
-import socket
-import re
-import subprocess
-import pathlib
-import stat
-import http.client
+import tarfile
 import html
-from typing import Callable, Any
+import urllib.error
+import base64
 import io
+import ipaddress
+import tempfile
+import os
 import xml
-import termios
+import urllib.parse
+import pathlib
+import sys
+import time
+from dataclasses import dataclass, field
 from typing import Dict, Optional
-import codecs
-from PIL import Image
+import re
+import errno
+import zipfile
 from xml.etree import ElementTree
 import json
-import tempfile
-import struct
-import base64
-import errno
-import tarfile
-import ipaddress
-import urllib.error
+import subprocess
 import shutil
-import os
+from typing import Callable, Any
 import random
 from dataclasses import dataclass
+import argparse
 import urllib.request
+import socket
+import logging
+import stat
+import http.client
+import struct
+from PIL import Image
+import enum
+import termios
+import xml.etree.ElementTree as ET
+import codecs
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -5082,7 +5082,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     5: "Invalid mascot version",
                     6: "FD points not to a file",
                     7: "FD opened in invalid mode",
-                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot"
+                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot",
+                    9: "it has no manifest.json that can be read (missing, not a JSON object, over 1 MiB or nested too deep)"
                 }
 
                 label = getattr(import_object, "label", f"id {packet.object_id}")

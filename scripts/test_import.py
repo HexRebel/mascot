@@ -44,8 +44,9 @@ static void member(const char* path, bool expected) {
     }
 }
 
-// An unpacked pack with this manifest.json (NULL: none): whether its name is the header's
-static void manifest(const char* label, const char* text, const char* name, bool expected) {
+// An unpacked pack with this manifest.json (NULL: none): its name is the header's (WLSHM_MANIFEST_NAMES),
+// another (WLSHM_MANIFEST_OTHER) or none is read (WLSHM_MANIFEST_UNREAD)
+static void manifest(const char* label, const char* text, const char* name, int expected) {
     char dir[] = "/tmp/wlshm-test-XXXXXX";
     if (!mkdtemp(dir)) { printf("mkdtemp\n"); failed = 1; return; }
     int fd = open(dir, O_DIRECTORY);
@@ -54,8 +55,9 @@ static void manifest(const char* label, const char* text, const char* name, bool
         if (write(file, text, strlen(text)) < 0) failed = 1;
         close(file);
     }
-    if (wlshm_manifest_names(fd, name) != expected) {
-        printf("manifest %s: expected %s\n", label, expected ? "the header's name" : "refused");
+    int got = wlshm_manifest_names(fd, name);
+    if (got != expected) {
+        printf("manifest %s: expected %d, got %d\n", label, expected, got);
         failed = 1;
     }
     unlinkat(fd, "manifest.json", 0);
@@ -130,24 +132,24 @@ int main(void) {
     header("slash", "../../x", 7, "0.0.1", 5, false, "");
     header("nul inside", "Ro\0bo", 5, "0.0.1", 5, false, "");
     // The header's name chooses what is replaced, the manifest's what is loaded: they must be the same
-    manifest("same", "{\"name\": \"Shimeji.Robo\", \"version\": \"0.0.1\"}", "Shimeji.Robo", true);
-    manifest("another", "{\"name\": \"Shimeji.Robo\"}", "Innocent", false);
-    manifest("prefix", "{\"name\": \"Shimeji.Robo\"}", "Shimeji.Rob", false);
-    manifest("none", NULL, "Shimeji.Robo", false);
-    manifest("no name", "{\"version\": \"0.0.1\"}", "Shimeji.Robo", false);
-    manifest("name not text", "{\"name\": 1}", "1", false);
-    manifest("not JSON", "{name: Shimeji.Robo", "Shimeji.Robo", false);
-    manifest("not an object", "[\"Shimeji.Robo\"]", "Shimeji.Robo", false);
+    manifest("same", "{\"name\": \"Shimeji.Robo\", \"version\": \"0.0.1\"}", "Shimeji.Robo", WLSHM_MANIFEST_NAMES);
+    manifest("another", "{\"name\": \"Shimeji.Robo\"}", "Innocent", WLSHM_MANIFEST_OTHER);
+    manifest("prefix", "{\"name\": \"Shimeji.Robo\"}", "Shimeji.Rob", WLSHM_MANIFEST_OTHER);
+    manifest("none", NULL, "Shimeji.Robo", WLSHM_MANIFEST_UNREAD);
+    manifest("no name", "{\"version\": \"0.0.1\"}", "Shimeji.Robo", WLSHM_MANIFEST_OTHER);
+    manifest("name not text", "{\"name\": 1}", "1", WLSHM_MANIFEST_OTHER);
+    manifest("not JSON", "{name: Shimeji.Robo", "Shimeji.Robo", WLSHM_MANIFEST_UNREAD);
+    manifest("not an object", "[\"Shimeji.Robo\"]", "Shimeji.Robo", WLSHM_MANIFEST_UNREAD);
     // json.h keeps both: the loader took the last, this the first
-    manifest("two names", "{\"name\": \"Innocent\", \"name\": \"Shimeji.Robo\"}", "Innocent", false);
+    manifest("two names", "{\"name\": \"Innocent\", \"name\": \"Shimeji.Robo\"}", "Innocent", WLSHM_MANIFEST_OTHER);
     {
         // json.h's recursion ran out of stack on a deep manifest
         static char deep[1000002];  // under the 1 MiB a manifest may be
         memset(deep, '[', 500000);
         memset(deep + 500000, ']', 500000);
-        manifest("deep", deep, "Shimeji.Robo", false);
+        manifest("deep", deep, "Shimeji.Robo", WLSHM_MANIFEST_UNREAD);
     }
-    manifest("two names, header the last", "{\"name\": \"Innocent\", \"name\": \"Shimeji.Robo\"}", "Shimeji.Robo", false);
+    manifest("two names, header the last", "{\"name\": \"Innocent\", \"name\": \"Shimeji.Robo\"}", "Shimeji.Robo", WLSHM_MANIFEST_OTHER);
     if (!failed)
         printf("ok\n");
     return failed;
