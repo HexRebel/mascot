@@ -131,6 +131,28 @@ class Files(unittest.TestCase):
         self.aichat_config(base + "/v1", client="local")
         self.assertNotIn("secret plans", mine(AICHAT_CONFIG_DIR=cfg))
 
+    def test_odd_api_base_is_not_local(self):
+        # A backslash or @ in the address: URL parsers disagree where its host is, so it is not this computer
+        self.write("notes.txt", "secret plans\n")
+        base = self.fake_ollama({})
+        cfg = os.path.join(self.home, "aichat")
+        port = base.rsplit(":", 1)[1]
+        for odd in (f"http://127.0.0.1:{port}\\@evil.com/v1", f"http://me@127.0.0.1:{port}/v1",
+                    f"http://evil.com\\@127.0.0.1:{port}/v1"):
+            self.aichat_config(odd)
+            self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg), odd)
+
+    def test_flow_yaml_is_explained(self):
+        # aichat reads clients: [{...}] too, but the tools do not: they say so instead of only refusing
+        self.write("notes.txt", "secret plans\n")
+        base = self.fake_ollama({})
+        os.makedirs(os.path.join(self.home, "aichat"), exist_ok=True)
+        with open(os.path.join(self.home, "aichat", "config.yaml"), "w") as f:
+            f.write(f"model: ollama:gemma4:12b\nclients: [{{type: openai-compatible, name: ollama, api_base: '{base}/v1'}}]\n")
+        out = self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=os.path.join(self.home, "aichat"))
+        self.assertNotIn("secret plans", out)
+        self.assertIn("api_base", out)
+
     def test_weather_sends_only_a_place_name(self):
         # The place goes into wttr.in's URL, also for a model that is not local: a file or the shell history as
         # the "city" would leave the computer. Nothing is sent here (the proxy is a closed port)

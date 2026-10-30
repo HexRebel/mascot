@@ -254,14 +254,27 @@ def aichat_ollama_base():
         if clients and indent == keys and (m := re.fullmatch(r"(name|api_base):\s*(.*)", text)):
             clients[-1].setdefault(m[1], yaml_scalar(m[2]))
     client = next((c for c in clients if c.get("name") == "ollama"), {})
+    global NOT_LOCAL_WHY
+    if not client and any(re.match(r"clients:\s*\[", line) for line in lines):
+        NOT_LOCAL_WHY = (f"{path} lists its clients on one line (clients: [...]); Mascot's tools read only a "
+                         "client named ollama written one setting a line, with its api_base, so they cannot tell "
+                         "the model is local")
     return client.get("api_base") or os.environ.get("OLLAMA_API_BASE") or None
 
 
+NOT_LOCAL_WHY = None
+
+
 def loopback(url):
-    """Whether url's host is this computer (only localhost and loopback addresses)"""
+    """Whether url's host is this computer (only localhost and loopback addresses).
+    Not with a backslash or an @ in it: URL parsers disagree where its host is
+    (aichat's reads http://evil.com\\@127.0.0.1 as evil.com)"""
     try:
-        host = urllib.parse.urlsplit(url if "://" in url else "http://" + url).hostname or ""
+        parts = urllib.parse.urlsplit(url if "://" in url else "http://" + url)
+        host = parts.hostname or ""
     except ValueError:
+        return False
+    if "\\" in url or "@" in parts.netloc:
         return False
     if host == "localhost":
         return True
@@ -1882,6 +1895,8 @@ def main():
         result = TOOLS[name](args if isinstance(args, dict) else {})
     except ToolError as e:
         result = f"error: {e}"  # for the model, which can tell the user
+        if NOT_LOCAL_WHY and "local model" in str(e):
+            result += f" (why it is not counted as local: {NOT_LOCAL_WHY})"
     output = os.environ.get("LLM_OUTPUT")
     language = " ".join(os.environ.get("MASCOT_LANGUAGE", "").split())[:40]
     if output and language:  # the last thing the model reads before it answers: a small one drifts otherwise
