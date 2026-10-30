@@ -564,6 +564,9 @@ int main(int argc, const char** argv)
     sigaction(SIGTERM, &(struct sigaction) {
         .sa_sigaction = sigaction_handler,
     }, NULL);
+    // A client that goes is an error from write() or sendmsg(), not a SIGPIPE that ends mascotd (an export
+    // writes to the client's fd, which may be a pipe)
+    signal(SIGPIPE, SIG_IGN);
 
     // Arguments:
     // -s, --socket-path <path> - path to the socket (optional)

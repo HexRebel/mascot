@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <list.h>
+#include <pthread.h>
 
 struct __attribute__((packed,aligned(__alignof__(uint32_t)))) ipc_header {
     uint8_t type;
@@ -32,6 +33,8 @@ struct ipc_connector {
     int32_t epoll_fd;
     void* userdata;
     uint8_t mode;
+    // An import's or export's thread may send while the main thread sends or flushes
+    pthread_mutex_t lock;
 };
 
 ipc_packet_t* ipc_allocate_packet(uint16_t length)
@@ -439,10 +442,8 @@ int32_t ipc_connector_receive(ipc_connector_t *connector, ipc_packet_t **packet)
     return 0;
 }
 
-int32_t ipc_connector_send(ipc_connector_t* connector, ipc_packet_t* packet)
+static int32_t connector_send(ipc_connector_t* connector, ipc_packet_t* packet)
 {
-    if (!connector || !packet) return -EINVAL;
-
     if (connector->mode) {
         list_add(connector->queue, packet);
         return 0;
@@ -473,7 +474,8 @@ int32_t ipc_connector_send(ipc_connector_t* connector, ipc_packet_t* packet)
         memcpy(CMSG_DATA(cmsg), packet->fd_list, sizeof(int) * packet->fd_writer_position);
     }
 
-    if (sendmsg(connector->fd, &message, MSG_DONTWAIT) < 0) {
+    // MSG_NOSIGNAL: a client that is gone is an error here, not a SIGPIPE that ends mascotd
+    if (sendmsg(connector->fd, &message, MSG_DONTWAIT | MSG_NOSIGNAL) < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             if (!connector->mode) {
                 struct epoll_event event = {
@@ -498,6 +500,16 @@ int32_t ipc_connector_send(ipc_connector_t* connector, ipc_packet_t* packet)
     return 0;
 }
 
+int32_t ipc_connector_send(ipc_connector_t* connector, ipc_packet_t* packet)
+{
+    if (!connector || !packet) return -EINVAL;
+
+    pthread_mutex_lock(&connector->lock);
+    int32_t result = connector_send(connector, packet);
+    pthread_mutex_unlock(&connector->lock);
+    return result;
+}
+
 ipc_connector_t* ipc_initialize_connector(int32_t connector_fd, int32_t epoll_fd, void* userdata)
 {
     ipc_connector_t* connector = calloc(1, sizeof(ipc_connector_t));
@@ -507,6 +519,7 @@ ipc_connector_t* ipc_initialize_connector(int32_t connector_fd, int32_t epoll_fd
     connector->queue = list_init(16);
     connector->epoll_fd = epoll_fd;
     connector->userdata = userdata;
+    pthread_mutex_init(&connector->lock, NULL);
 
     struct epoll_event event = {
         .events = EPOLLIN | EPOLLRDHUP,
@@ -532,6 +545,7 @@ void ipc_destroy_connector(ipc_connector_t* connector)
     }
 
     list_free(connector->queue);
+    pthread_mutex_destroy(&connector->lock);
     free(connector);
 }
 
@@ -539,6 +553,7 @@ int32_t ipc_connector_flush(ipc_connector_t* connector)
 {
     if (!connector) return -EINVAL;
 
+    pthread_mutex_lock(&connector->lock);
     if (connector->mode == 1) {
         struct epoll_event event = {
             .events = EPOLLIN | EPOLLRDHUP,
@@ -558,10 +573,11 @@ int32_t ipc_connector_flush(ipc_connector_t* connector)
     for (uint32_t i = 0; i < list_size(queue); i++) {
         ipc_packet_t* packet = list_get(queue, i);
         if (packet) {
-            ipc_connector_send(connector, packet);
+            connector_send(connector, packet);
         }
     }
 
     list_free(queue);
+    pthread_mutex_unlock(&connector->lock);
     return 0;
 }

@@ -140,8 +140,12 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   A time over 64 letters or more than ten years off is not one, instead of a traceback for a long number.
 - mascotd keeps running when `mascot import` or `mascot export` is stopped (Ctrl-C) or its client goes away
   while it works. It waited for the transfer with a deadline already passed and then sent `SIGKILL` to its
-  thread, which ended the whole daemon and all mascots with it. The transfer now finishes on its own and tells
-  no one; the client is let go before its connection is closed.
+  thread, which ended the whole daemon and all mascots with it. The transfer now stops on its own and tells
+  no one; the client is let go before its connection is closed. A stopped import installs nothing (it went on
+  and installed the pack), and an export stops between files.
+- mascotd keeps running when a client goes while mascotd writes to it: a message to its socket, or an export to
+  a pipe, gave `SIGPIPE`, which ended the daemon. A pack is only imported from a regular file (a FIFO or socket
+  passed the check), and a client's messages are sent under a lock, as an import's thread sends too.
 
 ## 0.8.0 (2026-10-29)
 

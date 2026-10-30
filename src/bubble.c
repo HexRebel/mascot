@@ -103,6 +103,7 @@ bool bubble_start(const char* command, const char* chat_socket, const char* data
         sigset_t none;
         sigemptyset(&none);
         sigprocmask(SIG_SETMASK, &none, NULL);
+        signal(SIGPIPE, SIG_DFL);  // mascotd ignores it; the bubble should not
 
         // Quickshell logs a lot; keep it out of the terminal mascot was started from
         int devnull = open("/dev/null", O_RDWR);
