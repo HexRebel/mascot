@@ -5,6 +5,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## 0.8.1 (2026-10-30)
 
+- `make uninstall` removes only the mascots `make install` put there. It removed all of `share/mascot/prototypes`,
+  which with `PREFIX=~/.local` is also where `mascot prototypes import` keeps yours.
 - `mascot prototypes import` takes a pack made by `mascot prototypes export` again. Its files are named
   `./behaviors.json`, and the import stopped with "behaviors.json not found".
 - Security: Robo's tools run only when they are turned on in `CHAT_TOOLS`. aichat runs any of Mascot's tools the

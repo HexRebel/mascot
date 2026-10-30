@@ -172,10 +172,12 @@ uninstall:
 	rm -f $(addprefix $(DESTDIR)$(PREFIX)/share/mascot/ui/,$(UI_FILES))
 	rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-tools $(DESTDIR)$(PREFIX)/share/mascot/tools/mascot-guide $(DESTDIR)$(PREFIX)/share/mascot/tools/functions.json
 	for tool in $(TOOLS); do rm -f $(DESTDIR)$(PREFIX)/share/mascot/tools/bin/$$tool; done
-	rm -rf $(DESTDIR)$(PREFIX)/share/mascot/prototypes
+	# Only the mascots install put there: with PREFIX=~/.local the same directory holds the ones you imported
+	cd prototypes && for p in *; do rm -rf "$(DESTDIR)$(PREFIX)/share/mascot/prototypes/$$p"; done
 	rmdir $(DESTDIR)$(PREFIX)/lib/mascot $(DESTDIR)$(PREFIX)/include/mascot \
 		$(DESTDIR)$(PREFIX)/share/mascot/ui $(DESTDIR)$(PREFIX)/share/mascot/tools/bin \
-		$(DESTDIR)$(PREFIX)/share/mascot/tools $(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null || true
+		$(DESTDIR)$(PREFIX)/share/mascot/tools $(DESTDIR)$(PREFIX)/share/mascot/prototypes \
+		$(DESTDIR)$(PREFIX)/share/mascot 2>/dev/null || true
 
 .PHONY: install-plugins
 install-plugins: build-plugins

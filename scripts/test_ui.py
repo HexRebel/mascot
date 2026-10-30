@@ -156,6 +156,24 @@ class Install(unittest.TestCase):
             left = sorted(os.path.relpath(os.path.join(d, n), root) for d, ds, fs in os.walk(root) for n in ds + fs)
             self.assertFalse([p for p in left if "mascot" in p], left)
 
+    def test_uninstall_keeps_imported_mascots(self):
+        # With PREFIX=~/.local the installed prototypes/ is where mascot import puts yours: uninstall took them too
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            make = ["make", "-s", "-C", ROOT, "-o", "all", f"DESTDIR={root}", "PREFIX=/usr"]
+            mine = os.path.join(root, "usr/share/mascot/prototypes/Shimeji.Mine")
+            for target in ("install", "uninstall"):
+                out = subprocess.run(make + [target], capture_output=True, text=True, timeout=120)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                if target == "install":
+                    os.makedirs(mine)
+                    with open(os.path.join(mine, "manifest.json"), "w") as f:
+                        f.write("{}")
+            left = sorted(os.path.relpath(os.path.join(d, n), root) for d, ds, fs in os.walk(root) for n in ds + fs)
+            self.assertEqual([p for p in left if "prototypes/" in p],
+                             ["usr/share/mascot/prototypes/Shimeji.Mine",
+                              "usr/share/mascot/prototypes/Shimeji.Mine/manifest.json"])
+
 
 class Network(unittest.TestCase):
     def test_menu_asks_openrouter_only_when_used(self):
