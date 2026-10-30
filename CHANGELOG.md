@@ -10,6 +10,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   could still read your files, shell history and logs.
 - A listed directory has "- " before each name. gemma4 wrote `nowl.png` for `owl.png` in about half its answers,
   and never with the dashes.
+- Security: the weather tool sends only a place name (letters, digits, spaces and `, . -`, at most 64), so a model
+  cannot send a file or a command to wttr.in as the "city".
 
 ## 0.8.0 (2026-10-29)
 

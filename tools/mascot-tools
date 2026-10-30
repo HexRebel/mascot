@@ -110,6 +110,10 @@ def is_secret(rel):
 def get_current_weather(args):
     # Only the place name leaves the computer; none means wttr.in's guess by IP
     location = str(args.get("location") or "").strip()
+    # Also for a model that is not local: a file or a command as the "city"
+    # would leave the computer, so only what a place name is made of
+    if len(location) > 64 or not all(c.isalnum() or c in " ,.-" for c in location):
+        raise ToolError("the location must be a place name (letters, digits, spaces and , . - only, at most 64)")
     url = "https://wttr.in/" + urllib.parse.quote(location.replace(" ", "+"), safe="+,")
     url += "?format=" + urllib.parse.quote("%l: %C, %t (feels like %f), wind %w, humidity %h, rain %p") + "&M"
     request = urllib.request.Request(url, headers={"User-Agent": "curl/8"})  # plain text, not HTML

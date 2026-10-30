@@ -30,12 +30,26 @@ class Files(unittest.TestCase):
             f.write(text)
         return path
 
-    def tool(self, name, args, dotfiles="", allowed=None):
+    def tool(self, name, args, dotfiles="", allowed=None, **env):
         out = subprocess.run([os.path.join(ROOT, "tools", "bin", name), json.dumps(args)],
                              env={"HOME": self.home, "PATH": "/usr/bin:/bin", "MASCOT_TOOLS_LOCAL": "1",
-                                  "MASCOT_DOTFILES": dotfiles, "MASCOT_TOOLS_ALLOWED": name if allowed is None else allowed},
+                                  "MASCOT_DOTFILES": dotfiles, "MASCOT_TOOLS_ALLOWED": name if allowed is None else allowed,
+                                  **env},
                              capture_output=True, text=True, timeout=30)
         return out.stdout + out.stderr
+
+    def test_weather_sends_only_a_place_name(self):
+        # The place goes into wttr.in's URL, also for a model that is not local: a file or the shell history as
+        # the "city" would leave the computer. Nothing is sent here (the proxy is a closed port)
+        weather = lambda location: self.tool("get_current_weather", {"location": location},
+                                             https_proxy="http://127.0.0.1:9", MASCOT_TOOLS_LOCAL="0")
+        for place in ("København", "Paris, France", "St. Petersburg", "Aix-en-Provence", ""):
+            self.assertIn("could not get the weather", weather(place), place)
+        for data in ("export OPENAI_API_KEY=sk-abc", "~/.ssh/id_ed25519", "a@b", "line\nbreak", "x" * 65,
+                     "%2e%2e", "Paris?format=j1", "Århus/../etc"):
+            out = weather(data)
+            self.assertNotIn("could not get the weather", out, data)
+            self.assertIn("a place name", out, data)
 
     def test_only_the_chosen_tools_run(self):
         # aichat runs any function in functions.json the model calls, not only those in AICHAT_USE_TOOLS: with
