@@ -39,6 +39,7 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   and the mascots' memory in `null/` where it was started, and removing that with `rm -rf`.
 - Security: `last_commands` hides a command that is given a password, however short: `mysql -pPW`, `sshpass -p`,
   `curl -u user:PW`, `https://user:PW@host`, `echo PW | sudo -S`.
+- The AUR package checks the release tag's checksum, so a tag moved later does not build.
 
 ## 0.8.0 (2026-10-29)
 

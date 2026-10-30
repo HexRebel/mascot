@@ -17,7 +17,12 @@ source=("$pkgname::git+https://github.com/HexRebel/mascot.git#tag=v$pkgver"
         "json.h::git+https://github.com/sheredom/json.h.git"
         "qoi::git+https://github.com/phoboslab/qoi.git"
         "py-qoi::git+https://github.com/mathpn/py-qoi.git")
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+# The tag's checksum (makepkg -g after tagging, pacman 6.1 or newer): a tag moved
+# later does not build. The others only give the submodules, which Mascot pins
+sha256sums=('037821b4c63fdee5c284a5ca591441e1fd287ae97caa86aa1e55f8f9f100581e'
+            'SKIP'
+            'SKIP'
+            'SKIP')
 
 prepare() {
     cd "$pkgname"
