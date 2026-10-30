@@ -670,6 +670,11 @@ int main(int argc, const char** argv)
     if (stat(configuration_root, &st) == -1) {
         ERROR("Failed to create configuration root at %s", configuration_root);
     }
+    // make install PREFIX=~/.local makes it 755 before we run, and it holds the
+    // todo list, the reminders and the chat sessions
+    if (st.st_uid == getuid() && (st.st_mode & 077)) {
+        chmod(configuration_root, 0700);
+    }
 
     if (!configuration_file[0]) default_configuration_file(configuration_root, configuration_file, PATH_MAX-1);
     if (!config_parse(configuration_file)) {

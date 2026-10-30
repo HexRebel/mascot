@@ -182,8 +182,9 @@ def read_current(directory: str) -> Choice | None:
 def write_config(directory: str, text: str) -> str:
     """Writes Mascot's own config (directory 700, file 600, in one step); one that is there is kept as
     config.yaml.old (600: it may hold a key). Returns its path"""
-    # Mascot's own directory too, when it is new (right after installing): it holds the sessions and todo list
+    # Mascot's own directory too: it holds the sessions and todo list, and make install PREFIX=~/.local makes it 755
     os.makedirs(os.path.dirname(directory), mode=0o700, exist_ok=True)
+    os.chmod(os.path.dirname(directory), 0o700)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     os.chmod(directory, 0o700)
     path = os.path.join(directory, "config.yaml")

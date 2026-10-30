@@ -38,6 +38,11 @@ class Files(unittest.TestCase):
                              capture_output=True, text=True, timeout=30)
         return out.stdout + out.stderr
 
+    def test_todo_list_is_private(self):
+        todo = os.path.join(self.home, "todo.md")
+        self.tool("add_todo", {"item": "secret plans"}, MASCOT_TODO_FILE=todo)
+        self.assertEqual(os.stat(todo).st_mode & 0o777, 0o600)
+
     def test_weather_sends_only_a_place_name(self):
         # The place goes into wttr.in's URL, also for a model that is not local: a file or the shell history as
         # the "city" would leave the computer. Nothing is sent here (the proxy is a closed port)

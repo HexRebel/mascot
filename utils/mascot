@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import shutil
+import tarfile
+import zipfile
+import socket
+import errno
+import subprocess
+import time
+import base64
 import http.client
+import sys
 import urllib.error
+import shutil
+import xml
+import html
 import random
 import urllib.request
-import urllib.parse
-import json
-import html
-import codecs
-import errno
-from xml.etree import ElementTree
-import argparse
-import os
 import io
-import pathlib
-import xml.etree.ElementTree as ET
+from PIL import Image
+import urllib.parse
+import re
+from typing import Callable, Any
+import tempfile
+import json
+import enum
+import codecs
 import stat
 import termios
-import xml
-import subprocess
-import socket
-from dataclasses import dataclass, field
-import tarfile
-import time
-import tempfile
-from typing import Dict, Optional
-import sys
-import base64
-from typing import Callable, Any
+from xml.etree import ElementTree
 import logging
-import struct
-import enum
-import re
+from typing import Dict, Optional
 from dataclasses import dataclass
-from PIL import Image
-import zipfile
+import xml.etree.ElementTree as ET
+import struct
+import argparse
+import os
+from dataclasses import dataclass, field
+import pathlib
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -2111,9 +2111,10 @@ def read_current(directory: str) -> Choice | None:
 def write_config(directory: str, text: str) -> str:
     """Writes Mascot's own config (directory 700, file 600, in one step); one that is there is kept as
     config.yaml.old (600: it may hold a key). Returns its path"""
-    # Mascot's own directory too, when it is new (right after installing): it holds the sessions and todo list
-    # Mascot's own directory too, when it is new (right after installing): it holds the sessions and todo list
+    # Mascot's own directory too: it holds the sessions and todo list, and make install PREFIX=~/.local makes it 755
+    # Mascot's own directory too: it holds the sessions and todo list, and make install PREFIX=~/.local makes it 755
     os.makedirs(os.path.dirname(directory), mode=0o700, exist_ok=True)
+    os.chmod(os.path.dirname(directory), 0o700)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     os.chmod(directory, 0o700)
     path = os.path.join(directory, "config.yaml")

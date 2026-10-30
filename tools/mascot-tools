@@ -1663,6 +1663,8 @@ TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file,
 
 def main():
     name = os.path.basename(sys.argv[0])
+    # The todo list and the reminders are only the user's, whatever the umask
+    os.umask(0o077)
     try:
         if name not in TOOLS:
             raise ToolError(f"unknown tool {name}")

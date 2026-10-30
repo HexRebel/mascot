@@ -12,6 +12,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   and never with the dashes.
 - Security: the weather tool sends only a place name (letters, digits, spaces and `, . -`, at most 64), so a model
   cannot send a file or a command to wttr.in as the "city".
+- Security: Mascot's data directory is made private (700) each time mascotd and `mascot setup` run, and the todo
+  list and reminders are written 600. `make install PREFIX=~/.local` made it 755, so others on the computer could
+  read the todo list and the chat sessions.
 
 ## 0.8.0 (2026-10-29)
 

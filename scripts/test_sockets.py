@@ -61,5 +61,15 @@ class NoRuntimeDir(unittest.TestCase):
         self.assertIn("XDG_RUNTIME_DIR", out.stdout + out.stderr)
 
 
+class DataDir(unittest.TestCase):
+    @unittest.skipUnless(can_unshare(), "unshare cannot give the test a /tmp of its own")
+    def test_daemon_makes_data_dir_private(self):
+        # make install PREFIX=~/.local makes share/mascot 755 before mascotd runs: the todo list and the sessions
+        # in it were readable by others. mascotd stops without XDG_RUNTIME_DIR, but after making it private
+        out = private_tmp("mkdir -p /tmp/home/.local/share/mascot && chmod 755 /tmp/home/.local/share/mascot && "
+                          f"{os.path.join(ROOT, 'build', 'mascotd')}; stat -c mode=%a /tmp/home/.local/share/mascot")
+        self.assertIn("mode=700", out.stdout, out.stdout + out.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

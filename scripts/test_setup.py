@@ -129,6 +129,14 @@ class Config(Home):
         setup.write_config(self.aichat_dir, "model: ollama:a\n")
         self.assertEqual(self.mode(self.data), 0o700)
 
+    def test_data_dir_made_private(self):
+        # make install PREFIX=~/.local makes share/mascot 755 before Mascot runs: the todo list and the sessions
+        # in it were readable by others
+        os.makedirs(self.data, mode=0o755)
+        os.chmod(self.data, 0o755)
+        setup.write_config(self.aichat_dir, "model: ollama:a\n")
+        self.assertEqual(self.mode(self.data), 0o700)
+
     def test_write_perms_and_old(self):
         path = setup.write_config(self.aichat_dir, "model: ollama:a\n")
         self.assertEqual(path, os.path.join(self.aichat_dir, "config.yaml"))
