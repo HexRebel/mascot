@@ -67,8 +67,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   `content_count`, `frame_count`) or more than 128 next behaviors crashed the daemon at every start, since it loads
   every pack it finds. A next behavior that is not defined is left out instead of being used as one. A refused
   pack no longer leaves its files in memory, and neither does an import refused without `-f`.
-- Security: `read_log` shows only lines that still match the search once keys are hidden. journalctl searched the
-  log before that, so a search for `password=h`, then `password=hu`, could tell a password one letter at a time.
+- Security: `read_log` searches the newest 5000 lines of the log itself, once keys are hidden, not with journalctl's
+  `--grep`, which searched before that: a search for `password=h`, then `password=hu`, could tell a password one
+  letter at a time, by what it found or by how many lines it found.
 - Security: without `XDG_RUNTIME_DIR` (with `-s`), `mascot prototypes poses` writes its page under a name nobody can
   guess, not `/tmp/mascot-poses-<name>.html`, where another user could put a link first.
 - The bubble quits when `XDG_RUNTIME_DIR` is not set (started by hand with `qs -p`), instead of keeping its socket

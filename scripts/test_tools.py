@@ -314,16 +314,23 @@ class Files(unittest.TestCase):
     def test_log_search_never_finds_a_key(self):
         # A journalctl that, like the real one, only gives the lines matching --grep
         bin_dir = os.path.join(self.home, "bin")
+        # (and -n, the newest that many): 100 ticks, the password in the middle of them
         self.write("bin/journalctl", "#!/usr/bin/python3\nimport re, sys\n"
-                   "lines = ['2026-10-30T10:00:00+0100 pc app[1]: login password=hunter2 ok',\n"
-                   "         '2026-10-30T10:00:01+0100 pc app[1]: started']\n"
+                   "lines = ['2026-10-30T10:00:%02d+0100 pc app[1]: tick %d' % (i % 60, i) for i in range(100)]\n"
+                   "lines.insert(70, '2026-10-30T10:01:10+0100 pc app[1]: login password=hunter2 ok')\n"
+                   "lines.append('2026-10-30T10:02:00+0100 pc app[1]: started')\n"
                    "grep = sys.argv[sys.argv.index('--grep') + 1] if '--grep' in sys.argv else ''\n"
-                   "print('\\n'.join(l for l in lines if re.search(grep, l, re.I)))\n")
+                   "lines = [l for l in lines if re.search(grep, l, re.I)]\n"
+                   "if '-n' in sys.argv: lines = lines[-int(sys.argv[sys.argv.index('-n') + 1]):]\n"
+                   "print('\\n'.join(lines))\n")
         os.chmod(os.path.join(bin_dir, "journalctl"), 0o755)
         path = bin_dir + ":/usr/bin:/bin"
-        found = self.tool("read_log", {"search": "password=h"}, PATH=path)
-        missed = self.tool("read_log", {"search": "password=x"}, PATH=path)
-        self.assertEqual(found.replace("password=h", "password=x"), missed)
+        # What a search shows must not depend on what the hidden password is
+        for right, wrong in (("password=h", "password=x"), ("hidden|password=hu", "hidden|password=hx"),
+                             ("password=hu|tick", "password=hx|tick")):
+            found = self.tool("read_log", {"search": right}, PATH=path)
+            missed = self.tool("read_log", {"search": wrong}, PATH=path)
+            self.assertEqual(found.replace(right, wrong), missed, right)
         out = self.tool("read_log", {"search": "login"}, PATH=path)
         self.assertIn("login password=[hidden] ok", out)
         self.assertNotIn("started", out)

@@ -1123,6 +1123,7 @@ def sleep_mode(args):
 # or not ("mascot-unsure": the mascot shows it does not know)
 SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine", "power")
 LOG_LINES = 60  # lines of the log read_log shows, the newest
+LOG_SEARCHED = 5000  # the newest lines read_log searches, whatever they say
 LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
 # Masking, one line at a time (a name never reaches into the next line):
 # each "name =", "name:", "name =>" or "name :=" (the name may be quoted, as in
@@ -1817,17 +1818,16 @@ def read_log(args):
     if unit and not re.match(r"^[\w@.:-]+$", unit):
         raise ToolError(f"\"{unit}\" is not a service name")
     since = since_option(args.get("since"))
-    base = ["-o", "short-iso", "-n", str(LOG_LINES)] + (["--since", since] if since else ["-b"])
+    # Not journalctl --grep: it searches the log before keys are hidden, so what
+    # it found (or how many) would tell a key one letter at a time. The newest
+    # lines whatever they say, searched once hidden
+    base = ["-o", "short-iso", "-n", str(LOG_SEARCHED if search else LOG_LINES)] + (["--since", since] if since else ["-b"])
     if args.get("kernel"):
         base.append("-k")
-    if search:
-        base += ["--grep", search, "--case-sensitive=false"]
     log, partial = journal(*base, *(["-u", unit] if unit else []))
     if unit and not log:  # maybe the user's own service
         log, partial = journal("--user", *base, "-u", unit)
     if search:
-        # journalctl searched the unmasked log: only what still matches once masked is shown,
-        # so a search for a key cannot tell what it is one letter at a time
         try:
             matches = re.compile(search, re.I).search
         except re.error:
@@ -1839,6 +1839,7 @@ def read_log(args):
             else:
                 entries.append([line])
         log = [line for entry in entries if any(map(matches, entry)) for line in entry]
+        log = log[-LOG_LINES:]
     sure(log)
     what = " ".join(filter(None, [f"of {unit}" if unit else "", "from the kernel" if args.get("kernel") else "",
                                   f"with \"{search}\"" if search else ""]))
