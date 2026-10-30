@@ -5,6 +5,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 
 ## 0.8.1 (2026-10-30)
 
+- `mascot prototypes import` takes a pack made by `mascot prototypes export` again. Its files are named
+  `./behaviors.json`, and the import stopped with "behaviors.json not found".
 - Security: Robo's tools run only when they are turned on in `CHAT_TOOLS`. aichat runs any of Mascot's tools the
   model asks for, not only the ones the bubble gave it, so with only time, weather and todo on, a local model
   could still read your files, shell history and logs.

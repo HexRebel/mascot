@@ -4480,17 +4480,24 @@ class WlshmBudget:
 
         return io.BufferedReader(Counted())
 
-    def read(self, source: tarfile.TarFile, name: str) -> bytes:
-        with source.extractfile(name) as f:
+    def read(self, source: tarfile.TarFile, member) -> bytes:
+        with source.extractfile(member) as f:
             return self.reader(f).read()
+
+
+def pack_path(name: str) -> str:
+    """A member's name as it lands in the mascot's directory: mascotd's own export writes ./behaviors.json"""
+    while name.startswith("./"):
+        name = name[2:]
+    return name
 
 
 def wlshm_manifest(path: str) -> dict:
     with open(path, "rb") as f:
         f.seek(512)
         with tarfile.open(fileobj=io.BytesIO(f.read()), mode="r:*") as source:
-            names = [m.name for m in wlshm_members(source)]
-            return json.loads(WlshmBudget().read(source, "manifest.json")) if "manifest.json" in names else {}
+            by_path = {pack_path(m.name): m for m in wlshm_members(source)}
+            return json.loads(WlshmBudget().read(source, by_path["manifest.json"])) if "manifest.json" in by_path else {}
 
 
 def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | None = None, name: str | None = None,
@@ -4512,23 +4519,26 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
     # behaviors.json is not read whole first), and the members are counted before the rest are read
     # behaviors.json is not read whole first), and the members are counted before the rest are read
     members = wlshm_members(source)
-    names = [m.name for m in members]
     wlshm_check(header, members)
+    # By the path it lands at (an exported pack's members start with ./)
+    # By the path it lands at (an exported pack's members start with ./)
+    by_path = {pack_path(m.name): m for m in members}
+    names = list(by_path)
     budget = WlshmBudget()
-    manifest = json.loads(budget.read(source, "manifest.json")) if "manifest.json" in names else {}
-    behaviors_name = manifest.get("behaviors", "behaviors.json")
-    actions_name = manifest.get("actions", "actions.json")
+    manifest = json.loads(budget.read(source, by_path["manifest.json"])) if "manifest.json" in by_path else {}
+    behaviors_name = pack_path(manifest.get("behaviors", "behaviors.json"))
+    actions_name = pack_path(manifest.get("actions", "actions.json"))
     for needed in (behaviors_name, actions_name):
-        if needed not in names:
+        if needed not in by_path:
             raise ValueError(f"{needed} not found")
-    behaviors = json.loads(budget.read(source, behaviors_name))
+    behaviors = json.loads(budget.read(source, by_path[behaviors_name]))
     if name:
         manifest["name"] = f"Shimeji.{name}"
         manifest["display_name"] = name
         header = wlshm_header(manifest["name"], manifest.get("version", "0.0.1"))
         wlshm_check(header, [])
 
-    definitions = json.loads(budget.read(source, actions_name))
+    definitions = json.loads(budget.read(source, by_path[actions_name]))
     assets = {n.removeprefix(manifest.get("assets", "assets") + "/") for n in names}
     changes = set_talk_sleep(behaviors, definitions, assets, talk, sleep, guess=True, answered=answered)
 
@@ -4550,11 +4560,11 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
             for member in members:
                 if member.name.lstrip("./") == "prompt.md":
                     continue
-                if member.name == behaviors_name:
+                if pack_path(member.name) == behaviors_name:
                     member.size = len(behaviors_data)
                     budget.spend(member.size)
                     tar.addfile(member, io.BytesIO(behaviors_data))
-                elif member.name == "manifest.json" and name:
+                elif pack_path(member.name) == "manifest.json" and name:
                     member.size = len(manifest_data)
                     budget.spend(member.size)
                     tar.addfile(member, io.BytesIO(manifest_data))

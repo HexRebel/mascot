@@ -311,6 +311,30 @@ class Cli(unittest.TestCase):
         finally:
             os.unlink(f.name)
 
+    def test_exported_pack_imports(self):
+        # mascotd's own export names its members ./manifest.json...: they were "not found", so no pack from
+        # mascot prototypes export could be imported again
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w") as tar:
+            for member_name, content in (("./manifest.json", b'{"name": "Shimeji.Capoo"}'), ("./behaviors.json", b"{}"),
+                                         ("./actions.json", b"{}"), ("./assets/shime1.png", b"png")):
+                info = tarfile.TarInfo(member_name)
+                info.size = len(content)
+                tar.addfile(info, io.BytesIO(content))
+        with tempfile.NamedTemporaryFile(suffix=".wlshm", delete=False) as f:
+            f.write(self.client.wlshm_header("Shimeji.Capoo", "0.0.1") + data.getvalue())
+        try:
+            out, manifest, _ = self.client.wlshm_adjusted(f.name, False, "none", "none", "Testcapoo")
+        finally:
+            os.unlink(f.name)
+        with out:
+            out.seek(512)
+            with tarfile.open(fileobj=out, mode="r:") as copy:
+                self.assertEqual(copy.getnames(), ["./manifest.json", "./behaviors.json", "./actions.json",
+                                                   "./assets/shime1.png"])
+                self.assertEqual(json.load(copy.extractfile("./manifest.json"))["name"], "Shimeji.Testcapoo")
+        self.assertEqual(manifest["display_name"], "Testcapoo")
+
     def test_unpacking_has_a_ceiling(self):
         # A pack of 212 KB became 210 MB in the copy sent to mascotd: the CLI stops at mascotd's ceilings
         # (here made small), counting what it reads, and a JSON file it reads counts too
