@@ -40,6 +40,12 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   name (`"password": …`, `'password' => …`) and in YAML and INI files; quoted values whole; passwords in URLs
   (`postgres://bob:…@db`), `<password>…</password>`, `Authorization: …`, `--password word`, netrc's `password word`
   and `Bearer word`. Everything 0.8.0 hid is still hidden; `bypass = no` and `key = ...` in code are no longer.
+- Security: a value with spaces is hidden to the end of the line (or the next `name=`), and so is a YAML value on
+  the lines below `password:` or `password: |`. Also hidden: a name and its value with only spaces or a tab between
+  (`set -gx DB_PASSWORD …`, a Dockerfile's `ENV API_TOKEN …`, pgbouncer), `DB_PW`, Danish and other names for a
+  password (`adgangskode`, `kodeord`, …), a quoted name with a space (`"db password"`), `<password type="x">`,
+  `{"key": "password", "value": …}`, `redis://:…@`, a password with `/` in a URL, the lines of a PEM key and a whole
+  line of base64. A search finds no more in a file than reading it shows.
 - Security: the chat guide quotes Ollama's model names in the aichat config it writes, and leaves out a name with a
   line break. A model called `x\n    api_base: …` could point Mascot's aichat somewhere else, and `- item` or `a: b`
   broke the file.

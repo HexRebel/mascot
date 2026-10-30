@@ -255,6 +255,35 @@ class Files(unittest.TestCase):
             self.write("one.txt", line + "\n")
             self.assertNotIn(value, self.tool("read_file", {"path": "~/one.txt"}), line)
 
+    def test_more_forms_of_keys_are_hidden(self):
+        # Values with spaces, YAML on the next line, a space or tab between name and value, more names, URLs with no
+        # user, PEM blocks: what the third review could still read
+        secrets = {"password: correct horse battery staple": "battery", "db.password=hun ter2": "ter2",
+                   "password: |\n  blkpw1\n  blkpw2\nnext: 1": "blkpw2", "password:\n  nxtpw3\nuser: bob": "nxtpw3",
+                   "set -gx DB_PASSWORD fishpw4": "fishpw4", "MYSQL_ROOT_PASSWORD dockpw5": "dockpw5",
+                   "password    pgbpw6": "pgbpw6", "client_secret\ttabpw7": "tabpw7", "ENV API_TOKEN envtk8": "envtk8",
+                   "DB_PW=dbpw9": "dbpw9", "db_pw: dbpw10": "dbpw10", "adgangskode: dkpw11": "dkpw11",
+                   "kodeord=dkpw12": "dkpw12", '"db password": "sppw13"': "sppw13",
+                   '<password type="x">attrpw14</password>': "attrpw14",
+                   '{"key": "password", "value": "kvpw15"}': "kvpw15", '{"Name":"api_token","Value":"kvpw16"}': "kvpw16",
+                   "REDIS_URL=redis://:rdpw17@host:6379": "rdpw17", "url: https://bob:sl/pw18@h.dk": "sl/pw18",
+                   "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz\n"
+                   "c2gtZWQyNTUxOQAAACD/pemPEM/withslashes+plus=\n-----END OPENSSH PRIVATE KEY-----": "pemPEM",
+                   "AAAAB3NzaC1yc2EAAAADAQABAAABgQC7/x9k+Yb3/longbase64line/x0Ab12Cd": "longbase64"}
+        plain = ["user: bob", "next: 1", "keyboard=us", "The password is wrong, try again.", "home: /usr/share/applications",
+                 "path=/usr/lib/x86_64-linux-gnu", "url: https://github.com/me/x",
+                 "set -gx EDITOR nvim", "ENV LANG C.UTF-8", '{"key": "theme", "value": "dark"}']
+        self.write("more.txt", "\n".join(list(secrets) + plain) + "\n")
+        out = self.tool("read_file", {"path": "~/more.txt"})
+        for line, value in secrets.items():
+            self.assertNotIn(value, out, line)
+        for line in plain:
+            self.assertIn(line, out)
+        for line, value in secrets.items():  # and searched for, a line at a time and in the file
+            self.write("one.txt", line + "\n")
+            found = self.tool("search_file", {"path": "~/one.txt", "text": value[:3]})
+            self.assertNotIn(value, found, line)
+
     def test_a_long_json_line_is_read(self):
         # Minified JSON (an app's settings): masking it made a RecursionError, and read_file gave nothing
         self.write("state.json", "{" + ",".join(f'"k{i}":{i}' for i in range(3000)) + ',"token":"tk9z"}\n')
@@ -332,7 +361,7 @@ class Files(unittest.TestCase):
             missed = self.tool("read_log", {"search": wrong}, PATH=path)
             self.assertEqual(found.replace(right, wrong), missed, right)
         out = self.tool("read_log", {"search": "login"}, PATH=path)
-        self.assertIn("login password=[hidden] ok", out)
+        self.assertIn("login password=[hidden]\n", out)
         self.assertNotIn("started", out)
 
     def test_more_places_with_tokens_are_private(self):

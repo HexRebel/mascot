@@ -533,7 +533,7 @@ def search_file(args):
                 raise ToolError(f"{shown(asked)} is not a text file")
             continue
         # Masked before searching, so a search for a key cannot tell what it is one letter at a time
-        lines = [masked(line) for line in data.decode("utf-8", "replace").splitlines()]
+        lines = masked(data.decode("utf-8", "replace")).splitlines()
         hits = [i for i, line in enumerate(lines) if needle in line.lower()]
         if not hits:
             continue
@@ -1137,15 +1137,28 @@ LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
 # <password>…</password>, Authorization: (the rest of the line), --password
 # word, "password word" on a netrc line and "Bearer word", and last 0.8.0's
 # rule (OLD_SECRET_VALUE), so nothing it hid is shown
-SECRET_NAME = re.compile(r"""(["']?)(?<![\w.-])([A-Za-z0-9_][\w.-]*)\1([ \t]*(?:=>|:=|[=:])[ \t]*)""")
-SECRET_VALUE_AT = re.compile(r""""(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;]+""")
-SECRET_NAME_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "secret", "token", "apikey", "credential",
-                     "credentials", "bearer"}
+SECRET_NAME = re.compile(r"""(?:(["'])([\w .-]{1,64}?)\1|(?<![\w.-])([A-Za-z0-9_][\w.-]*))"""
+                         r"""([ \t]*(?:=>|:=|[=:])[ \t]*)""")
+# A quoted value, else the rest of the line up to the next name=, as in a log (a password may have spaces)
+SECRET_VALUE_AT = re.compile(r""""(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|\S.*?(?=\s+[\w.-]+=|\s*$)""")
+SECRET_NAME_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "pw", "secret", "token", "apikey",
+                     "credential", "credentials", "bearer"}
 SECRET_NAME_ENDINGS = ("passwd", "password", "passphrase", "secret", "token", "apikey", "authkey", "credential",
-                       "credentials")
+                       "credentials", "adgangskode", "kodeord", "passord", "passwort", "wachtwoord", "salasana")
+# A name alone first on the line and one value after a space or tab: fish's set -gx, a Dockerfile's ENV,
+# pgbouncer and tab-separated files. In prose ("secret plans") a single space after a lowercase word is not one
+SECRET_NAME_SPACED = re.compile(r"^(\s*(?:set(?:\s+-[a-zA-Z]+)*\s+|ENV\s+)?)([A-Za-z0-9_][\w.-]*)([ \t]+)(\S+)\s*$")
+# A YAML name with its value on the lines below: "password: |" or "password:"
+SECRET_BLOCK = re.compile(r"""^\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:\s*(?:[|>][-+0-9]*)?\s*(?:#.*)?$""")
+# {"key": "password", "value": "…"}, as some apps keep their settings
+SECRET_KEY_VALUE = re.compile(r"""(["'](?:key|name)["']\s*:\s*["']([^"'\n]*)["']\s*,\s*["']value["']\s*:\s*)"""
+                              r"""("(?:\\.|[^"\\])*"|'[^']*'|[^\s,}]+)""", re.I)
+PEM_BEGIN = re.compile(r"^\s*-----BEGIN [^-]+-----\s*$")
+PEM_END = re.compile(r"^\s*-----END [^-]+-----\s*$")
+BASE64_LINE = re.compile(r"^\s*[A-Za-z0-9+/]{40,}={0,2}\s*$")
 NOT_SECRET_PASS = {"bypass", "compass", "surpass", "overpass", "underpass"}
-URL_PASSWORD = re.compile(r"(://[^/\s:@]+:)([^/\s@]+)(@)")
-SECRET_TAG = re.compile(r"<((?:[\w-]+:)?[\w-]+)>([^<]*)</")
+URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)([^\s@]+)(@)")
+SECRET_TAG = re.compile(r"<((?:[\w-]+:)?[\w-]+)(\s[^>]*)?>([^<]*)</")
 AUTHORIZATION = re.compile(r"(\b(?:proxy-)?authorization[ \t]*[:=][ \t]*)(\S.*)", re.I)
 SECRET_OPTION = re.compile(r"(--(?:password|passwd|pass|pwd|token|secret|api[-_]?key)\s+)([^\s-]\S*)", re.I)
 NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I)
@@ -1182,7 +1195,7 @@ def masked_line(line):
     # value of a name that is not secret
     hide, at = [], 0
     for m in SECRET_NAME.finditer(line):
-        if m.start() < at or not secret_name(m[2]):
+        if m.start() < at or not secret_name(m[2] or m[3]):
             continue
         value = SECRET_VALUE_AT.match(line, m.end())
         if value and value.group():
@@ -1190,8 +1203,14 @@ def masked_line(line):
             at = value.end()
     for start, end in reversed(hide):
         line = line[:start] + "[hidden]" + line[end:]
+    spaced = SECRET_NAME_SPACED.match(line)
+    if spaced and secret_name(spaced[2]) and (spaced[1].strip() or spaced[3] != " " or "_" in spaced[2]
+                                               or spaced[2].isupper()):
+        line = spaced[1] + spaced[2] + spaced[3] + "[hidden]"
+    line = SECRET_KEY_VALUE.sub(lambda m: m[1] + "[hidden]" if secret_name(m[2]) else m[0], line)
     line = URL_PASSWORD.sub(r"\1[hidden]\3", line)
-    line = SECRET_TAG.sub(lambda m: f"<{m[1]}>[hidden]</" if secret_name(m[1].split(":")[-1]) else m[0], line)
+    line = SECRET_TAG.sub(lambda m: f"<{m[1]}{m[2] or ''}>[hidden]</" if secret_name(m[1].split(":")[-1]) else m[0],
+                          line)
     line = SECRET_OPTION.sub(r"\1[hidden]", line)
     line = NETRC_PASSWORD.sub(r"\1[hidden]", line)
     line = BEARER.sub(r"\1[hidden]", line)
@@ -1200,13 +1219,39 @@ def masked_line(line):
         word = re.search(r"[\w.-]*$", line[:m.start()])[0] + re.match(r"[\w.-]*", line[m.start():])[0]
         return m[0] if word.lower() in NOT_SECRET_PASS else m[1] + "[hidden]"
     line = OLD_SECRET_VALUE.sub(old_rule, line)
+    if BASE64_LINE.match(line) and re.search(r"\d", line) and re.search(r"[A-Za-z]", line):
+        return re.match(r"\s*", line)[0] + "[hidden]"  # a key's lines, / and + as they come
     return RANDOM_LOOKING.sub(lambda m: "[hidden]" if re.search(r"\d", m[0]) and re.search(r"[A-Za-z]", m[0])
                               and "/" not in m[0] else m[0], line)
 
 
 def masked(text):
-    """Text (a log line or a whole file) without what looks like a password or key in it"""
-    return "\n".join(masked_line(line) for line in text.split("\n"))
+    """Text (a log line or a whole file) without what looks like a password or key in it: line by line, and the
+    lines of a PEM block or below a YAML "password:" whole"""
+    out, block, pem = [], None, False
+    for line in text.split("\n"):
+        indent = len(line) - len(line.lstrip(" \t"))
+        if pem:
+            pem = not PEM_END.match(line)
+            out.append(line if not pem else line[:indent] + "[hidden]")
+            continue
+        if block is not None:
+            if not line.strip():
+                out.append(line)
+                continue
+            if indent > block:
+                out.append(line[:indent] + "[hidden]")
+                continue
+            block = None
+        if PEM_BEGIN.match(line):
+            pem = True
+            out.append(line)
+            continue
+        out.append(masked_line(line))
+        opens = SECRET_BLOCK.match(line)
+        if opens and secret_name(opens[1]):
+            block = indent
+    return "\n".join(out)
 
 
 def journal(*args):
