@@ -33,6 +33,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: keys are hidden by their name, wherever the word is in it (`AWS_SECRET_ACCESS_KEY`, `apiKey`,
   `db.password`), quoted values whole, and netrc's `password word` and `Bearer word`. `bypass = no` and
   `key = ...` in code are no longer hidden.
+- Security: without `XDG_RUNTIME_DIR` (with `-s`), `mascot prototypes poses` writes its page under a name nobody can
+  guess, not `/tmp/mascot-poses-<name>.html`, where another user could put a link first.
 
 ## 0.8.0 (2026-10-29)
 

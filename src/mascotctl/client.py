@@ -1425,6 +1425,18 @@ document.getElementById("search").oninput = event => {
 """
 
 
+def poses_file(display_name: str):
+    """(open file, path) for a mascot's poses page: in XDG_RUNTIME_DIR, only the user's; without it (-s) under a
+    name nobody can guess, made new (in /tmp another user could put a link at a known name first)"""
+    name = "mascot-poses-" + re.sub(r"[^A-Za-z0-9_-]+", "-", display_name)
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime:
+        path = os.path.join(runtime, name + ".html")
+        return open(path, "w"), path
+    fd, path = tempfile.mkstemp(prefix=name + "-", suffix=".html")
+    return os.fdopen(fd, "w"), path
+
+
 def show_poses(arguments: argparse.Namespace):
     """mascot prototypes poses: writes a page with the mascot's actions as
     moving pictures (its images are QOI, which browsers cannot show, so they
@@ -1494,9 +1506,8 @@ def show_poses(arguments: argparse.Namespace):
     page = (POSES_PAGE.replace("__TITLE__", html.escape(prototype.display_name))
             .replace("__NAME__", html.escape(prototype.display_name)).replace("__H__", str(top + 16))
             .replace("__DATA__", json.dumps(data).replace("</", "<\\/")))
-    out_dir = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-    out_path = os.path.join(out_dir, "mascot-poses-" + re.sub(r"[^A-Za-z0-9_-]+", "-", prototype.display_name) + ".html")
-    with open(out_path, "w") as f:
+    f, out_path = poses_file(prototype.display_name)
+    with f:
         f.write(page)
     print(f"{prototype.display_name}: {len(actions)} actions in {out_path}")
     if not arguments.no_open:

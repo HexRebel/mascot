@@ -61,6 +61,54 @@ class NoRuntimeDir(unittest.TestCase):
         self.assertIn("XDG_RUNTIME_DIR", out.stdout + out.stderr)
 
 
+class PosesPage(unittest.TestCase):
+    """mascot prototypes poses writes a page for the browser: in XDG_RUNTIME_DIR, else under a name nobody can
+    guess (with -s the CLI runs without XDG_RUNTIME_DIR, and another user could put a link at the old name first)"""
+
+    def setUp(self):
+        import importlib.util
+        import sys
+        import tempfile
+        sys.path.insert(0, os.path.join(ROOT, "src", "mascotctl"))
+        spec = importlib.util.spec_from_file_location("client", os.path.join(ROOT, "src", "mascotctl", "client.py"))
+        self.client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.client)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = tmp.name
+        saved = os.environ.get("XDG_RUNTIME_DIR"), tempfile.tempdir
+        def restore():
+            if saved[0] is None:
+                os.environ.pop("XDG_RUNTIME_DIR", None)
+            else:
+                os.environ["XDG_RUNTIME_DIR"] = saved[0]
+            tempfile.tempdir = saved[1]
+        self.addCleanup(restore)
+        tempfile.tempdir = self.tmp  # stands in for /tmp
+
+    def test_in_runtime_dir(self):
+        runtime = os.path.join(self.tmp, "run")
+        os.mkdir(runtime, 0o700)
+        os.environ["XDG_RUNTIME_DIR"] = runtime
+        f, path = self.client.poses_file("Robo")
+        f.close()
+        self.assertEqual(path, os.path.join(runtime, "mascot-poses-Robo.html"))
+
+    def test_without_runtime_dir_not_at_a_known_name(self):
+        os.environ.pop("XDG_RUNTIME_DIR", None)
+        victim = os.path.join(self.tmp, "victim")
+        with open(victim, "w") as f:
+            f.write("mine")
+        os.symlink(victim, os.path.join(self.tmp, "mascot-poses-Robo.html"))
+        f, path = self.client.poses_file("Robo")
+        with f:
+            f.write("<html>")
+        with open(victim) as f:
+            self.assertEqual(f.read(), "mine")
+        self.assertNotEqual(path, os.path.join(self.tmp, "mascot-poses-Robo.html"))
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+
+
 class DataDir(unittest.TestCase):
     @unittest.skipUnless(can_unshare(), "unshare cannot give the test a /tmp of its own")
     def test_daemon_makes_data_dir_private(self):
