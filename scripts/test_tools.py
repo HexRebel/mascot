@@ -188,10 +188,12 @@ class Files(unittest.TestCase):
         weather = lambda location: self.tool("get_current_weather", {"location": location},
                                              https_proxy="http://127.0.0.1:9", MASCOT_TOOLS_LOCAL="0")
         for place in ("København", "Paris, France", "St. Petersburg", "Aix-en-Provence", "L'Aquila", "L’Aquila",
-                      "Frankfurt (Oder)", ""):
+                      "Frankfurt (Oder)", "東京", "Αθήνα", "Москва", ""):
             self.assertIn("could not get the weather", weather(place), place)
         for data in ("export OPENAI_API_KEY=sk-abc", "~/.ssh/id_ed25519", "a@b", "line\nbreak", "x" * 65,
-                     "%2e%2e", "Paris?format=j1", "Århus/../etc"):
+                     "%2e%2e", "Paris?format=j1", "Århus/../etc",
+                     # At most 64 bytes, as many letters of any kind carry more; digits only 0-9
+                     "東京" * 11, "Paris²", "Paris ٣"):
             out = weather(data)
             self.assertNotIn("could not get the weather", out, data)
             self.assertIn("a place name", out, data)
