@@ -1,42 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import tarfile
-import zipfile
-import socket
-import errno
-import subprocess
-import time
 import base64
-import http.client
-import sys
-import urllib.error
-import shutil
-import xml
-import html
-import random
-import urllib.request
-import io
-from PIL import Image
-import urllib.parse
-import re
-from typing import Callable, Any
-import tempfile
-import json
-import enum
-import codecs
-import stat
 import termios
-from xml.etree import ElementTree
-import logging
-from typing import Dict, Optional
-from dataclasses import dataclass
+import urllib.parse
+import tarfile
+import random
+import errno
+import io
+import codecs
+import argparse
+import xml
+import enum
+import shutil
+import html
+import subprocess
 import xml.etree.ElementTree as ET
 import struct
-import argparse
-import os
+import logging
 from dataclasses import dataclass, field
+import json
+import time
+import ipaddress
+import urllib.request
+import socket
+from PIL import Image
+import os
+import stat
+from typing import Dict, Optional
+import zipfile
+import urllib.error
+import sys
+import http.client
+from dataclasses import dataclass
+from xml.etree import ElementTree
+from typing import Callable, Any
 import pathlib
+import tempfile
+import re
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -2180,7 +2181,13 @@ def ollama_base() -> str:
 def ollama_here(base: str) -> bool:
     """Whether Ollama at base is this computer (as ui/local.js decides for the bubble's tools)"""
     host = urllib.parse.urlsplit(base).hostname or ""
-    return host in ("", "localhost", "::1", "0.0.0.0") or host.startswith("127.")
+    if host in ("", "localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:  # a name, e.g. 127.attacker.example
+        return False
+    return address.is_loopback or address.is_unspecified
 
 
 def ollama_models(base: str) -> list | None:

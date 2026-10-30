@@ -18,6 +18,7 @@
 CHAT_LANGUAGE and CHAT_TOOLS. The user's own aichat config is only looked for, never read or written. An API key
 is read without echo, never printed, and only sent to the service it belongs to."""
 import http.client
+import ipaddress
 import json
 import os
 import re
@@ -249,7 +250,13 @@ def ollama_base() -> str:
 def ollama_here(base: str) -> bool:
     """Whether Ollama at base is this computer (as ui/local.js decides for the bubble's tools)"""
     host = urllib.parse.urlsplit(base).hostname or ""
-    return host in ("", "localhost", "::1", "0.0.0.0") or host.startswith("127.")
+    if host in ("", "localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:  # a name, e.g. 127.attacker.example
+        return False
+    return address.is_loopback or address.is_unspecified
 
 
 def ollama_models(base: str) -> list | None:

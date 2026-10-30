@@ -15,6 +15,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: Mascot's data directory is made private (700) each time mascotd and `mascot setup` run, and the todo
   list and reminders are written 600. `make install PREFIX=~/.local` made it 755, so others on the computer could
   read the todo list and the chat sessions.
+- Security: `OLLAMA_HOST=127.0.0.1@evil.com` or `127.attacker.example` counted as this computer, so the file, todo and
+  shell tools went to a model somewhere else. Now only localhost and loopback addresses count.
 
 ## 0.8.0 (2026-10-29)
 

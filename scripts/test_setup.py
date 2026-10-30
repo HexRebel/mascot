@@ -300,7 +300,8 @@ class Net(Served):
     def test_ollama_here(self):
         for base in ("http://127.0.0.1:11434", "http://localhost:11434", "http://[::1]:11434", "http://0.0.0.0:11434"):
             self.assertTrue(setup.ollama_here(base), base)
-        for base in ("http://192.168.1.20:11434", "https://ollama.example.com"):
+        for base in ("http://192.168.1.20:11434", "https://ollama.example.com", "http://127.attacker.example:11434",
+                     "http://127.0.0.1.evil.com", "http://127.0.0.1@evil.com:11434"):
             self.assertFalse(setup.ollama_here(base), base)
 
     def test_check_key_headers(self):

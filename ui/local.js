@@ -6,9 +6,12 @@
 
 // Whether OLLAMA_HOST (empty: Ollama's own default) is this computer
 function ollamaHere(host) {
-    const address = host.replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "");
+    // The host as Ollama finds it in a URL: after the scheme and any user@, before the path and the port
+    let address = host.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split(/[\/?#]/)[0];
+    address = address.slice(address.lastIndexOf("@") + 1);
     const name = address.startsWith("[") ? address.slice(1, address.indexOf("]")) : address.replace(/:\d*$/, "");
-    return name === "" || name === "localhost" || name === "::1" || name === "0.0.0.0" || /^127\./.test(name);
+    return name === "" || name === "localhost" || name === "::1" || name === "0.0.0.0"
+        || /^127(\.\d{1,3}){3}$/.test(name);
 }
 
 // The local model in aichat --info's "model: ollama:<name>" line, or "" if it is not local

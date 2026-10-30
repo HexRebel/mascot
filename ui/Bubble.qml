@@ -1757,9 +1757,9 @@ PanelWindow {
     // the data directory replaces Mascot's bundled one (an empty one turns the
     // prompt off). Read when the bubble starts
     readonly property string dataDir: Quickshell.env("MASCOT_DATA_DIR")
+        || `${Quickshell.env("XDG_DATA_HOME") || Quickshell.env("HOME") + "/.local/share"}/mascot`
     // Where Ollama is: a model there counts as local only on this computer (see local.js)
     readonly property string ollamaHost: Quickshell.env("OLLAMA_HOST") || ""
-        || `${Quickshell.env("XDG_DATA_HOME") || Quickshell.env("HOME") + "/.local/share"}/mascot`
     property var userPrompt: null // null: no prompt.md in dataDir
     property string bundledPrompt: ""
     readonly property string prompt: (bubble.event?.prompt || (userPrompt ?? bundledPrompt)).trim()

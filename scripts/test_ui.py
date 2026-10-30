@@ -72,9 +72,20 @@ class Local(unittest.TestCase):
             self.assertEqual(self.call("localModel", f"model: ollama:{name}", ""), "", name)
 
     def test_ollama_elsewhere_is_not(self):
-        for host in ("192.168.1.20:11434", "http://ollama.example.com", "https://10.0.0.5"):
+        # A user name before @ and names that only start like a loopback address are somewhere else
+        for host in ("192.168.1.20:11434", "http://ollama.example.com", "https://10.0.0.5", "127.0.0.1@evil.com:11434",
+                     "http://127.0.0.1@evil.com", "http://localhost@evil.com/", "127.attacker.example",
+                     "127.0.0.1.evil.com:11434", "http://[::1]@evil.com"):
             self.assertFalse(self.call("ollamaHere", host), host)
             self.assertEqual(self.call("localModel", "model: ollama:gemma4:12b", host), "", host)
+
+    def test_ollama_host_is_only_ollama_host(self):
+        # ollamaHost was put between dataDir's two lines: without OLLAMA_HOST it was the data directory's path
+        # (which the old check took for this computer), and dataDir lost its fallback
+        with open(os.path.join(ROOT, "ui", "Bubble.qml")) as f:
+            qml = f.read()
+        self.assertRegex(qml, r'property string ollamaHost: Quickshell\.env\("OLLAMA_HOST"\) \|\| ""\n')
+        self.assertRegex(qml, r'property string dataDir: Quickshell\.env\("MASCOT_DATA_DIR"\)\s*\|\| `\$\{Quickshell\.env\("XDG_DATA_HOME"\)')
 
 
 class Network(unittest.TestCase):
