@@ -83,16 +83,19 @@ SECRET_DIRS = [d.split("/") for d in (
     ".config/youtube-tui", ".local/share/youtube-tui", ".local/share/rustypipe", ".local/share/TelegramDesktop",
     ".local/share/org.localsend.localsend_app", ".local/share/folks", ".steam", ".local/share/Steam",
     # history, caches and whole app sandboxes
-    ".local/share/fish", ".local/share/zsh", ".local/share/zoxide", ".cache", ".var", ".wine", ".git",
+    ".local/share/fish", ".local/share/zsh", ".local/share/zoxide", ".local/state/zsh", ".local/state/bash",
+    ".cache", ".var", ".wine", ".git",
     # environment variables, where keys tend to end up
     ".config/environment.d", ".config/uwsm")]
 # ...and names of files or directories: keys, tokens, shell history, and what
 # browsers and Electron apps keep logins and history in
-SECRET_NAMES = re.compile(r"""^(\.env(\..*)?|.*\.env|.*\.(pem|key|p12|pfx|kdbx|keystore|asc|gpg|sqlite3?|db|ldb|vdf|xbel)
+SECRET_NAMES = re.compile(r"""^(\.env(\..*)?|.*\.env|.*\.(pem|key|p12|pfx|kdbx|keystore|asc|gpg|sqlite3?|db|ldb|vdf|xbel|shada)
     |id_(rsa|dsa|ecdsa|ed25519)(_sk)?(\.pub)?|adbkey(\.pub)?|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.pgpass
     |\.claude\.json|\.pulse-cookie|credentials(\..*)?|secrets?(\..*)?|token(s)?(\..*)?|auth\.json|fish_variables
     |cookies(\..*)?|login\ data|web\ data|local\ storage|session\ storage|indexeddb|leveldb|logins\.json
-    |\.(zsh|bash|python|node_repl|sqlite|mysql|psql|lesshst)_?history|\.histfile|\.viminfo|\.wget-hsts)$""", re.X | re.I)
+    |\.\w*history|.*_history(\..*)?|\.?lesshst|\.histfile|\.viminfo|\.wget-hsts)$""", re.X | re.I)
+# (.zhistory, .zsh_history, .bash_history, .python_history, .psql_history, .node_repl_history, .Rhistory...;
+# fish_history, python_history, repl_history.jl; less's .lesshst and XDG lesshst; vim's .viminfo, neovim's .shada)
 
 
 class ToolError(Exception):
@@ -498,16 +501,37 @@ def not_found(asked):
     return ToolError(f"there is no {shown(asked)}; {shown(directory)} has: {listing}")
 
 
+class NotAFile(OSError):
+    pass
+
+
+def open_regular(path):
+    """path opened for reading if it is a file, else NotAFile. Without
+    O_NONBLOCK a FIFO (mkfifo) would wait for a writer forever; whether it is
+    one is asked of what was opened, so it cannot be swapped in between"""
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise NotAFile
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 def read_file(args):
     path, asked = home_path(args.get("path"))
     if os.path.isdir(path):
         raise ToolError(f"{shown(asked)} is a directory, use list_directory")
     limit = read_limit()
     try:
-        with open(path, "rb") as file:
+        with open_regular(path) as file:
             data = file.read(limit + 1)
+            size = os.fstat(file.fileno()).st_size
     except FileNotFoundError:
         raise not_found(asked)
+    except NotAFile:
+        raise ToolError(f"{shown(asked)} is not a file (a pipe or a device)")
     except OSError as e:
         raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if b"\0" in data[:8192]:
@@ -515,7 +539,6 @@ def read_file(args):
     # A key in a dotfile the user let the mascot see (export OPENAI_API_KEY=... in ~/.zshrc) is still not shown
     if len(data) <= limit:
         return masked(data.decode("utf-8", "replace"))
-    size = os.path.getsize(path)
     shown_part = data[:limit]
     shown_part = shown_part[:shown_part.rfind(b"\n") + 1] or shown_part  # whole lines
     return masked(shown_part.decode("utf-8", "replace")) + (
@@ -561,11 +584,15 @@ def search_file(args):
         if check_path(file):
             continue
         try:
-            with open(file, "rb") as f:
+            with open_regular(file) as f:
                 data = f.read(SEARCH_FILE_LIMIT)
         except FileNotFoundError:
             if not many:
                 raise not_found(asked)
+            continue
+        except NotAFile:
+            if not many:
+                raise ToolError(f"{shown(asked)} is not a file (a pipe or a device)")
             continue
         except OSError:
             continue
@@ -611,10 +638,12 @@ def look_at_image(args):
     if os.path.isdir(path):
         raise ToolError(f"{shown(asked)} is a directory, use list_directory")
     try:
-        with open(path, "rb") as file:
+        with open_regular(path) as file:
             data = file.read(IMAGE_LIMIT + 1)
     except FileNotFoundError:
         raise not_found(asked)
+    except NotAFile:
+        raise ToolError(f"{shown(asked)} is not a file (a pipe or a device)")
     except OSError as e:
         raise ToolError(f"cannot read {shown(asked)}: {e.strerror}")
     if len(data) > IMAGE_LIMIT:
@@ -682,9 +711,13 @@ def locked_change(path, change):
         message = change(lines)
         if lines != before:
             temp = f"{path}.{os.getpid()}.tmp"
-            with open(temp, "w", encoding="utf-8") as file:
-                file.write("".join(line + "\n" for line in lines))
-            os.replace(temp, path)
+            try:
+                with open(temp, "w", encoding="utf-8") as file:
+                    file.write("".join(line + "\n" for line in lines))
+                os.replace(temp, path)
+            finally:  # not left behind, empty, when writing it failed
+                if os.path.lexists(temp):
+                    os.unlink(temp)
         return message
     finally:
         os.close(lock)
@@ -1086,11 +1119,19 @@ PASSWORD_ARGUMENT = re.compile(r"\b(?:mysql\w*|mariadb\w*)\b.*\s-p\S|\bsshpass\b
                                r"|\b(?:su|sudo|doas|kinit|cryptsetup)\b.*<<<"
                                r"|\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:kinit|cryptsetup)\b"  # a password piped in
                                r"|\bbw\s+unlock\s+[^-\s]|\bbw\s+login\s+\S+\s+[^-\s]"
-                               r"|\bveracrypt\b.*\s(?:-p|--password)[\s=]*\S|\bsqlplus\s+[^/\s]+/[^\s@]", re.S)  # re.S: a command over lines with \\
+                               r"|\bveracrypt\b.*\s(?:-p|--password)[\s=]*\S|\bsqlplus\b(?:\s+-\S+)*\s+[^-/\s@][^/\s]*/[^\s@]"
+                               r"|\bwpa_cli\b.*\bset_network\s+\S+\s+(?:psk|password|sae_password|wep_key\d)\s+\S",
+                               re.S)  # re.S: a command over lines with \\
+
+
+# NAME=value and --name=value: secret by its name, as in masked() (STRIPE_KEY=, MY_PASSPHRASE=, --signing-key=)
+ASSIGNED = re.compile(r"(?<![\w.-])-*([A-Za-z_][\w.-]*)=(\S*)")
 
 
 def looks_secret(command):
-    if SECRET_WORDS.search(command) or PASSWORD_ARGUMENT.search(command):
+    if SECRET_WORDS.search(command) or PASSWORD_ARGUMENT.search(command) or url_secrets(command):
+        return True
+    if any(secret_value(name, value) for name, value in ASSIGNED.findall(command)):
         return True
     # Long runs of letters and digits mixed, like keys; not paths or words
     return any(re.search(r"\d", run) and re.search(r"[A-Za-z]", run) and "/" not in run
@@ -1202,19 +1243,26 @@ LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
 # adminpass; not bypass), or in key after another word (AWS_SECRET_ACCESS_KEY,
 # apiKey; not key or keyNavigation, as in code). Then passwords in URLs,
 # <password>…</password>, Authorization: (the rest of the line), --password
-# word, "password word" on a netrc line and "Bearer word", and last 0.8.0's
-# rule (OLD_SECRET_VALUE), so nothing it hid is shown
+# word, "password word" on a netrc line, "Bearer word" and the passwords given
+# to mysql, sshpass, curl..., and last 0.8.0's rule (OLD_SECRET_VALUE), so
+# nothing it hid is shown.
+# In time linear in the line's length (a file searched may be one line of 1 MiB):
+# no pattern here may try from each place in a line and look on to its end, or
+# have two repeats that can share the same characters (\s*:\s*(…\s*)* took 88 s
+# for "password:" and 100000 spaces)
 SECRET_NAME = re.compile(r"""(?:(["'])([\w .-]{1,64}?)\1\]?|(?<![\w.-])([A-Za-z0-9_][\w.-]*))"""
                          r"""([ \t]*(?:=>|:=|[=:])[ \t]*)""")
 # A value: quoted, or one word; its pieces run together as a shell joins them
 # (PASSWORD="abc"' x')
 SECRET_WORD = re.compile(r""""(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s"',;]+""")
+QUOTED = re.compile(r""""(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'""")
 # Where a name starts a setting, its unquoted value is the rest of the line (a
 # password may have spaces): first on the line, after export, set -gx, ENV,
 # readonly, declare, local, a list's -, or another setting's = (Environment=…).
-# Elsewhere (a log line, code, prose) one word
+# Elsewhere (a log line, code, prose) one word. So only the line's first or
+# second name can start one
 SETTING_START = re.compile(r"""\s*(?:(?:export|readonly|local|ENV)\s+|(?:set|declare)(?:\s+-\w+)*\s+|-\s+)?"""
-                           r"""(?:[\w.-]+=)?$""")
+                           r"""(?:[\w.-]+=)?""")
 SECRET_NAME_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "pw", "secret", "token", "apikey",
                      "credential", "credentials", "bearer", "psk", "auth"}
 # A name whose last word is one of these says something about a secret, not
@@ -1225,43 +1273,69 @@ NOT_SECRET_LAST = {"dir", "directory", "path", "file", "files", "length", "len",
                    "expiration", "timeout", "ttl", "lifetime", "age", "required", "enabled", "enable", "disabled",
                    "mode", "method", "methods", "format", "hint", "reset", "manager", "command", "cmd", "program",
                    "provider", "rules", "strength", "complexity", "chars", "characters", "digits", "history",
-                   "header", "scheme", "level", "kind", "version", "status", "identity"}
-# The shell's working directory, not a password
-NOT_SECRET_NAMES = {"pwd", "oldpwd"}
+                   "scheme", "level", "kind", "version", "status", "identity"}
+# The shell's working directory (PWD=/home/bob in sudo's log), and ODBC's
+# password (PWD=Hunter2): only a path is shown
+PATH_OR_SECRET = {"pwd"}
 SECRET_NAME_ENDINGS = ("passwd", "password", "passphrase", "secret", "token", "apikey", "authkey", "credential",
                        "credentials", "adgangskode", "kodeord", "passord", "passwort", "wachtwoord", "salasana")
 # A name alone first on the line and one value after a space or tab: fish's set -gx, a Dockerfile's ENV,
-# pgbouncer and tab-separated files. In prose ("secret plans") a single space after a lowercase word is not one
+# pgbouncer and tab-separated files. In prose ("secret plans", "TOKEN EXPIRED after 30 minutes") a single
+# space after a word is not one
 SECRET_NAME_SPACED = re.compile(r"^(\s*(?:set(?:\s+-[a-zA-Z]+)*\s+|ENV\s+)?)([A-Za-z0-9_][\w.-]*)([ \t]+)(?![^\w\s]*=)(\S.*)$")
 # A YAML name with its value on the lines below: "password: |", "password:", "password: !!binary |", "password: &a"
-SECRET_BLOCK = re.compile(r"""^\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:\s*(?:(?:!!?[\w/]+|&\w+)\s*)*(?:[|>][-+0-9]*)?\s*"""
-                          r"""(?:#.*)?$""")
+# (what follows the colon is read a piece at a time, see value_below)
+YAML_NAME = re.compile(r"""\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:""")
+YAML_PROPERTY = re.compile(r"""(?:!!?[\w/]+|&\w+)\s*""")
+YAML_BLOCK = re.compile(r"""[|>][-+0-9]*\s*""")
+SPACES = re.compile(r"\s*")
 # A YAML name with its value on the line: lines below indented further go on with it
 SECRET_INLINE = re.compile(r"""^\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:\s+\S""")
 # Kubernetes' env: "- name: DB_PASSWORD", then "value: …" on the next line
 SECRET_K8S_NAME = re.compile(r"""^\s*-\s+name:\s*["']?([\w.-]+)["']?\s*$""")
 SECRET_K8S_VALUE = re.compile(r"""^(\s*value:\s*)(\S.*)$""")
-# A Python string over more lines after a secret name: private_key = """
-TRIPLE_OPEN = re.compile(r"""([\w.-]+)["'\]]*\s*=\s*[rbuRBU]{0,2}("{3}|'{3})""")
-# {"key": "password", "value": "…"} and {name: API_TOKEN, value: …}, as some apps keep their settings
-SECRET_KEY_VALUE = re.compile(r"""(["']?(?:key|name)["']?\s*:\s*["']?([^"',}\n]*?)["']?\s*,\s*["']?value["']?\s*:\s*)"""
-                              r"""("(?:\\.|[^"\\])*"|'[^']*'|[^\s,}]+)""", re.I)
-# <add key="Password" value="…"/> and <entry name="token">…</entry>
+# A Python string over more lines after a secret name: private_key = """, {"password": """
+TRIPLE_OPEN = re.compile(r"""(?<![\w.-])([\w.-]+)["'\]]*\s*[=:]\s*[rbuRBU]{0,2}("{3}|'{3})""")
+# Where a value left open over lines ends: export PASSWORD="abc⏎def"
+DOUBLE_QUOTE_END = re.compile(r'(?:\\.|[^"\\])*"')
+# {"key": "password", "value": "…"} and {name: API_TOKEN, value: …}, as some apps keep their settings (a name
+# of at most 64, not starting or ending in a space, so the spaces around it are read once)
+SECRET_KEY_VALUE = re.compile(r"""(["']?(?:key|name)["']?[ \t]*:[ \t]*["']?([^"',}\s](?:[^"',}\n]{0,62}[^"',}\s])?)"""
+                              r"""["']?[ \t]*,[ \t]*["']?value["']?[ \t]*:[ \t]*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,}]+)""",
+                              re.I)
+# <add key="Password" value="…"/>, <add value="…" key="Password"/> and <entry name="token">…</entry>; a tag's
+# attributes never past a < (so '<a '*20000 is not read to its end from each <)
 XML_KEY_VALUE = re.compile(r"""(\b(?:key|name)\s*=\s*["']([^"']*)["']\s+value\s*=\s*)("[^"]*"|'[^']*')""", re.I)
-XML_NAMED = re.compile(r"""(<[\w:-]+\s[^>]*\bname\s*=\s*["']([^"']*)["'][^>]*>)([^<]*)(</)""", re.I)
+XML_VALUE_KEY = re.compile(r"""(\bvalue\s*=\s*)("[^"]*"|'[^']*')(\s+(?:key|name)\s*=\s*["']([^"']*)["'])""", re.I)
+XML_NAMED = re.compile(r"""(<[\w:-]+\s[^<>]*\bname\s*=\s*["']([^"']*)["'][^<>]*>)([^<]*)(</)""", re.I)
 PEM_BEGIN = re.compile(r"^\s*-----BEGIN [^-]+-----\s*$")
 PEM_END = re.compile(r"^\s*-----END [^-]+-----\s*$")
 BASE64_LINE = re.compile(r"^\s*[A-Za-z0-9+/]{40,}={0,2}\s*$")
 NOT_SECRET_PASS = {"bypass", "compass", "surpass", "overpass", "underpass"}
-# A password may have a /, but :80/ is a port and a path (http://h:80/a@b)
-URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)(?!\d+(?:/|$))([^\s@]+)(@)")
-SECRET_TAG = re.compile(r"<((?:[\w-]+:)?[\w-]+)(\s[^>]*)?>([^<]*)</")
+# A URL's user (and :password), read a piece at a time (see url_secrets)
+URL_START = re.compile(r"://")
+URL_USER = re.compile(r"[^/\s:@]*")
+NO_AT = re.compile(r"[^\s@]*")
+URL_HOST = re.compile(r"[^/?#\s]*")
+# :80/ is a port and a path when the @ starts a part of the path (http://h:80/@vite/client)
+URL_PORT = re.compile(r"\d+/(?:.*/)?")
+# A token as a URL's user (https://ghp_…@github.com): a known kind, or long letters and digits mixed
+URL_TOKEN_USER = re.compile(r"(?:gh[pousr]_|github_pat_|glpat-|xox[abeprs]-|hf_|sk-|npm_|pypi-)", re.I)
+SECRET_TAG = re.compile(r"<((?:[\w-]+:)?[\w-]+)(\s[^<>]*)?>([^<]*)</")
 AUTHORIZATION = re.compile(r"((?<![\w-])(?:(?:proxy-)?authorization|(?:set-)?cookie)[ \t]*[:=][ \t]*)(\S.*)", re.I)
 SECRET_OPTION = re.compile(r"(--(?:password|passwd|pass|pwd|token|secret|api[-_]?key)\s+)([^\s-]\S*)", re.I)
 NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I)
 BEARER = re.compile(r"\b(bearer\s+)([^\s=:]{8,})", re.I)
+# A password given to a command (as last_commands' PASSWORD_ARGUMENT finds it): after the command's name,
+# the option's value. mysql -pPW, sshpass -p PW, curl -u user:PW, redis-cli -a PW
+COMMAND_PASSWORDS = [(re.compile(r"\b(?:mysql\w*|mariadb\w*)\b"), re.compile(r"(\s-p)(\S+)")),
+                     (re.compile(r"\bsshpass\b"), re.compile(r"(\s-p\s*)(\S+)")),
+                     (re.compile(r"\b(?:curl|wget|svn)\b"), re.compile(r"(\s(?:-u|--user)(?:\s+|=)?[^\s:]+:)(\S+)")),
+                     (re.compile(r"\bredis-cli\b"), re.compile(r"(\s(?:-a|--pass)(?:\s+|=)?)(\S+)"))]
 OLD_SECRET_VALUE = re.compile(r"((?:pass(?:wd|word)?|secret|token|api[_-]?key|apikey|auth[_-]?key|bearer|credential)"
                               r"\s*[=:]\s*)\S+", re.I)
+WORD_END = re.compile(r"[\w.-]*$")
+WORD_START = re.compile(r"[\w.-]*")
 SINCE = re.compile(r"^(\d+)\s*(s|m|min|h|t|d)$", re.I)
 
 
@@ -1281,48 +1355,109 @@ def run(*command, timeout=8):
 def secret_name(name):
     words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", name)]
     together = re.sub(r"[^a-z0-9]", "", name.lower())
-    if together in NOT_SECRET_NAMES or (len(words) > 1 and words[-1] in NOT_SECRET_LAST):
+    if len(words) > 1 and words[-1] in NOT_SECRET_LAST:
         return False
     return (any(w in SECRET_NAME_WORDS for w in words) or (len(words) > 1 and words[-1] == "key")
             or together.endswith(SECRET_NAME_ENDINGS) or (together.endswith("pass") and together not in NOT_SECRET_PASS))
 
 
-def masked_line(line):
-    """One line without what looks like a password or key in it"""
+def secret_value(name, value):
+    """Whether name's value is hidden: a secret name, but PWD's only when it is not a path (/… or ~…)"""
+    if re.sub(r"[^a-z0-9]", "", name.lower()) in PATH_OR_SECRET:
+        return not value.lstrip("\"'").startswith(("/", "~"))
+    return secret_name(name)
+
+
+def url_secrets(line):
+    """(start, end) of what is hidden in the URLs in line: the password
+    (scheme://user:PASSWORD@host; all up to the last @ before the host ends, as
+    p@ss in postgres://u:p@ss@h) and a token as the user (https://ghp_…@github.com).
+    Each part of the line read at most a few times, however many :// it has"""
+    spans, pos = [], 0
+    while (m := URL_START.search(line, pos)):
+        start = m.end()
+        at = NO_AT.match(line, start).end()
+        if at == len(line) or line[at] != "@":  # no @ in this URL
+            pos = max(at, start)
+            continue
+        user_end = URL_USER.match(line, start).end()
+        if user_end < at and line[user_end] == ":":
+            last = line.rfind("@", at, URL_HOST.match(line, at).end())
+            password = line[user_end + 1:last]
+            if password and not URL_PORT.fullmatch(password):
+                spans.append((user_end + 1, last))
+            pos = last + 1
+            continue
+        user = line[start:at]
+        if user_end == at and (URL_TOKEN_USER.match(user) or len(user) >= 20 and re.search(r"\d", user)
+                               and re.search(r"[A-Za-z]", user)):
+            spans.append((start, at))
+        pos = at + 1
+    return spans
+
+
+def hidden_spans(line, spans):
+    """line with each (start, end) in spans (in order, apart) as [hidden], in one go"""
+    parts, last = [], 0
+    for start, end in spans:
+        parts += [line[last:start], "[hidden]"]
+        last = end
+    return "".join(parts) + line[last:]
+
+
+def masked_line(line, setting=True, opened=None):
+    """One line without what looks like a password or key in it. setting: the
+    line may be a setting's own (not a log message after its time and
+    program). opened (a list) gets the quote a hidden value was left open in,
+    so the lines below are hidden up to where it ends"""
     line = AUTHORIZATION.sub(r"\1[hidden]", line)
     # The values after secret names, found left to right without taking any
     # value of a name that is not secret
     hide, at = [], 0
-    for m in SECRET_NAME.finditer(line):
-        if m.start() < at or not secret_name(m[2] or m[3]):
+    for n, m in enumerate(SECRET_NAME.finditer(line)):
+        name = m[2] or m[3]
+        if m.start() < at or not (secret_name(name) or re.sub(r"[^a-z0-9]", "", name.lower()) in PATH_OR_SECRET):
             continue
-        end = m.end()
+        end, pieces = m.end(), []
         while (piece := SECRET_WORD.match(line, end)) and piece.group():  # pieces run together
             end = piece.end()
+            pieces.append(piece)
         if end == m.end():
             continue
-        if line[m.end()] not in "\"'" and SETTING_START.match(line[:m.start()]):
-            end = len(line.rstrip())  # a setting's own line: all of it
-        hide.append((m.end(), end))
         at = end
-    for start, end in reversed(hide):
-        line = line[:start] + "[hidden]" + line[end:]
+        if not secret_value(name, line[m.end():end]):
+            continue  # (a path: what it took is not searched again)
+        if setting and n < 2 and line[m.end()] not in "\"'" and SETTING_START.fullmatch(line, 0, m.start()):
+            end = len(line.rstrip())  # a setting's own line: all of it
+            at = len(line)
+        loose = [p[0][0] for p in pieces if p[0][0] in "\"'" and not QUOTED.fullmatch(p[0])]
+        if opened is not None and loose:
+            opened.append(loose[0])
+        hide.append((m.end(), end))
+    line = hidden_spans(line, hide)
     line = XML_KEY_VALUE.sub(lambda m: m[1] + '"[hidden]"' if secret_name(m[2]) else m[0], line)
+    line = XML_VALUE_KEY.sub(lambda m: m[1] + '"[hidden]"' + m[3] if secret_name(m[4]) else m[0], line)
     line = XML_NAMED.sub(lambda m: m[1] + "[hidden]" + m[4] if secret_name(m[2]) else m[0], line)
     spaced = SECRET_NAME_SPACED.match(line)
-    if spaced and secret_name(spaced[2]) and (spaced[1].strip() or spaced[3] != " " or "_" in spaced[2]
-                                               or spaced[2].isupper()):
+    if spaced and secret_name(spaced[2]) and secret_value(spaced[2], spaced[4]) and (
+            spaced[1].strip() or spaced[3] != " " or "_" in spaced[2] or spaced[2].isupper() and len(spaced[4].split()) == 1):
         line = spaced[1] + spaced[2] + spaced[3] + "[hidden]"
     line = SECRET_KEY_VALUE.sub(lambda m: m[1] + "[hidden]" if secret_name(m[2]) else m[0], line)
-    line = URL_PASSWORD.sub(r"\1[hidden]\3", line)
+    line = hidden_spans(line, url_secrets(line))
     line = SECRET_TAG.sub(lambda m: f"<{m[1]}{m[2] or ''}>[hidden]</" if secret_name(m[1].split(":")[-1]) else m[0],
                           line)
     line = SECRET_OPTION.sub(r"\1[hidden]", line)
     line = NETRC_PASSWORD.sub(r"\1[hidden]", line)
     line = BEARER.sub(r"\1[hidden]", line)
+    for command, option in COMMAND_PASSWORDS:
+        found = command.search(line)
+        if found:
+            line = line[:found.end()] + option.sub(r"\1[hidden]", line[found.end():])
 
     def old_rule(m):
-        word = re.search(r"[\w.-]*$", line[:m.start()])[0] + re.match(r"[\w.-]*", line[m.start():])[0]
+        # The word it is part of (bypass=…): only a short one can be one of NOT_SECRET_PASS
+        word = WORD_END.search(line, max(0, m.start() - 12), m.start())[0] \
+            + WORD_START.match(line, m.start(), m.start() + 12)[0]
         return m[0] if word.lower() in NOT_SECRET_PASS else m[1] + "[hidden]"
     line = OLD_SECRET_VALUE.sub(old_rule, line)
     if BASE64_LINE.match(line) and re.search(r"\d", line) and re.search(r"[A-Za-z]", line):
@@ -1331,22 +1466,46 @@ def masked_line(line):
                               and "/" not in m[0] else m[0], line)
 
 
-def masked(text):
+def value_below(line):
+    """The name of a YAML setting whose value is on the lines below (nothing
+    after its colon but tags, an anchor, | or > and a comment), else None"""
+    name = YAML_NAME.match(line)
+    if not name:
+        return None
+    at = SPACES.match(line, name.end()).end()
+    while (prop := YAML_PROPERTY.match(line, at)):
+        at = prop.end()
+    block = YAML_BLOCK.match(line, at)
+    at = block.end() if block else at
+    return name[1] if at == len(line) or line[at] == "#" else None
+
+
+def closing_at(line, quote):
+    """Where in line the string left open with quote ends, or -1"""
+    if quote == '"':
+        end = DOUBLE_QUOTE_END.match(line)
+        return end.end() - 1 if end else -1
+    return line.find(quote)
+
+
+def masked(text, logged=False):
     """Text (a log line or a whole file) without what looks like a password or key in it: line by line, and
-    whole the lines of a PEM block, below a YAML "password:", of a Python string over more lines and the value
-    line of a Kubernetes "- name: DB_PASSWORD\""""
-    out, block, pem, triple, k8s = [], None, False, None, None
-    for line in text.split("\n"):
+    whole the lines of a PEM block, below a YAML "password:", of a Python string over more lines, of a quoted
+    value left open (export PASSWORD="abc⏎def") and the value line of a Kubernetes "- name: DB_PASSWORD".
+    logged: the first line is a log message (after its time and program), which never starts a setting"""
+    out, block, pem, closing, k8s = [], None, False, None, None
+    for number, line in enumerate(text.split("\n")):
         indent = len(line) - len(line.lstrip(" \t"))
         if pem:
             pem = not PEM_END.match(line)
             out.append(line if not pem else line[:indent] + "[hidden]")
             continue
-        if triple:
-            if triple in line:  # the end of the string: what follows it is shown
-                at = line.index(triple)
-                out.append(line if not line[:at].strip() else line[:indent] + "[hidden]" + line[at:])
-                triple = None
+        if closing:
+            at = closing_at(line, closing)
+            if at >= 0:  # the end of the string: what follows it is masked as any line
+                rest = masked_line(line[at:], setting=False)
+                out.append(line[:at] + rest if not line[:at].strip() else line[:indent] + "[hidden]" + rest)
+                closing = None
             else:
                 out.append(line[:indent] + "[hidden]")
             continue
@@ -1370,16 +1529,20 @@ def masked(text):
             pem = True
             out.append(line)
             continue
-        out.append(masked_line(line))
-        opens = SECRET_BLOCK.match(line) or SECRET_INLINE.match(line)
-        if opens and secret_name(opens[1]):
+        opened = []
+        out.append(masked_line(line, setting=not (logged and number == 0), opened=opened))
+        inline = SECRET_INLINE.match(line)
+        opens = value_below(line) or (inline and inline[1])
+        if opens and secret_name(opens):
             block = indent
         named = SECRET_K8S_NAME.match(line)
         if named and secret_name(named[1]):
             k8s = indent
         string = TRIPLE_OPEN.search(line)
         if string and secret_name(string[1]) and string[2] not in line[string.end():]:
-            triple = string[2]
+            closing = string[2]
+        elif opened:
+            closing = opened[0]
     return "\n".join(out)
 
 
@@ -1413,7 +1576,8 @@ def log_entries(lines):
     return entries
 
 
-LOG_HEAD = re.compile(r"\S+ \S+ [^:\s]+(?:\[\d+\])?: ")
+# time host program[pid]: ; a program's name may have spaces (Web Content[123]:), then it has its pid
+LOG_HEAD = re.compile(r"\S+ \S+ (?:[^:\s\[][^:\[\]]*?\[\d+\]|[^:\s]+): ")
 
 
 def masked_entry(entry):
@@ -1421,10 +1585,14 @@ def masked_entry(entry):
     further lines are indented to where the message starts, so the YAML or the
     key they are part of is seen"""
     head = LOG_HEAD.match(entry[0])
-    width = head.end() if head else 0
-    text = [entry[0][width:]] + [line[width:] if line[:width].isspace() else line.lstrip() for line in entry[1:]]
-    hidden = masked("\n".join(text)).split("\n")
-    return [entry[0][:width] + hidden[0]] + [" " * width + line for line in hidden[1:]]
+    start = head.end() if head else 0
+    # The further lines are indented to where the message starts; for a head LOG_HEAD cannot read, as far as
+    # the least indented of them, so the YAML's own indentation is kept
+    width = start or min((len(line) - len(line.lstrip()) for line in entry[1:] if line.strip()), default=0)
+    text = [entry[0][start:]] + [line[width:] if not width or line[:width].isspace() else line.lstrip()
+                                 for line in entry[1:]]
+    hidden = masked("\n".join(text), logged=True).split("\n")
+    return [entry[0][:start] + hidden[0]] + [" " * width + line for line in hidden[1:]]
 
 
 def since_option(since):
@@ -2022,7 +2190,8 @@ def read_log(args):
         log, partial = journal("--user", *base, "-u", unit, entries=True)
     entries = [entry for entry in log if entry]
     # When the newest lines are not all there is, the answer says from when
-    searched_all = not search or sum(map(len, entries)) < LOG_SEARCHED
+    # (journalctl -n counts messages, not their lines)
+    searched_all = not search or len(entries) < LOG_SEARCHED
     oldest = entries[0][0].split(" ", 1)[0] if entries else ""
     if search:
         # Text, not a pattern: the model's (a|a)*b would run for minutes. | between choices
@@ -2064,6 +2233,20 @@ TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file,
                                  local_model, check_system, read_log)}
 
 
+def unfit_text(value):
+    """What in value (JSON arguments) no file name or UTF-8 text can hold: a NUL or a lone surrogate; None if nothing"""
+    if isinstance(value, dict):
+        value = list(value.keys()) + list(value.values())
+    if isinstance(value, list):
+        return next(filter(None, map(unfit_text, value)), None)
+    if isinstance(value, str):
+        if "\0" in value:
+            return "NUL"
+        if re.search("[\ud800-\udfff]", value):
+            return "a lone surrogate"
+    return None
+
+
 def main():
     name = os.path.basename(sys.argv[0])
     # The todo list and the reminders are only the user's, whatever the umask
@@ -2088,10 +2271,17 @@ def main():
             args = json.loads(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].strip() else {}
         except json.JSONDecodeError:
             raise ToolError("invalid JSON arguments")
+        # JSON can carry a NUL ("\u0000") or half a UTF-16 pair ("\ud800"), which no file name or text file can
+        unfit = unfit_text(args)
+        if unfit:
+            raise ToolError(f"the arguments have a character no file name or text can hold ({unfit})")
         # What it is doing, for the bubble to show while it waits
         print("mascot-doing: " + json.dumps({"tool": name, "args": args}, ensure_ascii=False),
               file=sys.stderr, flush=True)
-        result = TOOLS[name](args if isinstance(args, dict) else {})
+        try:
+            result = TOOLS[name](args if isinstance(args, dict) else {})
+        except (ValueError, UnicodeError) as e:  # anything unfit_text missed: an error for the model, not a traceback
+            raise ToolError(f"{name} could not use that: {e}")
     except ToolError as e:
         result = f"error: {e}"  # for the model, which can tell the user
         if NOT_LOCAL_WHY and "local model" in str(e):

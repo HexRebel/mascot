@@ -6,6 +6,8 @@ Run: python3 -I scripts/test_tools.py
 """
 
 import http.server
+import importlib.machinery
+import importlib.util
 import json
 import os
 import subprocess
@@ -16,6 +18,14 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KEY = "sk-proj-Abc123def456ghi789jkl012mno345pq"
+
+
+def tools_module():
+    """tools/mascot-tools itself, to call its functions in this process"""
+    loader = importlib.machinery.SourceFileLoader("mascot_tools", os.path.join(ROOT, "tools", "mascot-tools"))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    return module
 
 
 class Files(unittest.TestCase):
@@ -382,7 +392,7 @@ class Files(unittest.TestCase):
         plain = ["set -gx PASSWORD_STORE_DIR ~/.password-store",
                  "export PASSWORD_STORE_DIR=~/.password-store", "token_limit = 512", "password_min_length: 8",
                  "secret_service: true", "credential.helper=store", "PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/ls",
-                 "http://h:80/a@b", "The password is wrong, try again.", "auth_method = basic",
+                 "http://h:80/@vite/client", "The password is wrong, try again.", "auth_method = basic",
                  '<label for="password">Name</label>', "author: Bob", "secret plans", "self.secret_asked += 1",
                  "add-service-cookie=no", "tls_psk_identity = my-collector-01"]
         self.write("r4.txt", "\n".join(list(secrets) + plain) + "\n")
@@ -406,11 +416,48 @@ class Files(unittest.TestCase):
             self.assertNotIn("Traceback", out, when[:20])
 
     def test_masking_takes_no_more_than_a_moment(self):
-        # A lookahead made a line of many spaces take seconds (a 1 MiB file: minutes)
-        self.write("slow.txt", "password: x" + " " * 200000 + "y\n" + "token=x " * 20000 + "\n")
-        started = time.time()
-        self.tool("read_file", {"path": "~/slow.txt"})
-        self.assertLess(time.time() - started, 5)
+        # A lookahead made a line of many spaces take seconds (a 1 MiB file: minutes). read_file reads only about
+        # 12 KB, search_file 1 MiB: these took 10 s to over 3 minutes in search_file (the fifth review)
+        slow = {"spaces": "password:" + " " * 100000 + "y", "tokens": "a token=x" * 20000,
+                "hex": "0123456789abcdef" * 4096, "long word first": "x" * 20000 + " token=x" * 2000,
+                "tags": "<a " * 20000, "old spaces": "password: x" + " " * 200000 + "y",
+                "urls": "://a:" * 20000, "key value": "key: a" + " " * 100000 + ",value:x"}
+        tools = tools_module()
+        for name, line in slow.items():
+            started = time.monotonic()
+            tools.masked(line)
+            self.assertLess(time.monotonic() - started, 1, name)
+            self.write("slow.txt", line + "\n")
+            started = time.monotonic()
+            self.tool("search_file", {"path": "~/slow.txt", "text": "nowhere"})
+            self.assertLess(time.monotonic() - started, 3, name)
+        # A whole MiB of them, as search_file reads
+        self.write("slow.txt", "\n".join(slow.values())[:1024 * 1024] + "\n")
+        started = time.monotonic()
+        self.tool("search_file", {"path": "~/slow.txt", "text": "nowhere"})
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_masking_round_five(self):
+        # What the fifth review and the last security review could still read
+        secrets = {"Driver={PG};Server=db;UID=sa;PWD=odbcpw1;": "odbcpw1", "PWD = odbcpw2": "odbcpw2",
+                   "AUTH_HEADER=Basic hdrpw3": "hdrpw3", "TOKEN_HEADER=hdrpw4": "hdrpw4",
+                   "PROXY_PASSWORD_HEADER=hdrpw5": "hdrpw5", "http://bob:12345/urlpw6@host": "urlpw6",
+                   '<add value="xmlpw7" key="Password"/>': "xmlpw7", 'x = {"password": """\ntriplepw8\n"""}': "triplepw8",
+                   'export PASSWORD="abc\nopenpw9"\nnext=1': "openpw9", "postgres://user:p@sspw10@host/db": "sspw10",
+                   "mysql -u root -phunter11 shop": "hunter11", "sshpass -p hunter12 ssh pi": "hunter12",
+                   "curl -u bob:hunter13 https://x.dk": "hunter13", "git clone https://ghp_tok14@github.com/me/x": "tok14",
+                   "redis-cli -a hunter15 ping": "hunter15"}
+        plain = ["PWD=/home/bob", "PWD=~/src", "TOKEN EXPIRED after 30 minutes", "http://h:80/@vite/client",
+                 "next=1", "ssh://git@github.com/me/x", "mysql -u root -p shop", "curl -u bob https://x.dk"]
+        self.write("r5.txt", "\n".join(list(secrets) + plain) + "\n")
+        out = self.tool("read_file", {"path": "~/r5.txt"})
+        for line, value in secrets.items():
+            self.assertNotIn(value, out, line)
+        for line in plain:
+            self.assertIn(line, out)
+        for line, value in secrets.items():
+            self.write("one.txt", line + "\n")
+            self.assertNotIn(value, self.tool("search_file", {"path": "~/one.txt", "text": value[:3]}), line)
 
     def test_a_long_json_line_is_read(self):
         # Minified JSON (an app's settings): masking it made a RecursionError, and read_file gave nothing
@@ -449,14 +496,20 @@ class Files(unittest.TestCase):
                   "echo hunter2 | sudo -u bob -S id", "su -c id <<< hunter2", "sudo --user bob -S id",
                   "sudo --user=bob --stdin id", "bw unlock hunter2", "bw login me@x.dk hunter2", "veracrypt -p hunter2 v",
                   "kinit bob <<< hunter2", "echo hunter2 | kinit bob", "echo -n hunter2 | cryptsetup open /dev/x c",
-                  "sqlplus bob/hunter2@db", "printf hunter2 | sudo -S true"]
+                  "sqlplus bob/hunter2@db", "printf hunter2 | sudo -S true",
+                  # Secret by the name it is given to, as masked() reads it, and a token as a URL's user
+                  "STRIPE_KEY=hunter2 node pay.js", "HF_KEY=hunter2 python x.py", "SIGNING_KEY=hunter2 make",
+                  "MY_PASSPHRASE=hunter2 ./backup", "git push https://ghp_hunter2@github.com/me/x",
+                  "sqlplus -S scott/hunter2@db", "wpa_cli set_network 0 psk '\"hunter2\"'", "PWD=hunter2 isql dsn"]
         plain = ["mkdir -p src/x", "ssh -p 2222 pi", "curl -u me https://x.dk", "git clone https://github.com/me/x",
                  "ls -p", "sudo pacman -Syu", "sudo pacman -S firefox", "sudo -E pacman -S --needed git",
                  "socat -u UNIX-CONNECT:/run/x.sock -", "docker login ghcr.io", "docker ps -a", "redis-cli ping",
                  "zip -r a.zip f", "unzip a.zip", "ssh-keygen -t ed25519", "smbclient -L nas -U me", "7z x a.7z",
                  "lftp -u me ftp.x.dk", "redis-cli -h db -p 6379 get x", "sudo -u bob pacman -S git",
                  "echo $PWD", "ldapsearch -x -W", "nmcli con show", "rdesktop pc", "bw unlock", "bw login",
-                 "kinit bob", "cryptsetup open /dev/x c", "sqlplus /nolog", "echo hi | grep h", "sudo --user bob ls"]
+                 "kinit bob", "cryptsetup open /dev/x c", "sqlplus /nolog", "echo hi | grep h", "sudo --user bob ls",
+                 "sqlplus -S /nolog", "ls --color=auto", "make CC=gcc", "PWD=/tmp ls", "git clone ssh://git@github.com/x",
+                 "wpa_cli status"]
         # last_commands shows at most 10
         for chunk in (secret[i:i + 10] for i in range(0, len(secret), 10)):
             out = self.history(chunk)
@@ -502,11 +555,15 @@ class Files(unittest.TestCase):
         self.assertNotIn("started", out)
 
     def fake_journal(self, lines):
-        """A journalctl that gives these lines (-n: the newest that many); returns the PATH to find it"""
+        """A journalctl that gives these lines (-n: the newest that many messages, a message's further lines
+        indented, as the real one counts them); returns the PATH to find it"""
         self.write("log.txt", "\n".join(lines) + "\n")
         self.write("bin/journalctl", "#!/usr/bin/python3\nimport os, sys\n"
                    f"lines = open({os.path.join(self.home, 'log.txt')!r}).read().splitlines()\n"
-                   "if '-n' in sys.argv: lines = lines[-int(sys.argv[sys.argv.index('-n') + 1]):]\n"
+                   "starts = [i for i, l in enumerate(lines) if not l[:1].isspace()]\n"
+                   "if '-n' in sys.argv:\n"
+                   "    n = int(sys.argv[sys.argv.index('-n') + 1])\n"
+                   "    lines = lines[starts[-n] if n < len(starts) else 0:]\n"
                    "print('\\n'.join(lines))\n")
         os.chmod(os.path.join(self.home, "bin", "journalctl"), 0o755)
         return os.path.join(self.home, "bin") + ":/usr/bin:/bin"
@@ -523,6 +580,11 @@ class Files(unittest.TestCase):
         out = self.tool("read_log", {"search": "Linux version"}, PATH=path)
         self.assertNotIn("since boot", out)
         self.assertIn("since 2026-10-30T", out)
+        # journalctl -n counts messages: two messages of many lines are the whole boot
+        path = self.fake_journal(["2026-10-30T09:59:59+0100 pc kernel: Linux version 7.2",
+                                  "2026-10-30T10:00:00+0100 pc app[1]: dump"] + ["    line %d" % i for i in range(200000)])
+        out = self.tool("read_log", {"search": "Linux version"}, PATH=path)
+        self.assertIn("since boot", out)
 
     def test_log_search_is_text_not_a_pattern(self):
         # The model's search is text (| between choices), never run as a pattern: (a|a)*b took minutes
@@ -551,6 +613,80 @@ class Files(unittest.TestCase):
         self.assertIn("user: bob", out)
         self.assertNotIn("blockpw1", out)
         self.assertNotIn("b3BlbnNzaC1rZXk", out)
+
+    def test_log_messages_are_masked_as_messages(self):
+        # A message is not a setting's own line (token=abc rejected... hid all after it), and a program with a
+        # space in its name (Firefox's "Web Content") keeps its YAML's indentation, so its password: hides the next
+        head = "2026-10-30T10:00:00+0100 pc app[1]: "
+        web = "2026-10-30T10:00:01+0100 pc Web Content[123]: "
+        pad = " " * len(web)
+        path = self.fake_journal([head + "token=abc rejected for user bob", head + "Credentials: none provided by client",
+                                  head + "TOKEN EXPIRED after 30 minutes", web + "config:", pad + "  password:",
+                                  pad + "    webpw1", pad + "  user: bob"])
+        out = self.tool("read_log", {}, PATH=path)
+        for shown in ("token=[hidden] rejected for user bob", "provided by client", "TOKEN EXPIRED after 30 minutes",
+                      pad + "  user: bob"):
+            self.assertIn(shown, out)
+        self.assertNotIn("abc", out)
+        self.assertNotIn("webpw1", out)
+
+    def test_more_shell_histories_are_private(self):
+        # Even with all of home's dotfiles allowed: zsh's other names and XDG places, fish's, and other programs'
+        histories = [".zhistory", ".zsh_history", ".bash_history", ".python_history", ".psql_history", ".mysql_history",
+                     ".sqlite_history", ".lesshst", ".node_repl_history", ".local/state/zsh/history",
+                     ".local/state/bash/history", ".config/fish/fish_history", ".local/share/fish/fish_history",
+                     ".local/state/lesshst", ".local/state/nvim/shada/main.shada", ".config/zsh/.zsh_history"]
+        allowed = ";".join(["~/.local", "~/.config"] + ["~/" + h for h in histories if "/" not in h])
+        for rel in histories:
+            self.write(rel, "mysql -phunter2\n")
+            out = self.tool("read_file", {"path": "~/" + rel}, allowed)
+            self.assertIn("private", out, rel)
+            self.assertNotIn("hunter2", out, rel)
+        out = self.tool("search_file", {"path": "~/.config", "text": "mysql"}, allowed)
+        self.assertNotIn("hunter2", out)
+
+    def test_a_pipe_is_not_waited_for(self):
+        # A FIFO (mkfifo) blocks open() until someone writes: read_file, search_file and look_at_image waited forever
+        os.mkfifo(os.path.join(self.home, "pipe"))
+        os.mkfifo(os.path.join(self.home, "pipe.png"))
+        self.write("docs/notes.txt", "pipe dreams\n")
+        os.mkfifo(os.path.join(self.home, "docs", "pipe.txt"))
+        base = self.fake_ollama({"gemma4:12b": {"response": "a cat"}})
+        self.aichat_config(base + "/v1")
+        image = {"MASCOT_VISION_MODEL": "gemma4:12b", "AICHAT_CONFIG_DIR": os.path.join(self.home, "aichat")}
+        for tool, args, env in (("read_file", {"path": "~/pipe"}, {}), ("search_file", {"path": "~/pipe", "text": "x"}, {}),
+                                ("look_at_image", {"path": "~/pipe.png"}, image)):
+            started = time.monotonic()
+            out = self.tool(tool, args, **env)
+            self.assertLess(time.monotonic() - started, 5, tool)
+            self.assertIn("not a file", out, tool)
+        out = self.tool("search_file", {"path": "~/docs", "text": "pipe"})
+        self.assertIn("pipe dreams", out)
+
+    def test_odd_characters_give_an_error_not_a_traceback(self):
+        # JSON can carry a NUL or a lone surrogate, which no file name or text file can hold
+        todo = os.path.join(self.home, "lists", "todo.md")
+        reminders = os.path.join(self.home, "lists", "reminders.md")
+        lists = {"MASCOT_TODO_FILE": todo, "MASCOT_REMINDER_FILE": reminders}
+        self.tool("add_todo", {"item": "milk"}, **lists)
+        self.tool("set_reminder", {"when": "1h", "text": "tea"}, **lists)
+        for odd in ("a\0b", "a\ud800b"):
+            for tool, args in (("read_file", {"path": odd}), ("list_directory", {"path": odd}),
+                               ("search_file", {"path": odd, "text": "x"}), ("search_file", {"path": "~", "text": odd}),
+                               ("look_at_image", {"path": odd}), ("add_todo", {"item": odd}),
+                               ("remove_todo", {"item": odd}), ("edit_todo", {"item": "1", "text": odd}),
+                               ("cancel_reminder", {"item": odd}), ("set_reminder", {"when": "1h", "text": odd})):
+                out = self.tool(tool, args, MASCOT_VISION_MODEL="", **lists)
+                self.assertNotIn("Traceback", out, (tool, odd))
+                self.assertIn("error:", out, (tool, odd))
+        self.assertEqual(sorted(os.listdir(os.path.dirname(todo))), ["reminders.md", "todo.md"])
+        with open(todo) as f:
+            self.assertIn("milk", f.read())
+        # And a change that cannot be written leaves no empty <file>.<pid>.tmp behind
+        tools = tools_module()
+        with self.assertRaises(UnicodeError):
+            tools.locked_change(todo, lambda lines: lines.append("- [ ] a\ud800b"))
+        self.assertEqual(sorted(os.listdir(os.path.dirname(todo))), ["reminders.md", "todo.md"])
 
     def test_more_places_with_tokens_are_private(self):
         for rel in (".config/containers/auth.json", ".config/github-copilot/hosts.json", ".config/hub",
