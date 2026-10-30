@@ -40,12 +40,19 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   name (`"password": …`, `'password' => …`) and in YAML and INI files; quoted values whole; passwords in URLs
   (`postgres://bob:…@db`), `<password>…</password>`, `Authorization: …`, `--password word`, netrc's `password word`
   and `Bearer word`. Everything 0.8.0 hid is still hidden; `bypass = no` and `key = ...` in code are no longer.
-- Security: a value with spaces is hidden to the end of the line (or the next `name=`), and so is a YAML value on
-  the lines below `password:` or `password: |`. Also hidden: a name and its value with only spaces or a tab between
-  (`set -gx DB_PASSWORD …`, a Dockerfile's `ENV API_TOKEN …`, pgbouncer), `DB_PW`, Danish and other names for a
-  password (`adgangskode`, `kodeord`, …), a quoted name with a space (`"db password"`), `<password type="x">`,
-  `{"key": "password", "value": …}`, `redis://:…@`, a password with `/` in a URL, the lines of a PEM key and a whole
-  line of base64. A search finds no more in a file than reading it shows.
+- Security: a setting's value is hidden to the end of the line, spaces and all (`password: correct horse`,
+  `DB_PASSWORD=my pass x=…`, `Environment=DB_PASSWORD=…`); elsewhere in a line (a log, code, prose) one word, as
+  0.8.0 did. Also hidden: a YAML value on the lines below `password:` (with `|`, `!!binary`, `&anchor`, a list or a
+  further indented line), a name and its value with only spaces or a tab between (`set -gx DB_PASSWORD …`, a
+  Dockerfile's `ENV API_TOKEN …`, pgbouncer), `DB_PW`, Danish and other names for a password (`adgangskode`,
+  `kodeord`, …), `psk`, `auth`, a quoted name with a space (`"db password"`), `config['password'] = …`, a shell's
+  `PASSWORD="abc"' x'`, `<password type="x">`, `<add key="Password" value="…"/>`, `<entry name="token">`,
+  `{"key": "password", "value": …}` and `{name: API_TOKEN, value: …}`, Kubernetes' `- name: DB_PASSWORD` with
+  `value:` below, a Python string over more lines (`private_key = """`), `Cookie:`, `redis://:…@`, a password with
+  `/` in a URL (not a port and path: `http://h:80/a@b` is shown), the lines of a PEM key and a whole line of base64.
+  A name that only says something about a secret is not one (`PASSWORD_STORE_DIR`, `token_limit`, `secret_service`,
+  `credential.helper`, the shell's `PWD`), and a line of many spaces no longer takes seconds. A search finds no more
+  in a file than reading it shows.
 - Security: the chat guide quotes Ollama's model names in the aichat config it writes, and leaves out a name with a
   line break. A model called `x\n    api_base: …` could point Mascot's aichat somewhere else, and `- item` or `a: b`
   broke the file.

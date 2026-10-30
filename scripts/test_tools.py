@@ -316,6 +316,44 @@ class Files(unittest.TestCase):
             found = self.tool("search_file", {"path": "~/one.txt", "text": value[:3]})
             self.assertNotIn(value, found, line)
 
+    def test_masking_round_four(self):
+        # What the fourth review could still read, and the ordinary text that was hidden
+        secrets = {"password=correct horse x=battery": "battery", "DB_PASSWORD=my pass word x=SECRETTAIL": "SECRETTAIL",
+                   """PASSWORD="abc"' xtail'""": "xtail",
+                   "env:\n  - name: DB_PASSWORD\n    value: k8spw1\n  - name: LANG": "k8spw1",
+                   "env: [{name: API_TOKEN, value: k8spw2}]": "k8spw2",
+                   '<add key="Password" value="xmlpw3"/>': "xmlpw3", '<entry name="token">xmlpw4</entry>': "xmlpw4",
+                   "config['password'] = 'subpw5'": "subpw5", 'cfg["api_key"] = "subpw6"': "subpw6",
+                   'private_key = """\ntriplepw7\n"""\nname = 1': "triplepw7",
+                   "password: !!binary |\n  YmluYXJ5cHc4\nuser: bob": "YmluYXJ5cHc4", "password: &pw\n  anchorpw9\nuser: bob": "anchorpw9",
+                   "password:\n- listpw10\nuser: bob": "listpw10", "password: abc\n  contpw11\nuser: bob": "contpw11",
+                   "psk=pskpw12": "pskpw12", "auth = authpw13": "authpw13", "Cookie: session=cookiepw14; a=b": "cookiepw14",
+                   "DB_PASSWORD SECRETSPACE trailing15": "trailing15", "set -gx GITHUB_TOKEN ghp_x trail16": "trail16",
+                   "Environment=DB_PASSWORD=sys pw17": "pw17", "url: https://bob:sl/pw18@h.dk": "sl/pw18"}
+        # (def login(password: str…) hides "str," as 0.8.0 did: nothing 0.8.0 hid is shown)
+        plain = ["set -gx PASSWORD_STORE_DIR ~/.password-store",
+                 "export PASSWORD_STORE_DIR=~/.password-store", "token_limit = 512", "password_min_length: 8",
+                 "secret_service: true", "credential.helper=store", "PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/ls",
+                 "http://h:80/a@b", "The password is wrong, try again.", "auth_method = basic",
+                 '<label for="password">Name</label>', "author: Bob", "secret plans", "self.secret_asked += 1",
+                 "add-service-cookie=no", "tls_psk_identity = my-collector-01"]
+        self.write("r4.txt", "\n".join(list(secrets) + plain) + "\n")
+        out = self.tool("read_file", {"path": "~/r4.txt"})
+        for line, value in secrets.items():
+            self.assertNotIn(value, out, line)
+        for line in plain:
+            self.assertIn(line, out)
+        for line, value in secrets.items():
+            self.write("one.txt", line + "\n")
+            self.assertNotIn(value, self.tool("read_file", {"path": "~/one.txt"}), line)
+
+    def test_masking_takes_no_more_than_a_moment(self):
+        # A lookahead made a line of many spaces take seconds (a 1 MiB file: minutes)
+        self.write("slow.txt", "password: x" + " " * 200000 + "y\n" + "token=x " * 20000 + "\n")
+        started = time.time()
+        self.tool("read_file", {"path": "~/slow.txt"})
+        self.assertLess(time.time() - started, 5)
+
     def test_a_long_json_line_is_read(self):
         # Minified JSON (an app's settings): masking it made a RecursionError, and read_file gave nothing
         self.write("state.json", "{" + ",".join(f'"k{i}":{i}' for i in range(3000)) + ',"token":"tk9z"}\n')
@@ -398,7 +436,7 @@ class Files(unittest.TestCase):
             missed = self.tool("read_log", {"search": wrong}, PATH=path)
             self.assertEqual(found.replace(right, wrong), missed, right)
         out = self.tool("read_log", {"search": "login"}, PATH=path)
-        self.assertIn("login password=[hidden]\n", out)
+        self.assertIn("login password=[hidden] ok\n", out)
         self.assertNotIn("started", out)
 
     def fake_journal(self, lines):

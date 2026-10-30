@@ -1154,29 +1154,59 @@ LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
 # <password>…</password>, Authorization: (the rest of the line), --password
 # word, "password word" on a netrc line and "Bearer word", and last 0.8.0's
 # rule (OLD_SECRET_VALUE), so nothing it hid is shown
-SECRET_NAME = re.compile(r"""(?:(["'])([\w .-]{1,64}?)\1|(?<![\w.-])([A-Za-z0-9_][\w.-]*))"""
+SECRET_NAME = re.compile(r"""(?:(["'])([\w .-]{1,64}?)\1\]?|(?<![\w.-])([A-Za-z0-9_][\w.-]*))"""
                          r"""([ \t]*(?:=>|:=|[=:])[ \t]*)""")
-# A quoted value, else the rest of the line up to the next name=, as in a log (a password may have spaces)
-SECRET_VALUE_AT = re.compile(r""""(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|\S.*?(?=\s+[\w.-]+=|\s*$)""")
+# A value: quoted, or one word; its pieces run together as a shell joins them
+# (PASSWORD="abc"' x')
+SECRET_WORD = re.compile(r""""(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s"',;]+""")
+# Where a name starts a setting, its unquoted value is the rest of the line (a
+# password may have spaces): first on the line, after export, set -gx, ENV,
+# readonly, declare, local, a list's -, or another setting's = (Environment=…).
+# Elsewhere (a log line, code, prose) one word
+SETTING_START = re.compile(r"""\s*(?:(?:export|readonly|local|ENV)\s+|(?:set|declare)(?:\s+-\w+)*\s+|-\s+)?"""
+                           r"""(?:[\w.-]+=)?$""")
 SECRET_NAME_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "pw", "secret", "token", "apikey",
-                     "credential", "credentials", "bearer"}
+                     "credential", "credentials", "bearer", "psk", "auth"}
+# A name whose last word is one of these says something about a secret, not
+# what it is (PASSWORD_STORE_DIR, token_limit, secret_service, credential.helper)
+NOT_SECRET_LAST = {"dir", "directory", "path", "file", "files", "length", "len", "min", "max", "limit", "limits",
+                   "size", "count", "store", "helper", "service", "services", "type", "types", "policy", "prompt",
+                   "label", "field", "name", "names", "id", "ids", "url", "uri", "endpoint", "expiry", "expires",
+                   "expiration", "timeout", "ttl", "lifetime", "age", "required", "enabled", "enable", "disabled",
+                   "mode", "method", "methods", "format", "hint", "reset", "manager", "command", "cmd", "program",
+                   "provider", "rules", "strength", "complexity", "chars", "characters", "digits", "history",
+                   "header", "scheme", "level", "kind", "version", "status", "identity"}
+# The shell's working directory, not a password
+NOT_SECRET_NAMES = {"pwd", "oldpwd"}
 SECRET_NAME_ENDINGS = ("passwd", "password", "passphrase", "secret", "token", "apikey", "authkey", "credential",
                        "credentials", "adgangskode", "kodeord", "passord", "passwort", "wachtwoord", "salasana")
 # A name alone first on the line and one value after a space or tab: fish's set -gx, a Dockerfile's ENV,
 # pgbouncer and tab-separated files. In prose ("secret plans") a single space after a lowercase word is not one
-SECRET_NAME_SPACED = re.compile(r"^(\s*(?:set(?:\s+-[a-zA-Z]+)*\s+|ENV\s+)?)([A-Za-z0-9_][\w.-]*)([ \t]+)(\S+)\s*$")
-# A YAML name with its value on the lines below: "password: |" or "password:"
-SECRET_BLOCK = re.compile(r"""^\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:\s*(?:[|>][-+0-9]*)?\s*(?:#.*)?$""")
-# {"key": "password", "value": "…"}, as some apps keep their settings
-SECRET_KEY_VALUE = re.compile(r"""(["'](?:key|name)["']\s*:\s*["']([^"'\n]*)["']\s*,\s*["']value["']\s*:\s*)"""
+SECRET_NAME_SPACED = re.compile(r"^(\s*(?:set(?:\s+-[a-zA-Z]+)*\s+|ENV\s+)?)([A-Za-z0-9_][\w.-]*)([ \t]+)(?![^\w\s]*=)(\S.*)$")
+# A YAML name with its value on the lines below: "password: |", "password:", "password: !!binary |", "password: &a"
+SECRET_BLOCK = re.compile(r"""^\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:\s*(?:(?:!!?[\w/]+|&\w+)\s*)*(?:[|>][-+0-9]*)?\s*"""
+                          r"""(?:#.*)?$""")
+# A YAML name with its value on the line: lines below indented further go on with it
+SECRET_INLINE = re.compile(r"""^\s*(?:-\s+)?["']?([\w.-]+)["']?\s*:\s+\S""")
+# Kubernetes' env: "- name: DB_PASSWORD", then "value: …" on the next line
+SECRET_K8S_NAME = re.compile(r"""^\s*-\s+name:\s*["']?([\w.-]+)["']?\s*$""")
+SECRET_K8S_VALUE = re.compile(r"""^(\s*value:\s*)(\S.*)$""")
+# A Python string over more lines after a secret name: private_key = """
+TRIPLE_OPEN = re.compile(r"""([\w.-]+)["'\]]*\s*=\s*[rbuRBU]{0,2}("{3}|'{3})""")
+# {"key": "password", "value": "…"} and {name: API_TOKEN, value: …}, as some apps keep their settings
+SECRET_KEY_VALUE = re.compile(r"""(["']?(?:key|name)["']?\s*:\s*["']?([^"',}\n]*?)["']?\s*,\s*["']?value["']?\s*:\s*)"""
                               r"""("(?:\\.|[^"\\])*"|'[^']*'|[^\s,}]+)""", re.I)
+# <add key="Password" value="…"/> and <entry name="token">…</entry>
+XML_KEY_VALUE = re.compile(r"""(\b(?:key|name)\s*=\s*["']([^"']*)["']\s+value\s*=\s*)("[^"]*"|'[^']*')""", re.I)
+XML_NAMED = re.compile(r"""(<[\w:-]+\s[^>]*\bname\s*=\s*["']([^"']*)["'][^>]*>)([^<]*)(</)""", re.I)
 PEM_BEGIN = re.compile(r"^\s*-----BEGIN [^-]+-----\s*$")
 PEM_END = re.compile(r"^\s*-----END [^-]+-----\s*$")
 BASE64_LINE = re.compile(r"^\s*[A-Za-z0-9+/]{40,}={0,2}\s*$")
 NOT_SECRET_PASS = {"bypass", "compass", "surpass", "overpass", "underpass"}
-URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)([^\s@]+)(@)")
+# A password may have a /, but :80/ is a port and a path (http://h:80/a@b)
+URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)(?!\d+(?:/|$))([^\s@]+)(@)")
 SECRET_TAG = re.compile(r"<((?:[\w-]+:)?[\w-]+)(\s[^>]*)?>([^<]*)</")
-AUTHORIZATION = re.compile(r"(\b(?:proxy-)?authorization[ \t]*[:=][ \t]*)(\S.*)", re.I)
+AUTHORIZATION = re.compile(r"((?<![\w-])(?:(?:proxy-)?authorization|(?:set-)?cookie)[ \t]*[:=][ \t]*)(\S.*)", re.I)
 SECRET_OPTION = re.compile(r"(--(?:password|passwd|pass|pwd|token|secret|api[-_]?key)\s+)([^\s-]\S*)", re.I)
 NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I)
 BEARER = re.compile(r"\b(bearer\s+)([^\s=:]{8,})", re.I)
@@ -1201,6 +1231,8 @@ def run(*command, timeout=8):
 def secret_name(name):
     words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", name)]
     together = re.sub(r"[^a-z0-9]", "", name.lower())
+    if together in NOT_SECRET_NAMES or (len(words) > 1 and words[-1] in NOT_SECRET_LAST):
+        return False
     return (any(w in SECRET_NAME_WORDS for w in words) or (len(words) > 1 and words[-1] == "key")
             or together.endswith(SECRET_NAME_ENDINGS) or (together.endswith("pass") and together not in NOT_SECRET_PASS))
 
@@ -1214,12 +1246,19 @@ def masked_line(line):
     for m in SECRET_NAME.finditer(line):
         if m.start() < at or not secret_name(m[2] or m[3]):
             continue
-        value = SECRET_VALUE_AT.match(line, m.end())
-        if value and value.group():
-            hide.append((value.start(), value.end()))
-            at = value.end()
+        end = m.end()
+        while (piece := SECRET_WORD.match(line, end)) and piece.group():  # pieces run together
+            end = piece.end()
+        if end == m.end():
+            continue
+        if line[m.end()] not in "\"'" and SETTING_START.match(line[:m.start()]):
+            end = len(line.rstrip())  # a setting's own line: all of it
+        hide.append((m.end(), end))
+        at = end
     for start, end in reversed(hide):
         line = line[:start] + "[hidden]" + line[end:]
+    line = XML_KEY_VALUE.sub(lambda m: m[1] + '"[hidden]"' if secret_name(m[2]) else m[0], line)
+    line = XML_NAMED.sub(lambda m: m[1] + "[hidden]" + m[4] if secret_name(m[2]) else m[0], line)
     spaced = SECRET_NAME_SPACED.match(line)
     if spaced and secret_name(spaced[2]) and (spaced[1].strip() or spaced[3] != " " or "_" in spaced[2]
                                                or spaced[2].isupper()):
@@ -1243,31 +1282,54 @@ def masked_line(line):
 
 
 def masked(text):
-    """Text (a log line or a whole file) without what looks like a password or key in it: line by line, and the
-    lines of a PEM block or below a YAML "password:" whole"""
-    out, block, pem = [], None, False
+    """Text (a log line or a whole file) without what looks like a password or key in it: line by line, and
+    whole the lines of a PEM block, below a YAML "password:", of a Python string over more lines and the value
+    line of a Kubernetes "- name: DB_PASSWORD\""""
+    out, block, pem, triple, k8s = [], None, False, None, None
     for line in text.split("\n"):
         indent = len(line) - len(line.lstrip(" \t"))
         if pem:
             pem = not PEM_END.match(line)
             out.append(line if not pem else line[:indent] + "[hidden]")
             continue
+        if triple:
+            if triple in line:  # the end of the string: what follows it is shown
+                at = line.index(triple)
+                out.append(line if not line[:at].strip() else line[:indent] + "[hidden]" + line[at:])
+                triple = None
+            else:
+                out.append(line[:indent] + "[hidden]")
+            continue
         if block is not None:
             if not line.strip():
                 out.append(line)
                 continue
-            if indent > block:
+            if indent > block or (indent == block and line.lstrip().startswith("- ")):
                 out.append(line[:indent] + "[hidden]")
                 continue
             block = None
+        if k8s is not None:
+            value = SECRET_K8S_VALUE.match(line)
+            if value and indent > k8s:
+                out.append(value[1] + "[hidden]")
+                k8s = None
+                continue
+            if indent <= k8s:
+                k8s = None
         if PEM_BEGIN.match(line):
             pem = True
             out.append(line)
             continue
         out.append(masked_line(line))
-        opens = SECRET_BLOCK.match(line)
+        opens = SECRET_BLOCK.match(line) or SECRET_INLINE.match(line)
         if opens and secret_name(opens[1]):
             block = indent
+        named = SECRET_K8S_NAME.match(line)
+        if named and secret_name(named[1]):
+            k8s = indent
+        string = TRIPLE_OPEN.search(line)
+        if string and secret_name(string[1]) and string[2] not in line[string.end():]:
+            triple = string[2]
     return "\n".join(out)
 
 
