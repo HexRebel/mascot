@@ -1771,6 +1771,20 @@ def read_log(args):
     log, partial = journal(*base, *(["-u", unit] if unit else []))
     if unit and not log:  # maybe the user's own service
         log, partial = journal("--user", *base, "-u", unit)
+    if search:
+        # journalctl searched the unmasked log: only what still matches once masked is shown,
+        # so a search for a key cannot tell what it is one letter at a time
+        try:
+            matches = re.compile(search, re.I).search
+        except re.error:
+            matches = lambda line: search.casefold() in line.casefold()
+        entries = []
+        for line in log:  # a message's further lines (indented) go with it
+            if line[:1].isspace() and entries:
+                entries[-1].append(line)
+            else:
+                entries.append([line])
+        log = [line for entry in entries if any(map(matches, entry)) for line in entry]
     sure(log)
     what = " ".join(filter(None, [f"of {unit}" if unit else "", "from the kernel" if args.get("kernel") else "",
                                   f"with \"{search}\"" if search else ""]))

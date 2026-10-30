@@ -250,6 +250,23 @@ class Files(unittest.TestCase):
         self.assertIn("OPENAI_API_KEY=[hidden]", out)
         self.assertNotIn(KEY[:12], out)
 
+    def test_log_search_never_finds_a_key(self):
+        # A journalctl that, like the real one, only gives the lines matching --grep
+        bin_dir = os.path.join(self.home, "bin")
+        self.write("bin/journalctl", "#!/usr/bin/python3\nimport re, sys\n"
+                   "lines = ['2026-10-30T10:00:00+0100 pc app[1]: login password=hunter2 ok',\n"
+                   "         '2026-10-30T10:00:01+0100 pc app[1]: started']\n"
+                   "grep = sys.argv[sys.argv.index('--grep') + 1] if '--grep' in sys.argv else ''\n"
+                   "print('\\n'.join(l for l in lines if re.search(grep, l, re.I)))\n")
+        os.chmod(os.path.join(bin_dir, "journalctl"), 0o755)
+        path = bin_dir + ":/usr/bin:/bin"
+        found = self.tool("read_log", {"search": "password=h"}, PATH=path)
+        missed = self.tool("read_log", {"search": "password=x"}, PATH=path)
+        self.assertEqual(found.replace("password=h", "password=x"), missed)
+        out = self.tool("read_log", {"search": "login"}, PATH=path)
+        self.assertIn("login password=[hidden] ok", out)
+        self.assertNotIn("started", out)
+
     def test_more_places_with_tokens_are_private(self):
         for rel in (".config/containers/auth.json", ".config/github-copilot/hosts.json", ".config/hub",
                     ".config/gcloud/application_default_credentials.json", ".config/sops/age/keys.txt",
