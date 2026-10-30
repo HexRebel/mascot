@@ -76,7 +76,10 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   programs file, a behavior that is not an object, a count larger than its list (`next_behavior_list_count`,
   `content_count`, `frame_count`) or more than 128 next behaviors crashed the daemon at every start, since it loads
   every pack it finds. A next behavior that is not defined is left out instead of being used as one. A refused
-  pack no longer leaves its files in memory, and neither does an import refused without `-f`.
+  pack frees all that was read of it (its files, the programs, actions and behaviors read before the one refused,
+  and its pictures), as does an import refused without `-f`: checked with LeakSanitizer over some 4000 packs, each
+  with one value of the wrong kind. A picture that cannot be written to the shared memory refuses the pack instead
+  of pointing past it, and an action's `select_behavior` is freed with it.
 - Security: `read_log` searches the newest 5000 lines of the log itself, once keys are hidden, not with journalctl's
   `--grep`, which searched before that: a search for `password=h`, then `password=hu`, could tell a password one
   letter at a time, by what it found or by how many lines it found.

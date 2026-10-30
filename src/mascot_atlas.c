@@ -129,10 +129,12 @@ bool _write_buffers(environment_buffer_factory_t* factory, uint64_t* buffer_fact
     }
 
     // Write the buffers to the factory
-    environment_buffer_factory_write(factory, buffers, buffer_len * 2);
+    // Not written (the pool could not grow): the sprites would point past its end
+    bool written = environment_buffer_factory_write(factory, buffers, buffer_len * 2);
     *buffer_factory_pos += buffer_len * 2;
     free(buffers);
-    return true;
+    if (!written) WARN("Failed to write buffers to memfd");
+    return written;
 }
 
 // Whether a file the walk found is a sprite: its name ends in .qoi (in any case)
@@ -277,7 +279,7 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
         };
         if (!_write_buffers(buffer_factory, &buffer_factory_pos, pixels[sprite_i], (size_t)qois[sprite_i].width*(size_t)qois[sprite_i].height*(size_t)4, qois[sprite_i].width, qois[sprite_i].height)) {
             environment_buffer_factory_destroy(buffer_factory);
-            return NULL;
+            goto fail_free_qoi_ctxs;
         }
     }
 
@@ -306,8 +308,10 @@ struct mascot_atlas* mascot_atlas_new(const char* dirname)
     return atlas;
 
 fail_free_qoi_ctxs:
+    if (atlas) free(atlas->sprites);
     free(atlas);
     for (uint32_t i = 0; i < sprite_count; i++) free(pixels[i]);
+    free(pixels);
     for (uint32_t i = 0; i < sprite_count; i++) free(namelist[i]);
     for (uint32_t i = 0; i < file_count; i++) free(file_paths[i]);
     free(qois);

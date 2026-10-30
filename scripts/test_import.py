@@ -294,7 +294,7 @@ void __debug(const char* f, int l, const char* x, ...) { (void)f; (void)l; (void
 static int factory, buffer;
 environment_buffer_factory_t* environment_buffer_factory_new() { return (environment_buffer_factory_t*)&factory; }
 void environment_buffer_factory_destroy(environment_buffer_factory_t* f) { (void)f; }
-bool environment_buffer_factory_write(environment_buffer_factory_t* f, const void* d, size_t s) { (void)f; (void)d; (void)s; return true; }
+bool environment_buffer_factory_write(environment_buffer_factory_t* f, const void* d, size_t s) { (void)f; (void)d; (void)s; return !getenv("WRITE_FAILS"); }
 void environment_buffer_factory_done(environment_buffer_factory_t* f) { (void)f; }
 environment_buffer_t* environment_buffer_factory_create_buffer(environment_buffer_factory_t* f, int32_t w, int32_t h, uint32_t s, uint32_t o) { (void)f; (void)w; (void)h; (void)s; (void)o; return (environment_buffer_t*)&buffer; }
 void environment_buffer_add_to_input_region(environment_buffer_t* b, int32_t x, int32_t y, int32_t w, int32_t h) { (void)b; (void)x; (void)y; (void)w; (void)h; }
@@ -335,9 +335,9 @@ class Atlas(unittest.TestCase):
         self.assertEqual(built.returncode, 0, built.stderr)
         return binary
 
-    def atlas(self, binary, sprites):
+    def atlas(self, binary, sprites, leaks=False, **env):
         out = subprocess.run([binary, sprites], capture_output=True, text=True, timeout=120,
-                             env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
+                             env={"ASAN_OPTIONS": f"detect_leaks={int(leaks)}", "PATH": "/usr/bin:/bin", **env})
         self.assertEqual(out.returncode, 0, out.stdout[-300:] + out.stderr[-1500:])
         return out.stdout.strip().splitlines()[-1]
 
@@ -356,6 +356,24 @@ class Atlas(unittest.TestCase):
                     with open(os.path.join(sprites, f"{i}.qoi"), "wb") as f:
                         f.write(big_qoi(width, height) + bytes(padding[0] if padding else 0))
                 self.assertEqual(self.atlas(binary, sprites), expected, name)
+
+    def test_refused_pictures_are_freed(self):
+        # A refused picture, or a Wayland pool that could not be written, left what was read in memory
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = self.driver(tmp)
+            for name, pictures in (("wide", [QOI, big_qoi(2049, 1)]), ("broken", [QOI, b"qoif" + bytes(10)])):
+                sprites = os.path.join(tmp, name)
+                os.mkdir(sprites)
+                for i, picture in enumerate(pictures):
+                    with open(os.path.join(sprites, f"{i}.qoi"), "wb") as f:
+                        f.write(picture)
+                self.assertEqual(self.atlas(binary, sprites, leaks=True), "refused", name)
+            self.assertEqual(self.atlas(binary, os.path.join(tmp, "wide"), leaks=True), "refused")
+            sprites = os.path.join(tmp, "fine")
+            os.mkdir(sprites)
+            with open(os.path.join(sprites, "0.qoi"), "wb") as f:
+                f.write(QOI)
+            self.assertEqual(self.atlas(binary, sprites, leaks=True, WRITE_FAILS="1"), "refused")
 
     def test_sprite_count_has_a_ceiling(self):
         # The count was a uint16_t and the loops ran to sprite_count*2 as an int: with more than 32767 sprites
@@ -644,6 +662,33 @@ class Pack(Manifest):
             return body.replace(one, "{" + '"type": "Animation", ' * 69 + one[1:], 1)
         self.raw("Types", "actions.json", change)
         self.load("Types", leaks=True)
+
+    def test_refused_parts_are_freed(self):
+        # What was read before a part is refused goes with the prototype: programs and actions before one that is
+        # not an object, a half-read action's texts, a reference's name, a program with odd bytecode
+        def first_action(data, **changes):
+            data[0].update(changes)
+            return data
+        def first_next(data, **changes):
+            behavior = next(b for b in data["definitions"] if b.get("next_behavior_list"))
+            behavior["next_behavior_list"][0].update(changes)
+            return data
+        def first_program(data, **changes):
+            data["programs"][0].update(changes)
+            return data
+        cases = [("Programs7", "scripts.json", lambda data: {"programs": data["programs"] + [7]}),
+                 ("Actions7", "actions.json", lambda data: data + [7]),
+                 ("BornMascot", "actions.json", lambda data: first_action(data, born_behavior="x", born_mascot=None)),
+                 ("SelectBehavior", "actions.json", lambda data: first_action(data, select_behavior="x", born_mascot=1)),
+                 ("Frequency", "behaviors.json", lambda data: first_next(data, frequency=None)),
+                 ("OddBytecode", "scripts.json", lambda data: first_program(data, instructions="123")),
+                 ("NoDefinitions", "behaviors.json", lambda data: {})]
+        for name, file, change in cases:
+            self.robo(name, file, change)
+            self.load(name, leaks=True)
+        # select_behavior of an action that loads is freed too
+        self.robo("Select", "actions.json", lambda data: first_action(data, select_behavior="x"))
+        self.load("Select", leaks=True)
 
     def test_unknown_next_behavior(self):
         self.robo("Unknown", "behaviors.json", lambda data: self.behavior(

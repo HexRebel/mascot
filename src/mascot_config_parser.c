@@ -115,6 +115,29 @@ static void action_content_free(struct mascot_action_content* content)
     content->kind = mascot_action_content_type_none;
 }
 
+// An action with all it holds, loaded or only half
+static void action_free(struct mascot_action* action)
+{
+    free((char*)action->name);
+    free((char*)action->target_behavior);
+    free((char*)action->born_behavior);
+    free((char*)action->affordance);
+    free((char*)action->transform_target);
+    free((char*)action->born_mascot);
+    free((char*)action->behavior);
+    free((char*)action->select_behavior);
+    if (action->variables) {
+        for (uint16_t j = 0; j < 128; j++) {
+            free(action->variables[j]);
+        }
+    }
+    free(action->variables);
+    for (uint16_t j = 0; j < sizeof(action->content) / sizeof(action->content[0]); j++) {
+        action_content_free(&action->content[j]);
+    }
+    free(action);
+}
+
 void mascot_prototype_unlink(const struct mascot_prototype* prototype)
 {
     if (!prototype) {
@@ -151,23 +174,7 @@ void mascot_prototype_unlink(const struct mascot_prototype* prototype)
         for (uint16_t i = 0; i < action_count; i++) {
             struct mascot_action* action = (struct mascot_action*)p->action_definitions[i];
             p->action_definitions[i] = NULL;
-            free((char*)action->name);
-            free((char*)action->target_behavior);
-            free((char*)action->born_behavior);
-            free((char*)action->affordance);
-            free((char*)action->transform_target);
-            free((char*)action->born_mascot);
-            free((char*)action->behavior);
-
-            for (uint16_t j = 0; j < 128; j++) {
-                free(action->variables[j]);
-            }
-            free(action->variables);
-
-            for (uint16_t j = 0; j < action->length; j++) {
-                action_content_free(&action->content[j]);
-            }
-            free(action);
+            action_free(action);
         }
         free((void*)p->action_definitions);
         free((void*)p->behavior_definitions);
@@ -693,6 +700,7 @@ struct mascot_expression* parse_program(struct json_object_s* program)
     // Check if instructions len is a multiple of 2
     if (bytecode_size % 2 != 0) {
         WARN("Instructions string length must be a multiple of 2");
+        expression_prototype_free(prototype);
         return NULL;
     }
 
@@ -704,12 +712,14 @@ struct mascot_expression* parse_program(struct json_object_s* program)
     // load bytecode
     if (!expression_prototype_load_bytecode(prototype, (uint8_t*)bytecode, bytecode_size)) {
         WARN("Failed to load bytecode");
+        expression_prototype_free(prototype);
         return NULL;
     }
 
     expression = (struct mascot_expression*)calloc(1, sizeof(struct mascot_expression));
     if (!expression) {
         WARN("Failed to allocate memory for expression");
+        expression_prototype_free(prototype);
         return NULL;
     }
 
@@ -1831,18 +1841,7 @@ action_generator_fail:
         DEBUG("Failed to load action");
     }
 
-    if (action_obj->variables) {
-        for (size_t i = 0; i < 128; i++) {
-            free(action_obj->variables[i]);
-        }
-    }
-    free(action_obj->variables);
-    for (size_t i = 0; i < 64; i++) {
-        action_content_free(&action_obj->content[i]);
-    }
-
-    free(action_obj->name);
-    free(action_obj);
+    action_free(action_obj);
     return result;
 
 }
@@ -1974,7 +1973,7 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
         if (!strncmp("name", celement->name->string, celement->name->string_size) && celement->name->string_size == 4) {
             if (celement->value->type != json_type_string) {
                 WARN("Behavior reference name must be a string");
-                return result;
+                goto failed;
             }
 
             if (do_temporal) {
@@ -1991,14 +1990,14 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
                 if (!name_set) {
                     WARN("Behavior %.*s not found", name->string_size, name->string);
                     result.status = MASCOT_BEHAVIORREF_PARSE_ERROR_BEHAVIOR_NOT_DEFINED;
-                    return result;
+                    goto failed;
                 }
             }
         }
         else if (!strncmp("frequency", celement->name->string, celement->name->string_size) && celement->name->string_size == 9) {
             if (celement->value->type != json_type_number) {
                 WARN("Behavior reference frequency must be a number");
-                return result;
+                goto failed;
             }
 
             struct json_number_s* frequency = (struct json_number_s*)celement->value->payload;
@@ -2008,7 +2007,7 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
     }
     if (!name_set) {
         WARN("Behavior reference name not set");
-        return result;
+        goto failed;
     }
 
     if (do_temporal) {
@@ -2016,6 +2015,11 @@ struct config_behaviorref_parse_result parse_behaviorref(struct mascot_prototype
     }
 
     result.status = MASCOT_BEHAVIORREF_PARSE_OK;
+    return result;
+
+failed:
+    // The name copied for a reference resolved later is not kept
+    free((char*)tempref.name);
     return result;
 }
 
@@ -2308,13 +2312,14 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
             }
 
             free(deffered_resolving);
-
+            deffered_resolving = NULL;
         }
 
         if (!strncmp("root_behavior_list", element->name->string, element->name->string_size) && element->name->string_size == strlen("root_behavior_list")) {
             DEBUG("Loading behavior root list");
             if (element->value->type != json_type_array) {
                 WARN("Invalid syntax in behaviors.json: root_behavior_list should be an array");
+                free(deffered_resolving);
                 return result;
             }
             result.root_list = calloc(128, sizeof(struct mascot_behavior_reference));
@@ -2348,6 +2353,7 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
         element = element->next;
     }
 
+    free(deffered_resolving);
     result.ok = true;
     return result;
 
@@ -2775,14 +2781,15 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
 
     struct json_object_s* programs_root = (struct json_object_s*)programs_data->payload;
     struct config_program_loader_result program_loader_result = load_programs(programs_root);
+    // Given to the prototype even when refused, so they are freed with it
+    prototype->expression_definitions = (const struct mascot_expression**)program_loader_result.expressions;
+    prototype->expressions_count = program_loader_result.count;
     if (!program_loader_result.ok) {
         WARN("Cannot load prototype from %s: Failed to load programs", filename_buf);
         return PROTOTYPE_LOAD_PROGRAMS_INVALID;
     }
 
     DEBUG("Prototype %s: loaded %d programs", prototype->name, program_loader_result.count);
-    prototype->expression_definitions = (const struct mascot_expression**)program_loader_result.expressions;
-    prototype->expressions_count = program_loader_result.count;
 
 
     char* actbuf = held(buffers, read_pack_file(actions_path, &size));
@@ -2804,14 +2811,14 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
 
     struct json_array_s* actions_root = (struct json_array_s*)actions_data->payload;
     struct config_action_loader_result actions_loader_result = load_actions(prototype, actions_root);
+    prototype->action_definitions = (const struct mascot_action**)actions_loader_result.actions;
+    prototype->actions_count = actions_loader_result.count;
     if (!actions_loader_result.ok) {
         WARN("Cannot load prototype from %s: Failed to load actions", filename_buf);
         return PROTOTYPE_LOAD_ACTIONS_INVALID;
     }
 
     DEBUG("Prototype %s: loaded %d actions", prototype->name, actions_loader_result.count);
-    prototype->action_definitions = (const struct mascot_action**)actions_loader_result.actions;
-    prototype->actions_count = actions_loader_result.count;
 
 
     char* behbuf = held(buffers, read_pack_file(behaviors_path, &size));
