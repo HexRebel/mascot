@@ -748,5 +748,34 @@ class ToolsPrivacy(Home):
         self.assertIn("just notes", self.read(os.path.join(elsewhere, "notes.txt"), MASCOT_DATA_DIR=elsewhere).stdout)
 
 
+class OldPython(unittest.TestCase):
+    """docs/building.md promises Python 3.10: nothing in Mascot's Python may need a newer grammar. Only 3.12 reads a
+    string with the f-string's own quote inside its braces (f"{x.decode("utf-8")}"): before, the file does not load"""
+
+    def test_no_quotes_reused_inside_f_strings(self):
+        import io
+        import tokenize
+        files = [os.path.join(ROOT, "utils", "mascot"), os.path.join(ROOT, "tools", "mascot-tools"),
+                 os.path.join(ROOT, "tools", "mascot-guide")]
+        files += [os.path.join(ROOT, "src", "mascotctl", f) for f in os.listdir(os.path.join(ROOT, "src", "mascotctl"))
+                  if f.endswith(".py")]
+        for path in files:
+            with open(path, encoding="utf-8") as f:
+                tokens = list(tokenize.generate_tokens(io.StringIO(f.read()).readline))
+            quotes = []  # the quote of each f-string we are inside
+            for token in tokens:
+                if token.type == tokenize.FSTRING_START:
+                    quote = token.string.lstrip("rRfFbB")
+                    self.assertFalse(quotes and quote[0] == quotes[-1][0],
+                                     f"{os.path.basename(path)}:{token.start[0]}: f-string inside one with the same quote")
+                    quotes.append(quote)
+                elif token.type == tokenize.FSTRING_END:
+                    quotes.pop()
+                elif token.type == tokenize.STRING and quotes:
+                    quote = token.string.lstrip("rRbBuU")[0]
+                    self.assertNotEqual(quote, quotes[-1][0],
+                                        f"{os.path.basename(path)}:{token.start[0]}: {token.string} inside an f-string")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1222,7 +1222,7 @@ chat settings (mascot config set KEY VALUE):
 roles: {roles} (its name is the role's).
   A role takes the place of the mascot's own personality; .exit role in the bubble brings it back.
   A personality for the mascots without one of their own (Robo has one):
-  {tilde(os.path.join(config_root, "prompt.md"))}
+  {tilde(os.path.join(config_root, 'prompt.md'))}
 
 in the bubble: .help, .help all, .tools, .roles"""
 
@@ -2037,16 +2037,16 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 print(f"Mascot id {packet.object_id} (Type {prototype.name}:")
                 print(f"Environment: {packet.environment_id}")
                 print(f"Current state: {packet.current_state}")
-                print(f"Current action: {packet.current_action_name.decode("utf-8", "replace")}")
+                print(f"Current action: {packet.current_action_name.decode('utf-8', 'replace')}")
                 print(f"Current action index: {packet.current_action_index}")
-                print(f"Current behavior: {packet.current_behavior_name.decode("utf-8", "replace")}")
-                print(f"Affordance: {packet.current_affordance_name.decode("utf-8", "replace")}")
+                print(f"Current behavior: {packet.current_behavior_name.decode('utf-8', 'replace')}")
+                print(f"Affordance: {packet.current_affordance_name.decode('utf-8', 'replace')}")
                 print("Action stack:")
                 for action_name, action_index in packet.actions:
-                    print(f"  {action_name.decode("utf-8", "replace")}, stored index: {action_index}")
+                    print(f"  {action_name.decode('utf-8', 'replace')}, stored index: {action_index}")
                 print("Behavior pool:")
                 for behavior_name, frequency in packet.behaviors:
-                    print(f"  {behavior_name.decode("utf-8", "replace")}, frequency: {frequency}")
+                    print(f"  {behavior_name.decode('utf-8', 'replace')}, frequency: {frequency}")
 
                 print(f"Position: {packet.variables[0].value}, {packet.variables[1].value}")
                 # print(f"Target: {packet.variables[2].value}, {packet.variables[3].value}")

@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import xml.etree.ElementTree as ET
-import ipaddress
-from PIL import Image
-import random
-import http.client
-import struct
-import socket
-import zipfile
-import shutil
-import argparse
-import re
-import urllib.error
-import subprocess
-import logging
-from dataclasses import dataclass, field
-from typing import Callable, Any
-from typing import Dict, Optional
-import io
-import urllib.parse
-import urllib.request
-import pathlib
-import html
-import errno
-import xml
-from dataclasses import dataclass
 import tempfile
+import struct
+import ipaddress
+import urllib.error
+import urllib.request
 import sys
-import time
-import stat
+import http.client
+import shutil
+from typing import Dict, Optional
+from PIL import Image
 import base64
-import os
-import codecs
+import socket
+from dataclasses import dataclass
+import argparse
 import termios
+import time
+import os
+import errno
+import pathlib
+import subprocess
+import xml.etree.ElementTree as ET
 import tarfile
+import xml
+import stat
+import zipfile
+import urllib.parse
 from xml.etree import ElementTree
+from dataclasses import dataclass, field
+import re
+from typing import Callable, Any
+import logging
+import random
+import html
 import enum
 import json
+import codecs
+import io
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -4515,7 +4515,7 @@ chat settings (mascot config set KEY VALUE):
 roles: {roles} (its name is the role's).
   A role takes the place of the mascot's own personality; .exit role in the bubble brings it back.
   A personality for the mascots without one of their own (Robo has one):
-  {tilde(os.path.join(config_root, "prompt.md"))}
+  {tilde(os.path.join(config_root, 'prompt.md'))}
 
 in the bubble: .help, .help all, .tools, .roles"""
 
@@ -5344,16 +5344,16 @@ def mascot_handler(arguments: argparse.Namespace, client: Client, parser):
                 print(f"Mascot id {packet.object_id} (Type {prototype.name}:")
                 print(f"Environment: {packet.environment_id}")
                 print(f"Current state: {packet.current_state}")
-                print(f"Current action: {packet.current_action_name.decode("utf-8", "replace")}")
+                print(f"Current action: {packet.current_action_name.decode('utf-8', 'replace')}")
                 print(f"Current action index: {packet.current_action_index}")
-                print(f"Current behavior: {packet.current_behavior_name.decode("utf-8", "replace")}")
-                print(f"Affordance: {packet.current_affordance_name.decode("utf-8", "replace")}")
+                print(f"Current behavior: {packet.current_behavior_name.decode('utf-8', 'replace')}")
+                print(f"Affordance: {packet.current_affordance_name.decode('utf-8', 'replace')}")
                 print("Action stack:")
                 for action_name, action_index in packet.actions:
-                    print(f"  {action_name.decode("utf-8", "replace")}, stored index: {action_index}")
+                    print(f"  {action_name.decode('utf-8', 'replace')}, stored index: {action_index}")
                 print("Behavior pool:")
                 for behavior_name, frequency in packet.behaviors:
-                    print(f"  {behavior_name.decode("utf-8", "replace")}, frequency: {frequency}")
+                    print(f"  {behavior_name.decode('utf-8', 'replace')}, frequency: {frequency}")
 
                 print(f"Position: {packet.variables[0].value}, {packet.variables[1].value}")
                 # print(f"Target: {packet.variables[2].value}, {packet.variables[3].value}")
