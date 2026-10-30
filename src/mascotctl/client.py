@@ -385,6 +385,16 @@ def prototype_find(name: str) -> Prototype | None:
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
+def display_name_of(text: str) -> str:
+    """text as a name the daemon takes (it is the mascot's name in the bubble's prompt): letters, digits, spaces
+    and - ' . _ only, at most 48 bytes; "" if nothing is left"""
+    kept = "".join(c if c.isalnum() or c in " -'._" else " " for c in text)
+    kept = " ".join(kept.split())
+    while len(kept.encode("utf-8")) > 48:
+        kept = kept[:-1].rstrip()
+    return kept
+
+
 def asset_name(file: str) -> str:
     """What an image is called in the prototype's assets (any letter case of the suffix)"""
     base, suffix = os.path.splitext(file)
@@ -716,7 +726,10 @@ def convert_prototype(figure: dict, output: str, name: str | None = None) -> str
             text = (element.text or "").strip() or element.get("Name", "").strip()
             return text or None
 
-        manifest["display_name"] = name or info_text("Name") or manifest["display_name"]
+        wanted = name or info_text("Name") or manifest["display_name"]
+        manifest["display_name"] = display_name_of(wanted) or display_name_of(figure["name"]) or "Mascot"
+        if manifest["display_name"] != wanted:
+            print(f"{label} is called {manifest['display_name']} (only letters, digits, spaces and - ' . _ fit)")
         for key, tag in (("artist", "Artist"), ("scripter", "Scripter"),
                          ("commissioner", "Commissioner"), ("support", "Support")):
             manifest[key] = info_text(tag)

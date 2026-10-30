@@ -44,9 +44,11 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   line break. A model called `x\n    api_base: …` could point Mascot's aichat somewhere else, and `- item` or `a: b`
   broke the file.
 - Security: a pack's `display_name` is the mascot's name in the bubble's prompt, so it must be a short name (at most
-  48 bytes of letters, digits, spaces and `- ' . _`); otherwise the pack's name is used. A pack could write
-  instructions to the model there. `CHAT_ROLES` finds a mascot by that name only when it ends its full name
-  (`Robo` of `Shimeji.Robo`), so a pack calling itself Robo does not get the role you gave Robo.
+  48 bytes of letters, digits, spaces and `- ' . _`, valid UTF-8 without line separators, invisible or direction
+  marks); otherwise the end of the pack's name is used, or "Mascot", never the whole name. A pack could write
+  instructions to the model there. Converting a Shimeji makes its name fit and says so. In `CHAT_ROLES` a name
+  without a dot means `Shimeji.<name>` and one with a dot the full name, so no pack calling itself Robo (or named
+  `Robo` or `Evil.Robo`) gets the role you gave Robo.
 - Security: the bubble's memory and private sessions count a model as local the same way the tools do (where aichat
   sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
   with the memory of what the tools had read, and could go on with a private session.

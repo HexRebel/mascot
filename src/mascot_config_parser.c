@@ -2357,17 +2357,36 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
 #define PACK_FILE_MAX (16 * 1024 * 1024)
 
 // A pack's display name is the mascot's name in the bubble's prompt: only a
-// short name (letters, digits, spaces and - ' . _), so a pack cannot write
-// instructions there; else its name is used
+// short name (letters, digits, spaces and - ' . _; beyond ASCII valid UTF-8,
+// without control characters, line or paragraph separators, invisible or
+// direction marks), so a pack cannot write instructions there; else the last
+// part of its name, or "Mascot"
 #define DISPLAY_NAME_MAX 48
 
 static bool display_name_safe(const char* name, size_t size)
 {
     if (!size || size > DISPLAY_NAME_MAX || strlen(name) != size) return false;
-    for (size_t i = 0; i < size; i++) {
-        unsigned char c = (unsigned char)name[i];
-        if (c >= 0x80 || isalnum(c) || strchr(" -'._", c)) continue;  // UTF-8 for Bjørn
-        return false;
+    const unsigned char* s = (const unsigned char*)name;
+    for (size_t i = 0; i < size; ) {
+        unsigned char c = s[i];
+        if (c < 0x80) {
+            if (!isalnum(c) && !strchr(" -'._", c)) return false;
+            i++;
+            continue;
+        }
+        // One UTF-8 character: its length, and no overlong or surrogate form
+        size_t length = c >= 0xF0 && c <= 0xF4 ? 4 : c >= 0xE0 ? 3 : c >= 0xC2 && c <= 0xDF ? 2 : 0;
+        if (!length || length > size - i || c > 0xF4) return false;
+        uint32_t point = c & (0xFF >> (length + 1));
+        for (size_t k = 1; k < length; k++) {
+            if ((s[i + k] & 0xC0) != 0x80) return false;
+            point = point << 6 | (s[i + k] & 0x3F);
+        }
+        if ((length == 3 && point < 0x800) || (length == 4 && (point < 0x10000 || point > 0x10FFFF))
+            || (point >= 0xD800 && point <= 0xDFFF)) return false;
+        if (point < 0xA0 || (point >= 0x2000 && point <= 0x206F) || point == 0xFEFF
+            || (point >= 0xFFF0 && point <= 0xFFFF) || point >= 0xE0000) return false;
+        i += length;
     }
     return true;
 }
@@ -2640,7 +2659,7 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
             if (display_name_safe(display_name->string, display_name->string_size)) {
                 prototype->display_name = strdup(display_name->string);
             } else {
-                WARN("Prototype %s: display_name is not a short name (letters, digits, spaces and - ' . _), using its name", filename_buf);
+                WARN("Prototype %s: display_name is not a short name (letters, digits, spaces and - ' . _), using the end of its name", filename_buf);
             }
         } else if (!strcmp(element->name->string, "artist")) {
             // Optional, null when unknown
@@ -2712,7 +2731,11 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
     }
 
     if (!prototype->display_name) {
-        prototype->display_name = strdup(prototype->name);
+        // Not the name itself: it is only checked to be a directory name, and
+        // would be the mascot's name in the prompt
+        const char* last = strrchr(prototype->name, '.');
+        last = last ? last + 1 : prototype->name;
+        prototype->display_name = strdup(display_name_safe(last, strlen(last)) ? last : "Mascot");
     }
 
     if (!strlen(assets_path)) {

@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from xml.etree import ElementTree
 from dataclasses import dataclass, field
-import html
-import socket
-import stat
-import termios
-import enum
-import subprocess
-import urllib.error
-import urllib.parse
 import logging
-import xml.etree.ElementTree as ET
-import time
-import ipaddress
-import tempfile
-import io
-import tarfile
-from typing import Dict, Optional
-import shutil
-from dataclasses import dataclass
-import http.client
-import base64
-import pathlib
-import xml
-from typing import Callable, Any
-import codecs
-import re
-import os
-import struct
 import sys
-from PIL import Image
-import errno
-import urllib.request
-import random
-import zipfile
-import json
 import argparse
+import xml.etree.ElementTree as ET
+import urllib.parse
+import time
+import enum
+import zipfile
+import socket
+import re
+import subprocess
+import pathlib
+import stat
+import http.client
+import html
+from typing import Callable, Any
+import io
+import xml
+import termios
+from typing import Dict, Optional
+import codecs
+from PIL import Image
+from xml.etree import ElementTree
+import json
+import tempfile
+import struct
+import base64
+import errno
+import tarfile
+import ipaddress
+import urllib.error
+import shutil
+import os
+import random
+from dataclasses import dataclass
+import urllib.request
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -3656,6 +3656,16 @@ def prototype_find(name: str) -> Prototype | None:
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
+def display_name_of(text: str) -> str:
+    """text as a name the daemon takes (it is the mascot's name in the bubble's prompt): letters, digits, spaces
+    and - ' . _ only, at most 48 bytes; "" if nothing is left"""
+    kept = "".join(c if c.isalnum() or c in " -'._" else " " for c in text)
+    kept = " ".join(kept.split())
+    while len(kept.encode("utf-8")) > 48:
+        kept = kept[:-1].rstrip()
+    return kept
+
+
 def asset_name(file: str) -> str:
     """What an image is called in the prototype's assets (any letter case of the suffix)"""
     base, suffix = os.path.splitext(file)
@@ -3995,7 +4005,10 @@ def convert_prototype(figure: dict, output: str, name: str | None = None) -> str
             text = (element.text or "").strip() or element.get("Name", "").strip()
             return text or None
 
-        manifest["display_name"] = name or info_text("Name") or manifest["display_name"]
+        wanted = name or info_text("Name") or manifest["display_name"]
+        manifest["display_name"] = display_name_of(wanted) or display_name_of(figure["name"]) or "Mascot"
+        if manifest["display_name"] != wanted:
+            print(f"{label} is called {manifest['display_name']} (only letters, digits, spaces and - ' . _ fit)")
         for key, tag in (("artist", "Artist"), ("scripter", "Scripter"),
                          ("commissioner", "Commissioner"), ("support", "Support")):
             manifest[key] = info_text(tag)

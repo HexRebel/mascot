@@ -925,19 +925,19 @@ const char* config_get_chat_language()
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
 // prototype's display or internal name (any case). An empty role means none,
 // not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
-// Whether display_name is the last part of name ("Robo" of "Shimeji.Robo"):
-// only then does CHAT_ROLES find a mascot by it, so a pack from the net that
-// calls itself Robo does not get the role the user gave Robo
-static bool display_name_is_own(const char* display_name, const char* name)
+// Whether a CHAT_ROLES key names this mascot: a key with a dot is the full
+// name ("Shimeji.Robo"), one without is the short name of a Shimeji ("Robo"
+// for Shimeji.Robo). Not by its display name, which a pack chooses, nor by a
+// name "Robo" or "Evil.Robo": names are unique, and Shimeji.Robo can only be
+// replaced with -f, so no pack from the net gets the role the user gave Robo
+static bool chat_role_key_names(const char* key, const char* name)
 {
     if (!name) return false;
-    size_t dlen = strlen(display_name), nlen = strlen(name);
-    if (dlen > nlen) return false;
-    if (strcasecmp(name + nlen - dlen, display_name)) return false;
-    return dlen == nlen || name[nlen - dlen - 1] == '.';
+    if (strchr(key, '.')) return !strcasecmp(key, name);
+    return !strncasecmp(name, "Shimeji.", 8) && !strcasecmp(name + 8, key);
 }
 
-const char* config_get_chat_role_for(const char* display_name, const char* name, char* dest, size_t size)
+const char* config_get_chat_role_for(const char* name, char* dest, size_t size)
 {
     for (const char* entry = config.chat_roles; entry && *entry; ) {
         const char* end = strchr(entry, ';');
@@ -949,8 +949,7 @@ const char* config_get_chat_role_for(const char* display_name, const char* name,
             snprintf(role, sizeof(role), "%.*s", (int)(entry + len - eq - 1), eq + 1);
             char* k = string_strip(key);
             char* r = string_strip(role);
-            if (*k && ((display_name && display_name_is_own(display_name, name) && !strcasecmp(k, display_name))
-                       || (name && !strcasecmp(k, name)))) {
+            if (*k && chat_role_key_names(k, name)) {
                 if (!*r) return NULL;
                 snprintf(dest, size, "%s", r);
                 return dest;

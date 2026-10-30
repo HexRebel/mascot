@@ -158,7 +158,7 @@ bool config_set_chat_roles(const char* value);
 const char* config_get_chat_roles();
 // The role from CHAT_ROLES for this prototype, else CHAT_ROLE; NULL if neither,
 // or if CHAT_ROLES gives it an empty role. May return dest
-const char* config_get_chat_role_for(const char* display_name, const char* name, char* dest, size_t size);
+const char* config_get_chat_role_for(const char* name, char* dest, size_t size);
 // A random mascot says something on its own every N to 2N minutes; 0 = never
 bool config_set_chat_remarks(int32_t value);
 int32_t config_get_chat_remarks();
