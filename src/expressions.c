@@ -195,9 +195,9 @@ enum expression_execution_result expression_vm_execute(struct expression_prototy
             case OP_LOADL:
                 if (state.sp >= 255) FAIL("Stack overflow");
                 indexr = immoperand;
-                if (indexr > prototype->mascot_vars_size) FAIL("Trying to access out of bounds variable");
+                if (indexr >= prototype->mascot_vars_size) FAIL("Trying to access out of bounds variable");
                 indexr = prototype->mascot_vars[indexr];
-                if (indexr > mascot->prototype->local_variables_count) FAIL("Variable points towards non existing local variable");
+                if (indexr >= mascot->prototype->local_variables_count) FAIL("Variable points towards non existing local variable");
                 struct mascot_local_variable* var = &mascot->local_variables[indexr];
 
                 if (var->kind == mascot_local_variable_int) {
@@ -212,7 +212,7 @@ enum expression_execution_result expression_vm_execute(struct expression_prototy
             case OP_LOADE:
                 if (state.sp >= 255) FAIL("Stack overflow");
                 indexr = immoperand;
-                if (indexr > prototype->global_getters_size) FAIL("Trying to access out of bounds global variable");
+                if (indexr >= prototype->global_getters_size) FAIL("Trying to access out of bounds global variable");
                 ptrr = prototype->global_getters[indexr];
                 if (!ptrr) FAIL("Global variable not found");
                 if (!ptrr(&state)) goto vmfail;
@@ -289,7 +289,7 @@ enum expression_execution_result expression_vm_execute(struct expression_prototy
                 state.stack[state.sp - 1] = !((int)freg0);
                 break;
             case OP_SHL:
-                if (state.sp < 3)
+                if (state.sp < 3) FAIL("Stack underflow");
                 freg0 = state.stack[state.sp - 2];
                 freg1 = state.stack[state.sp - 1];
                 state.stack[state.sp - 2] = ((int)freg0) << ((int)freg1);
@@ -395,7 +395,7 @@ enum expression_execution_result expression_vm_execute(struct expression_prototy
             case OP_CALL:
                 if (state.sp < 1) FAIL("Stack underflow")
                 indexr = immoperand;
-                if (indexr > prototype->function_ptrs_size) FAIL("Function index out of bounds");
+                if (indexr >= prototype->function_ptrs_size) FAIL("Function index out of bounds");
                 if (prototype->function_ptrs[indexr] == NULL) FAIL("Function is not found");
                 ptrr = prototype->function_ptrs[indexr];
                 if (!ptrr(&state)) goto vmfail;

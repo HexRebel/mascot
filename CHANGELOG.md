@@ -54,6 +54,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   text, and their words are compared whole (`"t"` was `"type"`, `""` was `"stay"`). A million `[` ran the parser
   out of stack, a second `"definitions"` freed behaviors twice, and 70 `"type"` keys in one piece of an action
   wrote past its 64 pieces, each crashing the daemon at every start.
+- Security: a mascot's programs cannot reach past the stack they run on: the `….ison` functions replaced the value
+  below the bottom with nothing pushed, a shift with too little on the stack read below it, and a variable,
+  getter or function index equal to the count read one past the table.
 - Security: a mascot's pictures are at most 2048 pixels a side and 256 MiB together (the biggest that ships is 181
   pixels and 13 MiB), checked from the header before a file is read. A pack of a few big pictures was read and
   decoded whole, up to 1.6 GB each, and overflowed the 32-bit Wayland pool, which took the daemon down.

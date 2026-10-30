@@ -518,6 +518,7 @@ bool mascot_environment_work_area_bottom(struct expression_vm_state* state)
 
 bool mascot_environment_floor_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = mascot_get_border_type(state->ref_mascot);
     state->stack[state->sp-2] = border == environment_border_type_floor;
@@ -528,6 +529,7 @@ bool mascot_environment_floor_ison(struct expression_vm_state* state)
 
 bool mascot_environment_ceiling_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = mascot_get_border_type(state->ref_mascot);
     state->stack[state->sp-2] = border == environment_border_type_ceiling;
@@ -538,6 +540,7 @@ bool mascot_environment_ceiling_ison(struct expression_vm_state* state)
 
 bool mascot_environment_wall_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = mascot_get_border_type(state->ref_mascot);
     state->stack[state->sp-2] = border == environment_border_type_wall;
@@ -548,6 +551,7 @@ bool mascot_environment_wall_ison(struct expression_vm_state* state)
 
 bool mascot_environment_left_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = mascot_get_border_type(state->ref_mascot);
     if (border == environment_border_type_wall) {
@@ -568,6 +572,7 @@ bool mascot_environment_left_ison(struct expression_vm_state* state)
 
 bool mascot_environment_right_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = mascot_get_border_type(state->ref_mascot);
     if (border == environment_border_type_wall) {
@@ -587,6 +592,7 @@ bool mascot_environment_right_ison(struct expression_vm_state* state)
 
 bool mascot_environment_work_area_left_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = environment_get_border_type(state->ref_mascot->environment, state->ref_mascot->X->value.i, state->ref_mascot->Y->value.i);
     if (border == environment_border_type_wall && state->ref_mascot->X->value.i == (int32_t)environment_workarea_left(state->ref_mascot->environment)) {
@@ -602,6 +608,7 @@ bool mascot_environment_work_area_left_border_ison(struct expression_vm_state* s
 
 bool mascot_environment_work_area_right_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = environment_get_border_type(state->ref_mascot->environment, state->ref_mascot->X->value.i, state->ref_mascot->Y->value.i);
     if (border == environment_border_type_wall && state->ref_mascot->X->value.i == (int32_t)environment_workarea_right(state->ref_mascot->environment)) {
@@ -617,6 +624,7 @@ bool mascot_environment_work_area_right_border_ison(struct expression_vm_state* 
 
 bool mascot_environment_work_area_top_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = environment_get_border_type(state->ref_mascot->environment, state->ref_mascot->X->value.i, state->ref_mascot->Y->value.i);
     if (border == environment_border_type_ceiling) {
@@ -632,6 +640,7 @@ bool mascot_environment_work_area_top_border_ison(struct expression_vm_state* st
 
 bool mascot_environment_work_area_bottom_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
     enum environment_border_type border = environment_get_border_type(state->ref_mascot->environment, state->ref_mascot->X->value.i, state->ref_mascot->Y->value.i);
     if (border == environment_border_type_floor) {
@@ -754,6 +763,7 @@ bool mascot_environment_active_ie_visible(struct expression_vm_state* state)
 
 bool mascot_environment_active_ie_top_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp - 2 <= 0) return false;
 
     int32_t x = state->stack[state->sp-2];
@@ -773,6 +783,7 @@ bool mascot_environment_active_ie_top_border_ison(struct expression_vm_state* st
 
 bool mascot_environment_active_ie_bottom_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
 
     int32_t x = state->stack[state->sp-2];
@@ -793,6 +804,7 @@ bool mascot_environment_active_ie_bottom_border_ison(struct expression_vm_state*
 
 bool mascot_environment_active_ie_left_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
 
 
@@ -813,6 +825,7 @@ bool mascot_environment_active_ie_left_border_ison(struct expression_vm_state* s
 
 bool mascot_environment_active_ie_right_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
 
 
@@ -834,6 +847,7 @@ bool mascot_environment_active_ie_right_border_ison(struct expression_vm_state* 
 
 bool mascot_environment_active_ie_border_ison(struct expression_vm_state* state)
 {
+    if (state->sp < 2) return false;  // it replaces the value below the top
     if (state->sp + 1 >= 255) return false;
 
     int32_t x = state->stack[state->sp-2];

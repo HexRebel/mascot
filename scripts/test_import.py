@@ -627,6 +627,65 @@ class Pack(Manifest):
         self.assertEqual(self.load("Unknown"), 0)
 
 
+VM_DRIVER = PARSER_DRIVER.split("// Each next behavior")[0] + r"""
+#include "expressions.h"
+bool mascot_environment_floor_ison(struct expression_vm_state* state);
+enum environment_border_type mascot_get_border_type(struct mascot* m) { (void)m; return 0; }
+
+// A program from a pack: argv[1] its bytecode in hex, calling floor.ison as function 0 and as global 0
+int main(int argc, char** argv) {
+    (void)argc;
+    struct expression_prototype* program = expression_prototype_new();
+    expression_prototype_load_bytecode(program, (uint8_t*)argv[1], strlen(argv[1]));  // hex, as in scripts.json
+    void* functions[] = { (void*)mascot_environment_floor_ison };
+    expression_prototype_load_function_ptrs(program, functions, 1);
+    expression_prototype_load_global_getters(program, functions, 1);
+    struct mascot_prototype prototype = { .local_variables_count = 128 };
+    struct mascot* mascot = calloc(1, sizeof(struct mascot));
+    mascot->prototype = &prototype;
+    float result = 0;
+    printf("%s\n", expression_vm_execute(program, mascot, &result) == EXPRESSION_EXECUTION_OK ? "ok" : "failed");
+    return 0;
+}
+"""
+
+
+class Vm(unittest.TestCase):
+    """The programs in a pack's scripts.json run in the daemon: their bytecode must not reach past the VM's stack"""
+
+    def test_stack_underflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = os.path.join(tmp, "driver.c")
+            with open(driver, "w") as f:
+                f.write(VM_DRIVER)
+            stubs = os.path.join(tmp, "stubs.c")
+            open(stubs, "w").close()
+            binary = os.path.join(tmp, "driver")
+            build = lambda: subprocess.run(["cc", "-std=gnu11", "-fsanitize=address,undefined", "-I", os.path.join(ROOT, "src"),
+                                            "-I", os.path.join(ROOT, "build"), driver, stubs,
+                                            *(os.path.join(ROOT, "src", f) for f in ("mascot_config_parser.c", "mascot_atlas.c",
+                                                                                     "io.c", "expressions.c")),
+                                            "-lm", "-o", binary], capture_output=True, text=True)
+            missing = sorted(set(re.findall(r"undefined reference to `(\w+)'", build().stderr))
+                             - {"__clog", "protocol_server_prototype_withdraw"})
+            with open(stubs, "w") as f:
+                f.write("#include <stdlib.h>\nvoid __clog(const char* c, const char* t, const char* f, int l, const char* x, ...) "
+                        "{ (void)c; (void)t; (void)f; (void)l; (void)x; }\n"
+                        "void protocol_server_prototype_withdraw(const void* p) { (void)p; }\n"
+                        + "".join(f"void {name}(void) {{ abort(); }}\n" for name in missing))
+            built = build()
+            self.assertEqual(built.returncode, 0, built.stderr)
+            run = lambda code: subprocess.run([binary, code], capture_output=True, text=True, timeout=20,
+                                              env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
+            # CALL 0 and LOADE 0 with nothing pushed: floor.ison replaced the value below the stack's bottom;
+            # CALL 1, LOADE 1: one past the one function there is; 0x34 (a shift) with nothing to shift
+            for code in ("70000100", "11000100", "70010100", "11010100", "34000100"):
+                out = run(code)
+                self.assertEqual((out.returncode, out.stdout.strip()), (0, "failed"), code + out.stderr[-1500:])
+            out = run("8000800070000100")  # two pushed: it may
+            self.assertEqual((out.returncode, out.stdout.strip()), (0, "ok"), out.stderr[-1500:])
+
+
 CHAT_ROLES_DRIVER = r"""
 #include <stdarg.h>
 #include <stdio.h>
