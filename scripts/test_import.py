@@ -768,6 +768,24 @@ class Pack(Manifest):
             self.assertEqual(out.returncode, 0, f"{name}: " + out.stderr[-1500:])
             self.assertNotIn("runtime error", out.stderr, name)
 
+    def test_number_of_parts_has_a_ceiling(self):
+        # The counts are 16 bits: 66000 actions (11 MB, under the 16 MiB a file may be) were counted as 464, and
+        # the rest never freed. At most 2048 of each
+        def more_actions(data, count):
+            extra = [dict(data[0], name=f"Extra{i}") for i in range(count)]
+            return data + extra
+        self.robo("ManyActions", "actions.json", lambda data: more_actions(data, 2048))
+        self.assertNotEqual(self.load("ManyActions", leaks=True), 0)
+        self.robo("ManyPrograms", "scripts.json", lambda data: {"programs": data["programs"] * 17})  # 2125
+        self.assertNotEqual(self.load("ManyPrograms", leaks=True), 0)
+        def more_behaviors(data, count):
+            data["definitions"] += [dict(data["definitions"][0], name=f"Extra{i}") for i in range(count)]
+            return data
+        self.robo("ManyBehaviors", "behaviors.json", lambda data: more_behaviors(data, 2048))
+        self.assertNotEqual(self.load("ManyBehaviors", leaks=True), 0)
+        self.robo("SomeMore", "actions.json", lambda data: more_actions(data, 500))
+        self.assertEqual(self.load("SomeMore", leaks=True), 0)
+
     def test_unknown_next_behavior(self):
         self.robo("Unknown", "behaviors.json", lambda data: self.behavior(
             data, next_behavior_list=[{"name": "Nobody", "frequency": 1}], next_behavior_list_count=1))

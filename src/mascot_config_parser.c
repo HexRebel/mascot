@@ -729,6 +729,10 @@ struct mascot_expression* parse_program(struct json_object_s* program)
     return expression;
 }
 
+// The most programs, actions, behaviors or root behaviors a pack may have: the
+// prototype counts them in 16 bits, and each action takes some 7 KB
+#define PACK_MAX_PARTS 2048
+
 struct config_program_loader_result load_programs(struct json_object_s* programs_root)
 {
     struct config_program_loader_result result = {0};
@@ -750,6 +754,10 @@ struct config_program_loader_result load_programs(struct json_object_s* programs
     }
 
     struct json_array_s* programs_array = (struct json_array_s*)programs->value->payload;
+    if (programs_array->length > PACK_MAX_PARTS) {
+        WARN("Invalid programs.json: more than %d programs", PACK_MAX_PARTS);
+        return result;
+    }
     struct json_array_element_s* program = programs_array->start;
     int i = 0;
     while (program) {
@@ -1876,6 +1884,10 @@ struct config_action_loader_result load_actions(struct mascot_prototype* prototy
         free(result.actions);
         return result;
     }
+    if (actions->length > PACK_MAX_PARTS) {
+        WARN("Invalid actions.json: more than %d actions", PACK_MAX_PARTS);
+        return result;
+    }
 
     struct json_object_s** deferred_resolving = calloc(actions->length, sizeof(struct json_object_s*));
     int deferred_count = 0;
@@ -2296,6 +2308,11 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
             }
 
             struct json_array_s* definitions = (struct json_array_s*)element->value->payload;
+            if (definitions->length > PACK_MAX_PARTS) {
+                WARN("Invalid behaviors.json: more than %d behaviors", PACK_MAX_PARTS);
+                free(deffered_resolving);
+                return result;
+            }
             struct json_array_element_s* definition = definitions->start;
 
             while (definition) {
@@ -2345,6 +2362,11 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
             size = 128;
             // Now build root behavior list
             struct json_array_s* root_behavior_list = (struct json_array_s*)element->value->payload;
+            if (root_behavior_list->length > PACK_MAX_PARTS) {
+                WARN("Invalid behaviors.json: more than %d root behaviors", PACK_MAX_PARTS);
+                free(deffered_resolving);
+                return result;
+            }
             struct json_array_element_s* root_behavior = root_behavior_list->start;
             while (root_behavior) {
                 if (result.root_list_count == size) {

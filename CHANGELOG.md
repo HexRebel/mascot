@@ -98,6 +98,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   and its pictures), as does an import refused without `-f`: checked with LeakSanitizer over some 4000 packs, each
   with one value of the wrong kind. A picture that cannot be written to the shared memory refuses the pack instead
   of pointing past it, and an action's `select_behavior` is freed with it.
+- Security: a pack has at most 2048 programs, actions, behaviors and root behaviors each. The prototype counts them
+  in 16 bits: 66000 actions (11 MB) were counted as 464, and the rest, some 470 MB, never freed.
 - Security: `read_log` searches the newest 200000 lines of the log itself, once keys are hidden, not with journalctl's
   `--grep`, which searched before that: a search for `password=h`, then `password=hu`, could tell a password one
   letter at a time, by what it found or by how many lines it found.
