@@ -56,7 +56,7 @@ class NoRuntimeDir(unittest.TestCase):
                   " s.listen(); s.settimeout(5); c,_=s.accept(); print(\"GOT\", c.recv(100)); sys.stdout.flush()' > /tmp/got &"
                   " sleep 1;")
         tool = os.path.join(ROOT, "tools", "bin", "sleep_mode")
-        out = private_tmp(f"{listen} {tool} '{{\"wake_up\": \"now\"}}'; sleep 1; cat /tmp/got")
+        out = private_tmp(f"{listen} MASCOT_TOOLS_ALLOWED=sleep_mode {tool} '{{\"wake_up\": \"now\"}}'; sleep 1; cat /tmp/got")
         self.assertNotIn("GOT", out.stdout, out.stdout + out.stderr)
         self.assertIn("XDG_RUNTIME_DIR", out.stdout + out.stderr)
 

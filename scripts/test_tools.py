@@ -30,12 +30,22 @@ class Files(unittest.TestCase):
             f.write(text)
         return path
 
-    def tool(self, name, args, dotfiles=""):
+    def tool(self, name, args, dotfiles="", allowed=None):
         out = subprocess.run([os.path.join(ROOT, "tools", "bin", name), json.dumps(args)],
                              env={"HOME": self.home, "PATH": "/usr/bin:/bin", "MASCOT_TOOLS_LOCAL": "1",
-                                  "MASCOT_DOTFILES": dotfiles},
+                                  "MASCOT_DOTFILES": dotfiles, "MASCOT_TOOLS_ALLOWED": name if allowed is None else allowed},
                              capture_output=True, text=True, timeout=30)
         return out.stdout + out.stderr
+
+    def test_only_the_chosen_tools_run(self):
+        # aichat runs any function in functions.json the model calls, not only those in AICHAT_USE_TOOLS: with
+        # only time, weather and todo chosen, a local model could still read files
+        self.write("notes.txt", "secret plans\n")
+        for allowed in ("get_current_weather,list_todos,add_todo,remove_todo,edit_todo", ""):
+            out = self.tool("read_file", {"path": "~/notes.txt"}, allowed=allowed)
+            self.assertNotIn("secret plans", out, allowed)
+            self.assertIn("not turned on", out, allowed)
+        self.assertIn("secret plans", self.tool("read_file", {"path": "~/notes.txt"}, allowed="list_todos,read_file"))
 
     def test_allowed_dotfile_keys_are_hidden(self):
         # CHAT_DOTFILES lets the mascot see ~/.zshrc (the help's own example); a key in it is still not shown

@@ -3,6 +3,12 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
+## Unreleased
+
+- Security: Robo's tools run only when they are turned on in `CHAT_TOOLS`. aichat runs any of Mascot's tools the
+  model asks for, not only the ones the bubble gave it, so with only time, weather and todo on, a local model
+  could still read your files, shell history and logs.
+
 ## 0.8.0 (2026-10-29)
 
 - `mascot setup`: Robo walks you through setting up the chat in the terminal, right after installing. Local with

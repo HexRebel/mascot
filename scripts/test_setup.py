@@ -717,7 +717,8 @@ class ToolsPrivacy(Home):
 
     def read(self, path, **env):
         return subprocess.run([os.path.join(ROOT, "tools", "bin", "read_file"), json.dumps({"path": path})],
-                              env={"HOME": self.home, "PATH": "/usr/bin:/bin", "MASCOT_TOOLS_LOCAL": "1", **env},
+                              env={"HOME": self.home, "PATH": "/usr/bin:/bin", "MASCOT_TOOLS_LOCAL": "1",
+                                   "MASCOT_TOOLS_ALLOWED": "read_file", **env},
                               capture_output=True, text=True, timeout=30)
 
     def test_tools_block_data_dir_aichat(self):

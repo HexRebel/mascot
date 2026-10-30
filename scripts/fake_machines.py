@@ -99,7 +99,7 @@ if __name__ == "__main__":
     for name, build in MACHINES.items():
         root = os.path.join(out, name)
         build(root)
-        env = dict(os.environ, MASCOT_TOOLS_LOCAL="1", MASCOT_MACHINE_ROOT=root,
+        env = dict(os.environ, MASCOT_TOOLS_LOCAL="1", MASCOT_TOOLS_ALLOWED="check_system", MASCOT_MACHINE_ROOT=root,
                    PATH=os.path.join(root, "bin") + os.pathsep + os.environ.get("PATH", ""))
         done = subprocess.run([TOOLS, json.dumps({"area": "machine"})], capture_output=True, text=True, env=env)
         marks = [l for l in done.stderr.splitlines() if l.startswith("mascot-") and not l.startswith("mascot-doing")]

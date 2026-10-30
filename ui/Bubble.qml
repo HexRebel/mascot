@@ -411,7 +411,7 @@ PanelWindow {
         bubble.shownUntil = Math.max(bubble.shownUntil, ...due.map(r => r.at));
         // Through env, not the Process's environment: Quickshell 0.3.0 (Debian 13)
         // cannot bind an object to it, and the tool would refuse to run
-        dueJob.command = ["env", "MASCOT_TOOLS_LOCAL=1", `MASCOT_REMINDER_FILE=${bubble.reminderFile}`,
+        dueJob.command = ["env", "MASCOT_TOOLS_LOCAL=1", "MASCOT_TOOLS_ALLOWED=due_reminders", `MASCOT_REMINDER_FILE=${bubble.reminderFile}`,
             `${bubble.toolsDir}/bin/due_reminders`, JSON.stringify({ until: bubble.shownUntil / 1000 })];
         dueJob.running = true;
     }
@@ -718,7 +718,7 @@ PanelWindow {
             run(["{}"], false, "", (out, ok) => {
                 bubble.contexts[local[1]] = ok ? parseInt(out) || 0 : 0;
                 cap(bubble.contexts[local[1]]);
-            }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_VISION_MODEL: local[1] });
+            }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: "context_size", MASCOT_VISION_MODEL: local[1] });
         });
     }
 
@@ -768,6 +768,8 @@ PanelWindow {
             AICHAT_FUNCTIONS_DIR: bubble.toolsDir,
             AICHAT_FUNCTION_CALLING: "true",
             AICHAT_USE_TOOLS: names.join(","),
+            // aichat runs any tool the model calls; tools/mascot-tools runs only these
+            MASCOT_TOOLS_ALLOWED: names.join(","),
             MASCOT_TOOLS_LOCAL: local ? "1" : "0",
             MASCOT_VISION_MODEL: local,
             MASCOT_DOTFILES: bubble.event?.dotfiles ?? "",
@@ -789,7 +791,7 @@ PanelWindow {
     function runTool(name: string, args: var): void {
         const path = `${bubble.toolsDir}/bin/${name}`.replace(/'/g, "'\\''");
         run([JSON.stringify(args)], false, "system", null, bubble.current, `'${path}'`,
-            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TODO_FILE: bubble.todoFile, MASCOT_REMINDER_FILE: bubble.reminderFile,
+            { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: name, MASCOT_TODO_FILE: bubble.todoFile, MASCOT_REMINDER_FILE: bubble.reminderFile,
               MASCOT_CHAT_SOCKET: bubble.chatSocket });
     }
 

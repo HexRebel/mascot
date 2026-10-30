@@ -17,7 +17,8 @@
 #   along with this program; if not, see <https://www.gnu.org/licenses/>.
 """aichat runs bin/<tool> '<json arguments>' with LLM_OUTPUT set to a file it
 reads the result from (the llm-functions layout, see functions.json). Every
-bin/<tool> is a link to this script, which picks the tool by its own name.
+bin/<tool> is a link to this script, which picks the tool by its own name. It
+runs only when that name is in MASCOT_TOOLS_ALLOWED, the tools the bubble chose.
 
 Nothing here writes or deletes anything but the todo list and the reminders,
 Mascot's own MASCOT_TODO_FILE and MASCOT_REMINDER_FILE. The file tools only see
@@ -1659,6 +1660,10 @@ def main():
     try:
         if name not in TOOLS:
             raise ToolError(f"unknown tool {name}")
+        # aichat runs any tool in functions.json the model calls, not only those in AICHAT_USE_TOOLS: only the
+        # ones the bubble chose for this answer run (none without the list)
+        if name not in os.environ.get("MASCOT_TOOLS_ALLOWED", "").split(","):
+            raise ToolError(f"{name} is not turned on; do not try other ways to get what it would give")
         try:
             args = json.loads(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].strip() else {}
         except json.JSONDecodeError:
