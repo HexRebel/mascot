@@ -88,6 +88,22 @@ class Local(unittest.TestCase):
         self.assertRegex(qml, r'property string dataDir: Quickshell\.env\("MASCOT_DATA_DIR"\)\s*\|\| `\$\{Quickshell\.env\("XDG_DATA_HOME"\)')
 
 
+class NoRuntimeDir(unittest.TestCase):
+    def test_bubble_needs_runtime_dir(self):
+        # Without XDG_RUNTIME_DIR the socket and the mascots' memory were null/… where qs was started, and the
+        # bubble ran rm -rf on that path: the shell quits, and the memory is only removed when it is a real path
+        with open(os.path.join(ROOT, "ui", "shell.qml")) as f:
+            shell = f.read()
+        self.assertRegex(shell, r'if \(!Quickshell\.env\("XDG_RUNTIME_DIR"\)\) \{[^}]*Qt\.quit\(\)')
+        with open(os.path.join(ROOT, "ui", "Bubble.qml")) as f:
+            bubble = f.read()
+        self.assertRegex(bubble, r'property string memoryDir: Quickshell\.env\("XDG_RUNTIME_DIR"\)\s*\?')
+        removals = [line for line in bubble.splitlines() if '"rm", "-rf"' in line]
+        self.assertTrue(removals)
+        for line in removals:
+            self.assertIn("if (bubble.memoryDir)", line)
+
+
 class Network(unittest.TestCase):
     def test_menu_asks_openrouter_only_when_used(self):
         # OpenRouter's list only hides its models that are gone; someone without one is not to ask it at all

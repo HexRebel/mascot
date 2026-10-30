@@ -95,11 +95,14 @@ PanelWindow {
     readonly property var entries: current ? current.entries : null
     readonly property bool busy: !!current?.job
     property int memoryCount: 0
-    readonly property string memoryDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/mascot-memory/`
-        + (Quickshell.env("MASCOT_CHAT_SOCKET") || "mascotd-chat").replace(/^.*\//, "").replace(/\.sock$/, "")
+    // "" without XDG_RUNTIME_DIR (shell.qml quits then): never null/… where qs was started
+    readonly property string memoryDir: Quickshell.env("XDG_RUNTIME_DIR")
+        ? `${Quickshell.env("XDG_RUNTIME_DIR")}/mascot-memory/`
+            + (Quickshell.env("MASCOT_CHAT_SOCKET") || "mascotd-chat").replace(/^.*\//, "").replace(/\.sock$/, "")
+        : ""
 
     Component.onCompleted: {
-        Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
+        if (bubble.memoryDir) Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
         setupJob.running = true;
     }
 
@@ -174,7 +177,7 @@ PanelWindow {
         bubble.conversations = {};
         bubble.lookups = {};
         bubble.contexts = {};
-        Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
+        if (bubble.memoryDir) Quickshell.execDetached(["rm", "-rf", "--", bubble.memoryDir]);
     }
 
     // Geometry

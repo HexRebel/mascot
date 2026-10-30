@@ -18,6 +18,15 @@ ShellRoot {
     readonly property bool managed: Quickshell.env("MASCOT_BUBBLE_MANAGED") === "1"
     property bool wasConnected: false
 
+    // The socket and the mascots' memory are in XDG_RUNTIME_DIR, where only you can
+    // reach them: without it they would be null/… where qs was started
+    Component.onCompleted: {
+        if (!Quickshell.env("XDG_RUNTIME_DIR")) {
+            console.error("mascot-bubble: XDG_RUNTIME_DIR is not set: the bubble keeps its socket and the mascots' memory there");
+            Qt.quit();
+        }
+    }
+
     function send(event: var): void {
         if (!daemon.connected)
             return;

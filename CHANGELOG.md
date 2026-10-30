@@ -35,6 +35,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   `key = ...` in code are no longer hidden.
 - Security: without `XDG_RUNTIME_DIR` (with `-s`), `mascot prototypes poses` writes its page under a name nobody can
   guess, not `/tmp/mascot-poses-<name>.html`, where another user could put a link first.
+- The bubble quits when `XDG_RUNTIME_DIR` is not set (started by hand with `qs -p`), instead of keeping its socket
+  and the mascots' memory in `null/` where it was started, and removing that with `rm -rf`.
 
 ## 0.8.0 (2026-10-29)
 
