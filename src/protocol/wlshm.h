@@ -37,4 +37,32 @@ enum wlshm_manifest {
 };
 int wlshm_manifest_names(int dirfd, const char* name);
 
+// The most a pack may unpack to: its bytes and its members (files and directories alike). Zeros pack small, so
+// a pack of 212 KB unpacked to 210 MB; it is counted as it is unpacked, not as the tar's headers say
+// (A test builds with smaller ones)
+#ifndef WLSHM_UNPACKED_MAX
+#define WLSHM_UNPACKED_MAX (256 * 1024 * 1024)
+#endif
+#ifndef WLSHM_MEMBERS_MAX
+#define WLSHM_MEMBERS_MAX 4096
+#endif
+struct wlshm_budget {
+    int64_t bytes;
+    int32_t members;
+};
+#define WLSHM_BUDGET ((struct wlshm_budget){WLSHM_UNPACKED_MAX, WLSHM_MEMBERS_MAX})
+
+// Counts one more member: false when the pack has more than the budget allows
+bool wlshm_count_member(struct wlshm_budget* budget);
+
+// Writes the data of the member archive is at to fd, at most what is left of the budget's bytes; these two are
+// in wlshm_unpack.c, the only part that needs libarchive
+struct archive;
+enum wlshm_copy {
+    WLSHM_COPY_OK,
+    WLSHM_COPY_TOO_BIG,
+    WLSHM_COPY_FAILED,  // not read or not written
+};
+int wlshm_copy_member(struct archive* archive, int fd, struct wlshm_budget* budget);
+
 #endif

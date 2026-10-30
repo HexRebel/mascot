@@ -475,6 +475,7 @@ Error:
   - 7: File is not opened in right mode (Expected read or readwrite)
   - 8: The pack's `manifest.json` names another mascot than its header (or names one twice)
   - 9: The pack has no `manifest.json` that can be read (missing, not a JSON object, over 1 MiB or nested too deep)
+  - 10: The pack unpacks to more than 256 MiB or 4096 members (files and directories), counted as it is unpacked
 
 # import.started() - 0x24
 

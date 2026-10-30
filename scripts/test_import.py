@@ -175,6 +175,76 @@ class Daemon(unittest.TestCase):
             self.assertEqual((out.returncode, out.stdout.strip()), (0, "ok"), out.stdout + out.stderr)
 
 
+BUDGET_DRIVER = r"""
+#include <archive.h>
+#include <archive_entry.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "protocol/wlshm.h"
+
+// Unpacks the tar argv[1] as mascotd does, with a budget of argv[2] bytes and argv[3] members, its files' data
+// one after the other into argv[4]
+int main(int argc, char** argv) {
+    (void)argc;
+    struct wlshm_budget budget = {atoll(argv[2]), atoi(argv[3])};
+    struct archive* archive = archive_read_new();
+    archive_read_support_format_tar(archive);
+    archive_read_support_filter_all(archive);
+    if (archive_read_open_filename(archive, argv[1], 10240) != ARCHIVE_OK) return 2;
+    int out = open(argv[4], O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    struct archive_entry* entry;
+    const char* result = "ok";
+    while (archive_read_next_header(archive, &entry) == ARCHIVE_OK) {
+        if (!wlshm_count_member(&budget)) { result = "too many"; break; }
+        if (archive_entry_filetype(entry) != AE_IFREG) continue;
+        int copied = wlshm_copy_member(archive, out, &budget);
+        if (copied == WLSHM_COPY_TOO_BIG) { result = "too big"; break; }
+        if (copied != WLSHM_COPY_OK) { result = "failed"; break; }
+    }
+    archive_read_free(archive);
+    printf("%s %lld\n", result, (long long)budget.bytes);
+    return 0;
+}
+"""
+
+
+class Unpacking(unittest.TestCase):
+    def test_unpacking_has_a_ceiling(self):
+        # A pack of 212 KB unpacked to 210 MB (zeros pack small): the daemon stops at WLSHM_UNPACKED_MAX bytes
+        # and WLSHM_MEMBERS_MAX members, counted as it unpacks, not as the tar says
+        with tempfile.TemporaryDirectory() as tmp:
+            driver, binary, tar_path, out = (os.path.join(tmp, n) for n in ("driver.c", "driver", "p.tar.gz", "out"))
+            with open(driver, "w") as f:
+                f.write(BUDGET_DRIVER)
+            built = subprocess.run(["cc", "-std=gnu11", "-Wall", "-Werror", "-fsanitize=address,undefined",
+                                    "-I", os.path.join(ROOT, "src"), driver,
+                                    os.path.join(ROOT, "src", "protocol", "wlshm_unpack.c"), "-larchive", "-o", binary],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            with tarfile.open(tar_path, "w:gz") as tar:
+                for name, data in (("a", b"A" * 100), ("dir", None), ("b", b"B" * 100)):
+                    info = tarfile.TarInfo(name)
+                    if data is None:
+                        info.type = tarfile.DIRTYPE
+                        tar.addfile(info)
+                    else:
+                        info.size = len(data)
+                        tar.addfile(info, io.BytesIO(data))
+            run = lambda size, members: subprocess.run([binary, tar_path, str(size), str(members), out],
+                                                       capture_output=True, text=True, timeout=30).stdout.strip()
+            self.assertEqual(run(1000, 10), "ok 800")
+            with open(out, "rb") as f:
+                self.assertEqual(f.read(), b"A" * 100 + b"B" * 100)
+            self.assertEqual(run(200, 3), "ok 0")
+            self.assertTrue(run(150, 10).startswith("too big "))
+            self.assertTrue(run(1000, 2).startswith("too many "))
+            with open(os.path.join(ROOT, "src", "protocol", "wlshm.h")) as f:
+                header = f.read()
+            self.assertIn("#define WLSHM_UNPACKED_MAX (256 * 1024 * 1024)\n", header)
+            self.assertIn("#define WLSHM_MEMBERS_MAX 4096", header)
+
+
 def pack(members: dict, name: str = "Shimeji.Bad") -> str:
     """A .wlshm with the given member names and contents (None: a directory), written to a temp file"""
     sys.path.insert(0, os.path.join(ROOT, "src", "mascotctl"))
@@ -240,6 +310,24 @@ class Cli(unittest.TestCase):
                 self.client.wlshm_adjusted(f.name, False, "none", "none")
         finally:
             os.unlink(f.name)
+
+    def test_unpacking_has_a_ceiling(self):
+        # A pack of 212 KB became 210 MB in the copy sent to mascotd: the CLI stops at mascotd's ceilings
+        # (here made small), counting what it reads, and a JSON file it reads counts too
+        self.assertEqual((self.client.WLSHM_UNPACKED_MAX, self.client.WLSHM_MEMBERS_MAX), (256 * 1024 * 1024, 4096))
+        saved = self.client.WLSHM_UNPACKED_MAX, self.client.WLSHM_MEMBERS_MAX
+        self.client.WLSHM_UNPACKED_MAX, self.client.WLSHM_MEMBERS_MAX = 1000, 6
+        try:
+            out, _, _ = self.adjusted({"assets/": None, "assets/a.png": bytes(400), "assets/b.png": bytes(400)})
+            out.close()
+            for members, why in (({"assets/": None, "assets/a.png": bytes(600), "assets/b.png": bytes(600)}, "MiB"),
+                                 ({"behaviors.json": b"{}" + b" " * 2000}, "MiB"),
+                                 ({"assets/": None, "a": b"", "b": b"", "c": b""}, "files and directories")):
+                with self.assertRaises(ValueError, msg=list(members)) as caught:
+                    self.adjusted(members)
+                self.assertIn(why, str(caught.exception))
+        finally:
+            self.client.WLSHM_UNPACKED_MAX, self.client.WLSHM_MEMBERS_MAX = saved
 
     def test_bad_pack_name_refused(self):
         for bad in ("../../x", "a/b", "..", ".hidden"):

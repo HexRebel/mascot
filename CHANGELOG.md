@@ -143,6 +143,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   thread, which ended the whole daemon and all mascots with it. The transfer now stops on its own and tells
   no one; the client is let go before its connection is closed. A stopped import installs nothing (it went on
   and installed the pack), and an export stops between files.
+- Security: a pack unpacks to at most 256 MiB and 4096 files and directories, counted as it is unpacked, in
+  mascotd and in `mascot import`. Zeros pack small: a pack of 212 KB became 210 MB in the store. One over
+  either is refused whole (import error 10) and leaves nothing behind.
 - mascotd keeps running when a client goes while mascotd writes to it: a message to its socket, or an export to
   a pipe, gave `SIGPIPE`, which ended the daemon. A pack is only imported from a regular file (a FIFO or socket
   passed the check), and a client's messages are sent under a lock, as an import's thread sends too.

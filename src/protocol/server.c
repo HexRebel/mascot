@@ -856,9 +856,16 @@ void* protocol_import_thread(void* arg) {
     // Only plain files and directories, and only inside the new directory: no absolute paths, no "..",
     // no links (so nothing in it can point out of it either). Anything else and the pack is refused whole.
     // Its own prompt.md is left out: a pack from someone else does not choose the mascot's personality.
-    // An import whose client goes (mascot import stopped with Ctrl-C) stops here and installs nothing
-    bool unpacked = true;
+    // An import whose client goes (mascot import stopped with Ctrl-C) stops here and installs nothing.
+    // Nor does a pack that unpacks to more than WLSHM_UNPACKED_MAX bytes or WLSHM_MEMBERS_MAX members
+    bool unpacked = true, too_big = false;
+    struct wlshm_budget budget = WLSHM_BUDGET;
     while (!atomic_load(&import->cancelled) && archive_read_next_header(archive, &entry) == ARCHIVE_OK) {
+        if (!wlshm_count_member(&budget)) {
+            unpacked = false;
+            too_big = true;
+            break;
+        }
         const char* path = archive_entry_pathname(entry);
         mode_t type = archive_entry_filetype(entry);
         if (!wlshm_member_path_safe(path) || (type != AE_IFREG && type != AE_IFDIR)) {
@@ -884,10 +891,11 @@ void* protocol_import_thread(void* arg) {
             unpacked = false;
             break;
         }
-        int32_t written = archive_read_data_into_fd(archive, writefd);
+        int copied = wlshm_copy_member(archive, writefd, &budget);
         close(writefd);
-        if (written != ARCHIVE_OK && written != ARCHIVE_WARN) {
+        if (copied != WLSHM_COPY_OK) {
             unpacked = false;
+            too_big = copied == WLSHM_COPY_TOO_BIG;
             break;
         }
     }
@@ -901,8 +909,9 @@ void* protocol_import_thread(void* arg) {
         mascot_prototype_unlink(old_prototype);
         close(newfd);
         archive_read_free(archive);
-        // 8: unpacked, but its names differ (or manifest.json has more than one); 9: no manifest.json is read
-        import_end(import, protocol_builder_import_failed(import, !unpacked ? 1 : manifest == WLSHM_MANIFEST_OTHER ? 8 : 9));
+        // 8: unpacked, but its names differ (or manifest.json has more than one); 9: no manifest.json is read;
+        // 10: it would unpack to more than WLSHM_UNPACKED_MAX bytes or WLSHM_MEMBERS_MAX members
+        import_end(import, protocol_builder_import_failed(import, too_big ? 10 : !unpacked ? 1 : manifest == WLSHM_MANIFEST_OTHER ? 8 : 9));
         return NULL;
     }
 

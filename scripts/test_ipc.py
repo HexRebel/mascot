@@ -340,6 +340,99 @@ int main(int argc, char** argv)
 """
 
 
+CEILING_DRIVER = r"""
+#include <dirent.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <semaphore.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
+#include "protocol/connector.h"
+#include "protocol/server.h"
+#include "protocol/wlshm.h"
+
+static sem_t done;
+static int store_fd;
+
+bool wlshm_read_header(const uint8_t header[WLSHM_HEADER_SIZE], char name[256], char version[128])
+{
+    (void)header;
+    strcpy(name, "pack");
+    strcpy(version, "0.0.1");
+    return true;
+}
+bool wlshm_member_path_safe(const char* path) { (void)path; return true; }
+bool wlshm_member_is_prompt(const char* path) { (void)path; return false; }
+int wlshm_manifest_names(int dirfd, const char* name) { (void)dirfd; (void)name; return WLSHM_MANIFEST_NAMES; }
+struct mascot_prototype* mascot_prototype_store_get(mascot_prototype_store* store, const char* name)
+{
+    (void)store; (void)name;
+    return NULL;
+}
+int32_t mascot_prototype_store_get_fd(mascot_prototype_store* store) { (void)store; return store_fd; }
+void mascot_prototype_link(const struct mascot_prototype* prototype) { (void)prototype; }
+void mascot_prototype_unlink(const struct mascot_prototype* prototype) { (void)prototype; sem_post(&done); }
+
+// Imports the pack argv[1] into the store argv[2] (built with small ceilings) and prints the code of its
+// import.failed, or "finished", and what was left in the store
+int main(int argc, char** argv)
+{
+    (void)argc;
+    static struct protocol_server_state state;
+    protocol_set_server_state(&state);
+    store_fd = open(argv[2], O_DIRECTORY);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    sem_init(&done, 0, 0);
+    int sv[2];
+    socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sv);
+    int epfd = epoll_create1(0);
+    ipc_connector_t* connector = ipc_initialize_connector(sv[0], epfd, NULL);
+    struct protocol_client* client = protocol_accept_connection(connector);
+    int pack = open(argv[1], O_RDONLY);
+    if (!protocol_server_import(client, pack, (uint32_t)PROTOCOL_OBJECT_IMPORT << 24 | 1, 0)) return 2;
+    close(pack);
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 10;
+    if (sem_timedwait(&done, &deadline)) {
+        puts("the import never finished");
+        return 1;
+    }
+    // The import's last packet: import.failed (0x23) with its code, or import.finished (0x25)
+    for (struct pollfd ready = {sv[1], POLLIN, 0}; poll(&ready, 1, 2000) == 1;) {
+        uint8_t packet[4096];
+        ssize_t got = recv(sv[1], packet, sizeof(packet), 0);
+        if (got >= 12 && packet[0] == 0x23) {
+            uint32_t code;
+            memcpy(&code, packet + 8, 4);
+            printf("failed %u\n", code);
+            break;
+        }
+        if (got >= 8 && packet[0] == 0x25) {
+            puts("finished");
+            break;
+        }
+    }
+    usleep(200000);  // it frees the import
+    DIR* store = fdopendir(store_fd);
+    for (struct dirent* entry; (entry = readdir(store));)
+        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) printf("left in the store: %s\n", entry->d_name);
+    closedir(store);
+    protocol_disconnect_client(client);
+    ipc_destroy_connector(connector);
+    close(sv[1]);
+    close(epfd);
+    return 0;
+}
+"""
+
+
 def build_driver(tmp, source, sources, libs=()):
     """Builds source with mascotd's sources under AddressSanitizer: anything else the daemon would call is a stub
     that aborts. Returns the binary, or the compiler's complaint"""
@@ -398,10 +491,41 @@ class Transfers(unittest.TestCase):
                     tar.addfile(member, io.BytesIO(data))
             with open(os.path.join(tmp, "pack.wlshm"), "wb") as f:
                 f.write(b"WLPK" + bytes(508) + archive.getvalue())
-            binary = build_driver(tmp, CANCEL_DRIVER, (*PROTOCOL, "io.c"), ("-larchive",))
+            binary = build_driver(tmp, CANCEL_DRIVER, (*PROTOCOL, "io.c", "protocol/wlshm_unpack.c"), ("-larchive",))
             self.assertTrue(os.path.isfile(binary), binary)
             out = run_driver(binary, os.path.join(tmp, "pack.wlshm"), store)
             self.assertEqual((out.returncode, out.stdout), (0, "done\n"), out.stderr[-3000:])
+
+    def test_unpacking_has_a_ceiling(self):
+        # A pack of 212 KB unpacked to 210 MB in the store: one over the ceiling (here 1000 bytes and 4 members,
+        # mascotd's are 256 MiB and 4096) is refused whole with code 10, and nothing is left behind
+        import io
+        import tarfile
+        cases = {"under": ({"manifest.json": b"{}", "a": bytes(500)}, "finished\nleft in the store: pack\n"),
+                 "bytes": ({"manifest.json": b"{}", "a": bytes(600), "b": bytes(600)}, "failed 10\n"),
+                 "members": ({"manifest.json": b"{}", "d": None, "d/a": b"a", "d/b": b"b", "d/c": b"c"}, "failed 10\n")}
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = build_driver(tmp, CEILING_DRIVER, (*PROTOCOL, "io.c", "protocol/wlshm_unpack.c"),
+                                  ("-larchive", "-DWLSHM_UNPACKED_MAX=1000", "-DWLSHM_MEMBERS_MAX=4"))
+            self.assertTrue(os.path.isfile(binary), binary)
+            for case, (members, expected) in cases.items():
+                store = os.path.join(tmp, "store-" + case)
+                os.mkdir(store)
+                archive = io.BytesIO()
+                with tarfile.open(fileobj=archive, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+                    for name, data in members.items():
+                        member = tarfile.TarInfo(name)
+                        if data is None:
+                            member.type = tarfile.DIRTYPE
+                            tar.addfile(member)
+                        else:
+                            member.size = len(data)
+                            tar.addfile(member, io.BytesIO(data))
+                pack = os.path.join(tmp, case + ".wlshm")
+                with open(pack, "wb") as f:
+                    f.write(b"WLPK" + bytes(508) + archive.getvalue())
+                out = run_driver(binary, pack, store)
+                self.assertEqual((out.returncode, out.stdout), (0, expected), (case, out.stderr[-3000:]))
 
     def test_export_to_a_pipe_outlives_its_client(self):
         # mascot export stopped with Ctrl-C: mascotd's next write to the pipe gave SIGPIPE, which ends the daemon.

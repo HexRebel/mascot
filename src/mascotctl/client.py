@@ -1082,11 +1082,59 @@ def wlshm_check(header: bytes, members: list) -> None:
             raise ValueError(f"{member.name} would be unpacked outside the mascot's directory")
 
 
+# The most a pack may unpack to, as mascotd allows (WLSHM_UNPACKED_MAX and WLSHM_MEMBERS_MAX in
+# src/protocol/wlshm.h): zeros pack small, so a pack of 212 KB unpacked to 210 MB
+WLSHM_UNPACKED_MAX = 256 * 1024 * 1024
+WLSHM_MEMBERS_MAX = 4096
+
+
+def wlshm_members(source: tarfile.TarFile) -> list:
+    """The pack's members, read one header at a time: ValueError at more than WLSHM_MEMBERS_MAX, before the rest are read"""
+    members = []
+    for member in source:
+        if len(members) >= WLSHM_MEMBERS_MAX:
+            raise ValueError(f"it has more than {WLSHM_MEMBERS_MAX} files and directories")
+        members.append(member)
+    return members
+
+
+class WlshmBudget:
+    """What is left of WLSHM_UNPACKED_MAX bytes: each read through it counts what it got, not the member's size"""
+
+    def __init__(self):
+        self.left = WLSHM_UNPACKED_MAX
+
+    def spend(self, size: int) -> None:
+        self.left -= size
+        if self.left < 0:
+            raise ValueError(f"it unpacks to more than {WLSHM_UNPACKED_MAX // (1024 * 1024)} MiB")
+
+    def reader(self, fileobj):
+        budget = self
+
+        class Counted(io.RawIOBase):
+            def readable(self):
+                return True
+
+            def readinto(self, buffer):
+                data = fileobj.read(min(len(buffer), budget.left + 1))
+                budget.spend(len(data))
+                buffer[:len(data)] = data
+                return len(data)
+
+        return io.BufferedReader(Counted())
+
+    def read(self, source: tarfile.TarFile, name: str) -> bytes:
+        with source.extractfile(name) as f:
+            return self.reader(f).read()
+
+
 def wlshm_manifest(path: str) -> dict:
     with open(path, "rb") as f:
         f.seek(512)
         with tarfile.open(fileobj=io.BytesIO(f.read()), mode="r:*") as source:
-            return json.load(source.extractfile("manifest.json")) if "manifest.json" in source.getnames() else {}
+            names = [m.name for m in wlshm_members(source)]
+            return json.loads(WlshmBudget().read(source, "manifest.json")) if "manifest.json" in names else {}
 
 
 def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | None = None, name: str | None = None,
@@ -1103,22 +1151,26 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
         header = f.read(512)
         source = tarfile.open(fileobj=io.BytesIO(f.read()), mode="r:*")
 
-    names = source.getnames()
-    wlshm_check(header, source.getmembers())
-    manifest = json.load(source.extractfile("manifest.json")) if "manifest.json" in names else {}
+    # The copy below may hold what the daemon unpacks, no more: the files read here count as well (a 256 MiB
+    # behaviors.json is not read whole first), and the members are counted before the rest are read
+    members = wlshm_members(source)
+    names = [m.name for m in members]
+    wlshm_check(header, members)
+    budget = WlshmBudget()
+    manifest = json.loads(budget.read(source, "manifest.json")) if "manifest.json" in names else {}
     behaviors_name = manifest.get("behaviors", "behaviors.json")
     actions_name = manifest.get("actions", "actions.json")
     for needed in (behaviors_name, actions_name):
         if needed not in names:
             raise ValueError(f"{needed} not found")
-    behaviors = json.load(source.extractfile(behaviors_name))
+    behaviors = json.loads(budget.read(source, behaviors_name))
     if name:
         manifest["name"] = f"Shimeji.{name}"
         manifest["display_name"] = name
         header = wlshm_header(manifest["name"], manifest.get("version", "0.0.1"))
         wlshm_check(header, [])
 
-    definitions = json.load(source.extractfile(actions_name))
+    definitions = json.loads(budget.read(source, actions_name))
     assets = {n.removeprefix(manifest.get("assets", "assets") + "/") for n in names}
     changes = set_talk_sleep(behaviors, definitions, assets, talk, sleep, guess=True, answered=answered)
 
@@ -1128,24 +1180,35 @@ def wlshm_adjusted(path: str, no_climb: bool, talk: str | None, sleep: str | Non
 
     behaviors_data = json.dumps(behaviors).encode("utf-8")
     manifest_data = json.dumps(manifest).encode("utf-8")
+    budget = WlshmBudget()  # What the copy holds, as mascotd will count it
     out = tempfile.TemporaryFile()
     out.write(header)
     # Someone else's pack does not choose the mascot's personality (the daemon leaves it out too)
-    if any(m.name.lstrip("./") == "prompt.md" for m in source.getmembers()):
+    if any(m.name.lstrip("./") == "prompt.md" for m in members):
         changes.append("its own personality (prompt.md) left out: give it one with a role (mascot --help)")
-    with tarfile.open(fileobj=out, mode="w") as tar:
-        for member in source.getmembers():
-            if member.name.lstrip("./") == "prompt.md":
-                continue
-            if member.name == behaviors_name:
-                member.size = len(behaviors_data)
-                tar.addfile(member, io.BytesIO(behaviors_data))
-            elif member.name == "manifest.json" and name:
-                member.size = len(manifest_data)
-                tar.addfile(member, io.BytesIO(manifest_data))
-            else:
-                tar.addfile(member, source.extractfile(member) if member.isfile() else None)
-    source.close()
+    try:
+        with tarfile.open(fileobj=out, mode="w") as tar:
+            for member in members:
+                if member.name.lstrip("./") == "prompt.md":
+                    continue
+                if member.name == behaviors_name:
+                    member.size = len(behaviors_data)
+                    budget.spend(member.size)
+                    tar.addfile(member, io.BytesIO(behaviors_data))
+                elif member.name == "manifest.json" and name:
+                    member.size = len(manifest_data)
+                    budget.spend(member.size)
+                    tar.addfile(member, io.BytesIO(manifest_data))
+                elif member.isfile():
+                    with source.extractfile(member) as data:
+                        tar.addfile(member, budget.reader(data))
+                else:
+                    tar.addfile(member, None)
+    except BaseException:
+        out.close()
+        raise
+    finally:
+        source.close()
     out.seek(0)
     return out, manifest, changes
 
@@ -1785,7 +1848,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     6: "FD points not to a file",
                     7: "FD opened in invalid mode",
                     8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot",
-                    9: "it has no manifest.json that can be read (missing, not a JSON object, over 1 MiB or nested too deep)"
+                    9: "it has no manifest.json that can be read (missing, not a JSON object, over 1 MiB or nested too deep)",
+                    10: "it unpacks to more than 256 MiB or 4096 files and directories"
                 }
 
                 label = getattr(import_object, "label", f"id {packet.object_id}")
