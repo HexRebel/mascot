@@ -83,7 +83,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: `last_commands` hides a command that is given a password, however short: `mysql -pPW`, `sshpass -p`,
   `curl -u user:PW` (also `-uuser:PW`), `lftp -u user,PW`, `https://user:PW@host`, `echo PW | sudo -S`, `redis-cli -a`,
   `docker login -p`, `smbclient -U user%PW`, `zip -P`, `7z -pPW`, `wpa_passphrase`, `ssh-keygen -N`, `openssl -k`,
-  `htpasswd -b` and `mosquitto_pub -P`.
+  `htpasswd -b` and `mosquitto_pub -P`; also `nmcli … wifi-sec.psk`, `xfreerdp /p:`, `rdesktop -p`, `mongosh -p`,
+  `ldapsearch -w`, `transmission-remote -n`, `sqlcmd -P`, `MYSQL_PWD=…`, `sudo -u bob -S`, `su … <<< …` and a
+  command split over lines with `\`.
 - `mascot prototypes import` says why a pack whose header and `manifest.json` give different names was refused,
   instead of "Invalid file format". Converting a Shimeji whose name is over 247 bytes says so instead of crashing.
 - mascotd started with `-s` and without `XDG_RUNTIME_DIR` says the chat bubble cannot run, instead of starting one
