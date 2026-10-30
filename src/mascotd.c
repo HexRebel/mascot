@@ -386,8 +386,14 @@ static int start_bubble(int epfd, void* epoll_ptr, const char* chat_path)
 {
     char command[PATH_MAX + 16] = {0};
     char ui[PATH_MAX];
+    // Mascot's bubble keeps its socket and the mascots' memory there, and quits without it
+    const char* runtime = secure_getenv("XDG_RUNTIME_DIR");
+    bool no_runtime = !runtime || !runtime[0];
     if (config_get_bubble_command()) {
+        if (no_runtime) WARN("XDG_RUNTIME_DIR is not set (mascotd -s): Mascot's chat bubble needs it and quits; starting BUBBLE_COMMAND anyway");
         snprintf(command, sizeof(command), "%s", config_get_bubble_command());
+    } else if (no_runtime) {
+        WARN("XDG_RUNTIME_DIR is not set (mascotd -s): the chat bubble needs it, so it is not started");
     } else if (installed_location(SYSTEM_UI_PATH, ui) && !strchr(ui, '\'')) {
         snprintf(command, sizeof(command), "qs -p '%s'", ui);
     } else {

@@ -5,6 +5,7 @@ built with a small C driver) and the CLI's own check before it sends a pack (cli
 Run: python3 -I scripts/test_import.py
 """
 
+import contextlib
 import importlib.util
 import io
 import json
@@ -246,6 +247,16 @@ class Cli(unittest.TestCase):
         self.assertNotIn("prompt.md", names)
         self.assertIn("assets/shime1.png", names)
         self.assertTrue(any("prompt.md" in c for c in changes), changes)
+
+    def test_long_name_refused(self):
+        # The header gives the name one length byte: "Shimeji." and 248 more did not fit, and converting crashed
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "x.wlshm")
+            with contextlib.redirect_stdout(io.StringIO()) as said:
+                result = self.client.convert_prototype({"name": "x" * 248, "confs": [], "images": tmp}, out)
+            self.assertIsNone(result)
+            self.assertIn("255", said.getvalue())
+            self.assertFalse(os.path.exists(out))
 
     def test_header_fits_in_512(self):
         self.assertEqual(len(self.client.wlshm_header("a" * 400, "1" * 400)), 512)

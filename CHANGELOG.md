@@ -67,6 +67,10 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   `curl -u user:PW` (also `-uuser:PW`), `lftp -u user,PW`, `https://user:PW@host`, `echo PW | sudo -S`, `redis-cli -a`,
   `docker login -p`, `smbclient -U user%PW`, `zip -P`, `7z -pPW`, `wpa_passphrase`, `ssh-keygen -N`, `openssl -k`,
   `htpasswd -b` and `mosquitto_pub -P`.
+- `mascot prototypes import` says why a pack whose header and `manifest.json` give different names was refused,
+  instead of "Invalid file format". Converting a Shimeji whose name is over 247 bytes says so instead of crashing.
+- mascotd started with `-s` and without `XDG_RUNTIME_DIR` says the chat bubble cannot run, instead of starting one
+  that quits at once.
 - The AUR package checks the release tag's checksum, so a tag moved later does not build.
 
 ## 0.8.0 (2026-10-29)

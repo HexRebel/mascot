@@ -638,6 +638,10 @@ def convert_prototype(figure: dict, output: str, name: str | None = None) -> str
     output, as name (else its own); returns output, or None if it failed (and
     says why)"""
     label = figure["name"]
+    # The .wlshm header gives the name one length byte
+    if len(f"Shimeji.{name or figure['name']}".encode("utf-8")) > 255:
+        print(f"Conversion failed for {label}: Shimeji.<name> is longer than 255 bytes; give a shorter one with --name")
+        return None
     # Its own conf wins if it has both files (many packs keep only info.xml
     # there), else the pack's; with neither, the bundled Shimeji's actions
     conf = next((c for c in figure["confs"]
@@ -771,10 +775,7 @@ def convert_prototype(figure: dict, output: str, name: str | None = None) -> str
 
     tar.close()
 
-    wlpak_prefix = b"WLPK"
-    wlpak_prefix += struct.pack(f"B{len(manifest['name'].encode('utf-8'))}s", len(manifest['name'].encode("utf-8")), manifest['name'].encode("utf-8"))
-    wlpak_prefix += struct.pack(f"B{len(manifest['version'].encode('utf-8'))}s", len(manifest['version'].encode("utf-8")), manifest['version'].encode("utf-8"))
-    wlpak_prefix += b"\x00" * (512 - len(wlpak_prefix))
+    wlpak_prefix = wlshm_header(manifest["name"], manifest["version"])
 
     # Only create the file once conversion has succeeded
     with open(output, "wb") as wlpak:
@@ -1765,7 +1766,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     4: "File referenced by fd is not valid TAR file",
                     5: "Invalid mascot version",
                     6: "FD points not to a file",
-                    7: "FD opened in invalid mode"
+                    7: "FD opened in invalid mode",
+                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot"
                 }
 
                 label = getattr(import_object, "label", f"id {packet.object_id}")

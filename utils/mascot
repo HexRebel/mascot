@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-import html
-import urllib.parse
-import termios
-import sys
+from xml.etree import ElementTree
 from dataclasses import dataclass, field
-from typing import Dict, Optional
-import io
+import html
 import socket
 import stat
-import argparse
-import ipaddress
-import http.client
-import tempfile
-from typing import Callable, Any
-import re
-import xml.etree.ElementTree as ET
-import tarfile
-import time
-import errno
-from dataclasses import dataclass
-import os
-import codecs
-import zipfile
-from xml.etree import ElementTree
-from PIL import Image
-import urllib.request
+import termios
 import enum
 import subprocess
-import logging
-import json
-import pathlib
 import urllib.error
-import xml
-import struct
-import base64
+import urllib.parse
+import logging
+import xml.etree.ElementTree as ET
+import time
+import ipaddress
+import tempfile
+import io
+import tarfile
+from typing import Dict, Optional
 import shutil
+from dataclasses import dataclass
+import http.client
+import base64
+import pathlib
+import xml
+from typing import Callable, Any
+import codecs
+import re
+import os
+import struct
+import sys
+from PIL import Image
+import errno
+import urllib.request
 import random
+import zipfile
+import json
+import argparse
 
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
 # Modified for Mascot by HexRebel, 2026; see the git history for details.
@@ -3911,6 +3911,11 @@ def convert_prototype(figure: dict, output: str, name: str | None = None) -> str
     output, as name (else its own); returns output, or None if it failed (and
     says why)"""
     label = figure["name"]
+    # The .wlshm header gives the name one length byte
+    # The .wlshm header gives the name one length byte
+    if len(f"Shimeji.{name or figure['name']}".encode("utf-8")) > 255:
+        print(f"Conversion failed for {label}: Shimeji.<name> is longer than 255 bytes; give a shorter one with --name")
+        return None
     # Its own conf wins if it has both files (many packs keep only info.xml
     # Its own conf wins if it has both files (many packs keep only info.xml
     # there), else the pack's; with neither, the bundled Shimeji's actions
@@ -4050,10 +4055,7 @@ def convert_prototype(figure: dict, output: str, name: str | None = None) -> str
 
     tar.close()
 
-    wlpak_prefix = b"WLPK"
-    wlpak_prefix += struct.pack(f"B{len(manifest['name'].encode('utf-8'))}s", len(manifest['name'].encode("utf-8")), manifest['name'].encode("utf-8"))
-    wlpak_prefix += struct.pack(f"B{len(manifest['version'].encode('utf-8'))}s", len(manifest['version'].encode("utf-8")), manifest['version'].encode("utf-8"))
-    wlpak_prefix += b"\x00" * (512 - len(wlpak_prefix))
+    wlpak_prefix = wlshm_header(manifest["name"], manifest["version"])
 
     # Only create the file once conversion has succeeded
     # Only create the file once conversion has succeeded
@@ -5066,7 +5068,8 @@ def prototypes_handler(arguments: argparse.Namespace, client: Client, parser):
                     4: "File referenced by fd is not valid TAR file",
                     5: "Invalid mascot version",
                     6: "FD points not to a file",
-                    7: "FD opened in invalid mode"
+                    7: "FD opened in invalid mode",
+                    8: "its manifest.json does not name it as its header does (or names it twice), so it could replace another mascot"
                 }
 
                 label = getattr(import_object, "label", f"id {packet.object_id}")
