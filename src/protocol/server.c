@@ -914,7 +914,9 @@ void* protocol_import_thread(void* arg) {
     }
 
     int32_t store_fd = mascot_prototype_store_get_fd(server_state->prototypes);
-    if (!unpacked) {
+    // The header's name chose what is replaced; the manifest's is what gets loaded (and
+    // replaces the prototype of that name): a pack whose two differ is refused
+    if (!unpacked || !wlshm_manifest_names(newfd, mascot_name)) {
         io_unlinkat(store_fd, tmpdirname, IO_RECURSIVE);
         mascot_prototype_unlink(old_prototype);
         close(newfd);

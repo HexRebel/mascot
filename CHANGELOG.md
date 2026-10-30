@@ -27,6 +27,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: a mascot's `manifest.json` can only name files inside its own folder (no absolute paths or `..`), and
   only regular files of at most 16 MiB are read: a FIFO hung the daemon, and a file whose size could not be told
   was read into a buffer of one byte. A broken `manifest.json` leaves out that mascot instead of stopping the daemon.
+- Security: an imported pack whose header and `manifest.json` give different names is refused. The header's name
+  decided what may be replaced, the manifest's what was loaded, so a pack called `Innocent` could replace Robo
+  without `-f`.
 
 ## 0.8.0 (2026-10-29)
 

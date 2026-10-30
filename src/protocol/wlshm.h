@@ -25,4 +25,11 @@ bool wlshm_member_path_safe(const char* path);
 // mascot's personality with every tool it has; someone else's pack never brings one
 bool wlshm_member_is_prompt(const char* path);
 
+// The most an unpacked pack's manifest.json may hold
+#define WLSHM_MANIFEST_MAX (1024 * 1024)
+
+// Whether the manifest.json unpacked in dirfd (a regular file) names the pack as its header does: the header's
+// name chooses which prototype is replaced, the manifest's is the one loaded
+bool wlshm_manifest_names(int dirfd, const char* name);
+
 #endif

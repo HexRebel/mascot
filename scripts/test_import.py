@@ -19,9 +19,11 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DRIVER = r"""
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "protocol/wlshm.h"
 
 static int failed = 0;
@@ -38,6 +40,25 @@ static void member(const char* path, bool expected) {
         printf("member %s: expected %s\n", path ? path : "(null)", expected ? "safe" : "refused");
         failed = 1;
     }
+}
+
+// An unpacked pack with this manifest.json (NULL: none): whether its name is the header's
+static void manifest(const char* label, const char* text, const char* name, bool expected) {
+    char dir[] = "/tmp/wlshm-test-XXXXXX";
+    if (!mkdtemp(dir)) { printf("mkdtemp\n"); failed = 1; return; }
+    int fd = open(dir, O_DIRECTORY);
+    if (text) {
+        int file = openat(fd, "manifest.json", O_WRONLY | O_CREAT, 0600);
+        if (write(file, text, strlen(text)) < 0) failed = 1;
+        close(file);
+    }
+    if (wlshm_manifest_names(fd, name) != expected) {
+        printf("manifest %s: expected %s\n", label, expected ? "the header's name" : "refused");
+        failed = 1;
+    }
+    unlinkat(fd, "manifest.json", 0);
+    close(fd);
+    rmdir(dir);
 }
 
 // A header with the given name and version bytes and length bytes (which may lie)
@@ -106,6 +127,15 @@ int main(void) {
     header("hidden", ".unpackingMascot1", 17, "0.0.1", 5, false, "");
     header("slash", "../../x", 7, "0.0.1", 5, false, "");
     header("nul inside", "Ro\0bo", 5, "0.0.1", 5, false, "");
+    // The header's name chooses what is replaced, the manifest's what is loaded: they must be the same
+    manifest("same", "{\"name\": \"Shimeji.Robo\", \"version\": \"0.0.1\"}", "Shimeji.Robo", true);
+    manifest("another", "{\"name\": \"Shimeji.Robo\"}", "Innocent", false);
+    manifest("prefix", "{\"name\": \"Shimeji.Robo\"}", "Shimeji.Rob", false);
+    manifest("none", NULL, "Shimeji.Robo", false);
+    manifest("no name", "{\"version\": \"0.0.1\"}", "Shimeji.Robo", false);
+    manifest("name not text", "{\"name\": 1}", "1", false);
+    manifest("not JSON", "{name: Shimeji.Robo", "Shimeji.Robo", false);
+    manifest("not an object", "[\"Shimeji.Robo\"]", "Shimeji.Robo", false);
     if (!failed)
         printf("ok\n");
     return failed;

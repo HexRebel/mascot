@@ -1,6 +1,11 @@
 #include "wlshm.h"
+#include "third_party/json.h/json.h"
 
+#include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 bool wlshm_name_safe(const char* name)
 {
@@ -48,4 +53,40 @@ bool wlshm_member_path_safe(const char* path)
             part++;
     }
     return true;
+}
+
+bool wlshm_manifest_names(int dirfd, const char* name)
+{
+    int fd = openat(dirfd, "manifest.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size > WLSHM_MANIFEST_MAX) {
+        close(fd);
+        return false;
+    }
+    char* text = calloc(1, (size_t)st.st_size + 1);
+    size_t got = 0;
+    while (text && got < (size_t)st.st_size) {
+        ssize_t n = read(fd, text + got, (size_t)st.st_size - got);
+        if (n <= 0)
+            break;
+        got += (size_t)n;
+    }
+    close(fd);
+    if (!text)
+        return false;
+    bool same = false;
+    struct json_value_s* root = json_parse(text, got);
+    if (root && root->type == json_type_object) {
+        for (struct json_object_element_s* e = ((struct json_object_s*)root->payload)->start; e; e = e->next) {
+            if (!strcmp(e->name->string, "name") && e->value->type == json_type_string) {
+                same = !strcmp(((struct json_string_s*)e->value->payload)->string, name);
+                break;
+            }
+        }
+    }
+    free(root);
+    free(text);
+    return same;
 }
