@@ -1070,13 +1070,22 @@ def sleep_mode(args):
 SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine", "power")
 LOG_LINES = 60  # lines of the log read_log shows, the newest
 LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
-# name = value or name: value, the value quoted or one word; secret when one
-# of the name's words (GITHUB_TOKEN, db.password) is one of SECRET_NAME_WORDS, or
-# it ends in key (AWS_SECRET_ACCESS_KEY, apiKey; not key or keyNavigation, as
-# in code). Then "password word" on a netrc line, and "Bearer word"
-ASSIGNMENT = re.compile(r"""\b([A-Za-z_][\w.-]*)(\s*[=:]\s*)("[^"]*"?|'[^']*'?|\S+)""")
+# name = value or name: value (the name may be quoted, as in JSON), the value
+# quoted or one word. Secret when one of the name's words (GITHUB_TOKEN,
+# db.password) is one of SECRET_NAME_WORDS, it ends in one run together
+# (PGPASSWORD, ACCESSTOKEN, adminpass; not bypass), or in key after another
+# word (AWS_SECRET_ACCESS_KEY, apiKey; not key or keyNavigation, as in code).
+# A value that is not secret is looked into (Environment=DB_PASSWORD=…).
+# Then --password word, Authorization: Basic word, "password word" on a netrc
+# line, and "Bearer word"
+ASSIGNMENT = re.compile(r"""(["']?)\b([A-Za-z_][\w.-]*)\1(\s*[=:]\s*)("[^"]*"?|'[^']*'?|\S+)""")
 SECRET_NAME_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "secret", "token", "apikey", "credential",
-                "credentials", "bearer"}
+                     "credentials", "bearer"}
+SECRET_NAME_ENDINGS = ("passwd", "password", "passphrase", "secret", "token", "apikey", "authkey", "credential",
+                       "credentials")
+NOT_SECRET_PASS = {"bypass", "compass", "surpass", "overpass", "underpass"}
+SECRET_OPTION = re.compile(r"(--(?:password|passwd|pass|pwd|token|secret|api[-_]?key)\s+)([^\s-]\S*)", re.I)
+AUTHORIZATION = re.compile(r"(\bauthorization\s*:\s*[A-Za-z]+\s+)(\S+)", re.I)
 NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I | re.M)
 BEARER = re.compile(r"\b(bearer\s+)([^\s=:]{8,})", re.I)
 SINCE = re.compile(r"^(\d+)\s*(s|m|min|h|t|d)$", re.I)
@@ -1095,13 +1104,31 @@ def run(*command, timeout=8):
     return done.stdout, done.stderr
 
 
+def secret_name(name):
+    words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", name)]
+    together = re.sub(r"[^a-z0-9]", "", name.lower())
+    return (any(w in SECRET_NAME_WORDS for w in words) or (len(words) > 1 and words[-1] == "key")
+            or together.endswith(SECRET_NAME_ENDINGS) or (together.endswith("pass") and together not in NOT_SECRET_PASS))
+
+
+def masked_assignment(m):
+    quote, name, sign, value = m[1], m[2], m[3], m[4]
+    if secret_name(name):
+        return f"{quote}{name}{quote}{sign}[hidden]"
+    # Not secret itself, but it may hold a setting that is
+    if value[:1] in ("'", '"'):
+        inner = value[1:-1] if len(value) > 1 and value[-1] == value[0] else value[1:]
+        value = value[0] + ASSIGNMENT.sub(masked_assignment, inner) + value[1 + len(inner):]
+    else:
+        value = ASSIGNMENT.sub(masked_assignment, value)
+    return f"{quote}{name}{quote}{sign}{value}"
+
+
 def masked(line):
     """A log line without what looks like a password or key in it"""
-    def assignment(m):
-        words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", m[1])]
-        secret = any(w in SECRET_NAME_WORDS for w in words) or (len(words) > 1 and words[-1] == "key")
-        return m[1] + m[2] + "[hidden]" if secret else m[0]
-    line = ASSIGNMENT.sub(assignment, line)
+    line = ASSIGNMENT.sub(masked_assignment, line)
+    line = SECRET_OPTION.sub(r"\1[hidden]", line)
+    line = AUTHORIZATION.sub(r"\1[hidden]", line)
     line = NETRC_PASSWORD.sub(r"\1[hidden]", line)
     line = BEARER.sub(r"\1[hidden]", line)
     return RANDOM_LOOKING.sub(lambda m: "[hidden]" if re.search(r"\d", m[0]) and re.search(r"[A-Za-z]", m[0])

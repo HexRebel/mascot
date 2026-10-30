@@ -31,8 +31,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   decided what may be replaced, the manifest's what was loaded, so a pack called `Innocent` could replace Robo
   without `-f`. A `manifest.json` with more than one `name` is refused too.
 - Security: keys are hidden by their name, wherever the word is in it (`AWS_SECRET_ACCESS_KEY`, `apiKey`,
-  `db.password`), quoted values whole, and netrc's `password word` and `Bearer word`. `bypass = no` and
-  `key = ...` in code are no longer hidden.
+  `db.password`, `PGPASSWORD`), also inside another setting (`Environment=DB_PASSWORD=…`) and with a quoted name
+  (`"password": …`), quoted values whole, and `--password word`, `Authorization: Basic word`, netrc's
+  `password word` and `Bearer word`. `bypass = no` and `key = ...` in code are no longer hidden.
 - Security: without `XDG_RUNTIME_DIR` (with `-s`), `mascot prototypes poses` writes its page under a name nobody can
   guess, not `/tmp/mascot-poses-<name>.html`, where another user could put a link first.
 - The bubble quits when `XDG_RUNTIME_DIR` is not set (started by hand with `qs -p`), instead of keeping its socket

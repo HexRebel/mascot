@@ -167,8 +167,19 @@ class Files(unittest.TestCase):
                    'db.password = "open sesame"': "sesame",
                    "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9": "eyJhbG",
                    "STRIPE_KEY: pk/live/abc": "pk/live",
-                   "client_secret=hunter2": "hunter2"}
-        plain = ["keyboard=us", "kb_layout = dk", "bypass = no", "monkey: banana", "passthrough=yes"]
+                   "client_secret=hunter2": "hunter2",
+                   # Run together (as the old rule hid them), and inside a setting or a log line that is not secret
+                   "export PGPASSWORD=pgpw4": "pgpw4", "ACCESSTOKEN=acc5": "acc5", "adminpass=adm6": "adm6",
+                   "OAUTHTOKEN: oau7": "oau7", "authkey=auk8": "auk8",
+                   "alias db='PGPASSWORD=alpw9 psql'": "alpw9",
+                   "systemd[1]: Environment=DB_PASSWORD=envpw1": "envpw1",
+                   "Oct 30 host kernel: password=kpw2": "kpw2", "level=info msg=password=mpw3": "mpw3",
+                   "env: TOKEN=etk4": "etk4",
+                   # Never hidden before either
+                   '{"password": "jpw5", "api_key": "jak6"}': "jpw5", "mysqldump --password ddpw7 shop": "ddpw7",
+                   "Authorization: Basic YWxhZGRpbjpvcGVu": "YWxhZGRp"}
+        plain = ["keyboard=us", "kb_layout = dk", "bypass = no", "monkey: banana", "passthrough=yes",
+                 "tokenizer = bert", "compass=north", "Environment=LANG=C"]
         self.write("notes.txt", "\n".join(list(secrets) + plain) + "\n")
         out = self.tool("read_file", {"path": "~/notes.txt"})
         for line, value in secrets.items():
