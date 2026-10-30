@@ -816,7 +816,23 @@ def reminder_file():
     return path
 
 
+# Longer than any time it can read ("i morgen kl. 12:00", "2026-10-19 12:00:00"); a later time than this is none
+WHEN_LIMIT = 64
+WHEN_FURTHEST = 10 * 366 * 86400
+
+
 def parse_when(when, now):
+    """when_at(when, now), or None for a text too long or a time too far off to be one"""
+    if len(when) > WHEN_LIMIT:
+        return None
+    try:
+        at = when_at(when, now)
+    except (ValueError, OverflowError):
+        return None
+    return at if at is None or abs(at - now) <= WHEN_FURTHEST else None
+
+
+def when_at(when, now):
     """The time (epoch seconds) for when: a duration ("10m", "1h30m", "2 hours",
     "45 sek"; a bare number is minutes), a time of day ("12:00", "kl. 12",
     today or else tomorrow), or a date and time ("2026-10-19 12:00",
@@ -831,7 +847,8 @@ def parse_when(when, now):
         days, clock, when = DAYS[m.group(1)], True, when[m.end():]
     if re.fullmatch(r"\d+", when) and not clock:
         return now + int(when) * 60
-    if re.fullmatch(r"(\d+\s*[a-zæøå]+\s*((and|og)\s*)?)+", when):
+    # "and"/"og" only after a space, so a unit cannot end in it: one way to read each text, no backtracking
+    if re.fullmatch(r"\d+\s*[a-zæøå]+(?:\s+(?:and|og))?(?:\s*\d+\s*[a-zæøå]+(?:\s+(?:and|og))?)*", when):
         parts = re.findall(r"(\d+)\s*([a-zæøå]+)", when)
         if not all(unit[0] in UNITS for _, unit in parts):
             return None

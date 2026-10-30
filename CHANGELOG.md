@@ -135,6 +135,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: `look_at_image` sends the image straight to Ollama, never through a proxy. With `HTTP_PROXY` and
   `NO_PROXY=127.0.0.0/8` aichat keeps off the proxy, so the model counts as local, but Python does not read a
   range in `NO_PROXY` and the image went to the proxy.
+- Security: `sleep_mode` and reminders read a time in one pass. "og" could be read as part of a unit or as the
+  word, so a made-up time like `1aog1aog…` took seconds, and minutes or days a little longer, from any model.
+  A time over 64 letters or more than ten years off is not one, instead of a traceback for a long number.
 
 ## 0.8.0 (2026-10-29)
 

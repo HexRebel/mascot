@@ -395,6 +395,16 @@ class Files(unittest.TestCase):
             self.write("one.txt", line + "\n")
             self.assertNotIn(value, self.tool("read_file", {"path": "~/one.txt"}), line)
 
+    def test_odd_wake_up_times_take_no_time(self):
+        # sleep_mode is there for any model: "og" could be part of a unit or the word, and 26 of "1aog" took 17 s
+        # (four times longer for each two more); a long number stopped it with a traceback
+        for when in ("1aog" * 26 + "!", "1 og " * 40 + "!", "9" * 5000, "9" * 60 + "m", "1h" * 2000):
+            start = time.monotonic()
+            out = self.tool("sleep_mode", {"wake_up": when}, MASCOT_CHAT_SOCKET=os.path.join(self.home, "none"))
+            self.assertLess(time.monotonic() - start, 3, when[:20])
+            self.assertIn("cannot tell when", out, when[:20])
+            self.assertNotIn("Traceback", out, when[:20])
+
     def test_masking_takes_no_more_than_a_moment(self):
         # A lookahead made a line of many spaces take seconds (a 1 MiB file: minutes)
         self.write("slow.txt", "password: x" + " " * 200000 + "y\n" + "token=x " * 20000 + "\n")
