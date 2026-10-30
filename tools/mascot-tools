@@ -1070,24 +1070,33 @@ def sleep_mode(args):
 SYSTEM_AREAS = ("network", "sound", "crashes", "services", "machine", "power")
 LOG_LINES = 60  # lines of the log read_log shows, the newest
 LOG_SCAN = 5000  # lines of the kernel log searched for firewall blocks
-# name = value or name: value (the name may be quoted, as in JSON), the value
-# quoted or one word. Secret when one of the name's words (GITHUB_TOKEN,
-# db.password) is one of SECRET_NAME_WORDS, it ends in one run together
-# (PGPASSWORD, ACCESSTOKEN, adminpass; not bypass), or in key after another
-# word (AWS_SECRET_ACCESS_KEY, apiKey; not key or keyNavigation, as in code).
-# A value that is not secret is looked into (Environment=DB_PASSWORD=…).
-# Then --password word, Authorization: Basic word, "password word" on a netrc
-# line, and "Bearer word"
-ASSIGNMENT = re.compile(r"""(["']?)\b([A-Za-z_][\w.-]*)\1(\s*[=:]\s*)("[^"]*"?|'[^']*'?|\S+)""")
+# Masking, one line at a time (a name never reaches into the next line):
+# each "name =", "name:", "name =>" or "name :=" (the name may be quoted, as in
+# JSON or PHP) whose name is secret has its value hidden, quoted or one word.
+# A name that is not secret takes nothing, so the search goes on inside its
+# value (Environment=DB_PASSWORD=…, kernel: password=…). Secret when one of the
+# name's words (GITHUB_TOKEN, db.password, 2FA_TOKEN) is one of
+# SECRET_NAME_WORDS, it ends in one run together (PGPASSWORD, ACCESSTOKEN,
+# adminpass; not bypass), or in key after another word (AWS_SECRET_ACCESS_KEY,
+# apiKey; not key or keyNavigation, as in code). Then passwords in URLs,
+# <password>…</password>, Authorization: (the rest of the line), --password
+# word, "password word" on a netrc line and "Bearer word", and last 0.8.0's
+# rule (OLD_SECRET_VALUE), so nothing it hid is shown
+SECRET_NAME = re.compile(r"""(["']?)(?<![\w.-])([A-Za-z0-9_][\w.-]*)\1([ \t]*(?:=>|:=|[=:])[ \t]*)""")
+SECRET_VALUE_AT = re.compile(r""""(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;]+""")
 SECRET_NAME_WORDS = {"pass", "passwd", "password", "passphrase", "pwd", "secret", "token", "apikey", "credential",
                      "credentials", "bearer"}
 SECRET_NAME_ENDINGS = ("passwd", "password", "passphrase", "secret", "token", "apikey", "authkey", "credential",
                        "credentials")
 NOT_SECRET_PASS = {"bypass", "compass", "surpass", "overpass", "underpass"}
+URL_PASSWORD = re.compile(r"(://[^/\s:@]+:)([^/\s@]+)(@)")
+SECRET_TAG = re.compile(r"<((?:[\w-]+:)?[\w-]+)>([^<]*)</")
+AUTHORIZATION = re.compile(r"(\b(?:proxy-)?authorization[ \t]*[:=][ \t]*)(\S.*)", re.I)
 SECRET_OPTION = re.compile(r"(--(?:password|passwd|pass|pwd|token|secret|api[-_]?key)\s+)([^\s-]\S*)", re.I)
-AUTHORIZATION = re.compile(r"(\bauthorization\s*:\s*[A-Za-z]+\s+)(\S+)", re.I)
-NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I | re.M)
+NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I)
 BEARER = re.compile(r"\b(bearer\s+)([^\s=:]{8,})", re.I)
+OLD_SECRET_VALUE = re.compile(r"((?:pass(?:wd|word)?|secret|token|api[_-]?key|apikey|auth[_-]?key|bearer|credential)"
+                              r"\s*[=:]\s*)\S+", re.I)
 SINCE = re.compile(r"^(\d+)\s*(s|m|min|h|t|d)$", re.I)
 
 
@@ -1111,28 +1120,38 @@ def secret_name(name):
             or together.endswith(SECRET_NAME_ENDINGS) or (together.endswith("pass") and together not in NOT_SECRET_PASS))
 
 
-def masked_assignment(m):
-    quote, name, sign, value = m[1], m[2], m[3], m[4]
-    if secret_name(name):
-        return f"{quote}{name}{quote}{sign}[hidden]"
-    # Not secret itself, but it may hold a setting that is
-    if value[:1] in ("'", '"'):
-        inner = value[1:-1] if len(value) > 1 and value[-1] == value[0] else value[1:]
-        value = value[0] + ASSIGNMENT.sub(masked_assignment, inner) + value[1 + len(inner):]
-    else:
-        value = ASSIGNMENT.sub(masked_assignment, value)
-    return f"{quote}{name}{quote}{sign}{value}"
-
-
-def masked(line):
-    """A log line without what looks like a password or key in it"""
-    line = ASSIGNMENT.sub(masked_assignment, line)
-    line = SECRET_OPTION.sub(r"\1[hidden]", line)
+def masked_line(line):
+    """One line without what looks like a password or key in it"""
     line = AUTHORIZATION.sub(r"\1[hidden]", line)
+    # The values after secret names, found left to right without taking any
+    # value of a name that is not secret
+    hide, at = [], 0
+    for m in SECRET_NAME.finditer(line):
+        if m.start() < at or not secret_name(m[2]):
+            continue
+        value = SECRET_VALUE_AT.match(line, m.end())
+        if value and value.group():
+            hide.append((value.start(), value.end()))
+            at = value.end()
+    for start, end in reversed(hide):
+        line = line[:start] + "[hidden]" + line[end:]
+    line = URL_PASSWORD.sub(r"\1[hidden]\3", line)
+    line = SECRET_TAG.sub(lambda m: f"<{m[1]}>[hidden]</" if secret_name(m[1].split(":")[-1]) else m[0], line)
+    line = SECRET_OPTION.sub(r"\1[hidden]", line)
     line = NETRC_PASSWORD.sub(r"\1[hidden]", line)
     line = BEARER.sub(r"\1[hidden]", line)
+
+    def old_rule(m):
+        word = re.search(r"[\w.-]*$", line[:m.start()])[0] + re.match(r"[\w.-]*", line[m.start():])[0]
+        return m[0] if word.lower() in NOT_SECRET_PASS else m[1] + "[hidden]"
+    line = OLD_SECRET_VALUE.sub(old_rule, line)
     return RANDOM_LOOKING.sub(lambda m: "[hidden]" if re.search(r"\d", m[0]) and re.search(r"[A-Za-z]", m[0])
                               and "/" not in m[0] else m[0], line)
+
+
+def masked(text):
+    """Text (a log line or a whole file) without what looks like a password or key in it"""
+    return "\n".join(masked_line(line) for line in text.split("\n"))
 
 
 def journal(*args):

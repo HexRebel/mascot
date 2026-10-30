@@ -177,9 +177,21 @@ class Files(unittest.TestCase):
                    "env: TOKEN=etk4": "etk4",
                    # Never hidden before either
                    '{"password": "jpw5", "api_key": "jak6"}': "jpw5", "mysqldump --password ddpw7 shop": "ddpw7",
-                   "Authorization: Basic YWxhZGRpbjpvcGVu": "YWxhZGRp"}
+                   "Authorization: Basic YWxhZGRpbjpvcGVu": "YWxhZGRp",
+                   # Over lines (YAML, INI, JSON): a name with nothing after it must not take the next line's
+                   "database:\n  password: ymlpw1\nsmtp:\n  token: ymltk2": "ymlpw1",
+                   "environment:\n  POSTGRES_PASSWORD: dcpw3": "dcpw3", "[db]\nuser =\npassword = inipw4": "inipw4",
+                   '{"db":\n {"password": "jsnpw5"}}': "jsnpw5", "# Example:\nAPI_TOKEN: extk6": "extk6",
+                   # A name with ": " that is not secret before one that is, on one line
+                   "myapp[12]: config: password: cfpw7": "cfpw7", "x: token: xtk8": "xtk8", "note: secret: nsc9": "nsc9",
+                   # Names starting with a digit, passwords in URLs, other languages, escaped quotes
+                   "1password=opw1": "opw1", "2FA_TOKEN=fat2": "fat2", "DATABASE_URL=postgres://bob:urlpw3@db/x": "urlpw3",
+                   "url: https://bob:urlpw4@h.dk": "urlpw4", "'password' => 'phppw5'": "phppw5",
+                   "<password>xmlpw6</password>": "xmlpw6", 'password := "gopw7"': "gopw7",
+                   "Authorization: authpw8": "authpw8", 'password="a\\"b escpw9"': "escpw9"}
         plain = ["keyboard=us", "kb_layout = dk", "bypass = no", "monkey: banana", "passthrough=yes",
-                 "tokenizer = bert", "compass=north", "Environment=LANG=C"]
+                 "tokenizer = bert", "compass=north", "Environment=LANG=C", "url: https://github.com/me/x",
+                 "<title>Mascot</title>", "database:", "user ="]
         self.write("notes.txt", "\n".join(list(secrets) + plain) + "\n")
         out = self.tool("read_file", {"path": "~/notes.txt"})
         for line, value in secrets.items():
@@ -187,6 +199,21 @@ class Files(unittest.TestCase):
         for line in plain:
             self.assertIn(line, out)
         self.assertIn("AWS_SECRET_ACCESS_KEY=[hidden]", out)
+        self.assertIn("ymltk2", "".join(secrets))  # (the second secret in that file: hidden too)
+        self.assertNotIn("ymltk2", out)
+        # Each on its own too, as search_file and the logs see one line at a time
+        for line, value in secrets.items():
+            self.write("one.txt", line + "\n")
+            self.assertNotIn(value, self.tool("read_file", {"path": "~/one.txt"}), line)
+
+    def test_a_long_json_line_is_read(self):
+        # Minified JSON (an app's settings): masking it made a RecursionError, and read_file gave nothing
+        self.write("state.json", "{" + ",".join(f'"k{i}":{i}' for i in range(3000)) + ',"token":"tk9z"}\n')
+        for tool, args in (("read_file", {"path": "~/state.json"}), ("search_file", {"path": "~/state.json", "text": "k2999"})):
+            out = self.tool(tool, args)
+            self.assertNotIn("Traceback", out, tool)
+            self.assertNotIn("tk9z", out, tool)
+        self.assertIn('"k1":1', self.tool("read_file", {"path": "~/state.json"}))
 
     def history(self, commands):
         with open(os.path.join(self.home, ".zsh_history"), "w") as f:
