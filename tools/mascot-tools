@@ -287,6 +287,13 @@ def context_size(args):
     return str(context_tokens() or 0)
 
 
+def local_model(args):
+    """For the bubble, not the model: 1 if MASCOT_VISION_MODEL is local the way
+    the tools count it (see main()), else 0. Its memory and private sessions
+    go on only with such a model"""
+    return "1" if os.environ.get("MASCOT_TOOLS_LOCAL") == "1" and os.environ.get("MASCOT_VISION_MODEL") else "0"
+
+
 def read_limit():
     """Bytes of a file to hand the model: a quarter of its context (at about 3
     bytes a token), so the prompt, the conversation and the answer still fit"""
@@ -1808,7 +1815,7 @@ def read_log(args):
 
 TOOLS = {f.__name__: f for f in (get_current_weather, list_directory, read_file, search_file, look_at_image, list_todos, add_todo, remove_todo, edit_todo,
                                  set_reminder, list_reminders, cancel_reminder, due_reminders, last_commands, sleep_mode, context_size,
-                                 check_system, read_log)}
+                                 local_model, check_system, read_log)}
 
 
 def main():

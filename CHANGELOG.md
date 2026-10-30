@@ -35,6 +35,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   name (`"password": …`, `'password' => …`) and in YAML and INI files; quoted values whole; passwords in URLs
   (`postgres://bob:…@db`), `<password>…</password>`, `Authorization: …`, `--password word`, netrc's `password word`
   and `Bearer word`. Everything 0.8.0 hid is still hidden; `bypass = no` and `key = ...` in code are no longer.
+- Security: the bubble's memory and private sessions count a model as local the same way the tools do (where aichat
+  sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
+  with the memory of what the tools had read, and could go on with a private session.
 - Security: a mascot's pictures are at most 2048 pixels a side and 256 MiB together (the biggest that ships is 181
   pixels and 13 MiB), checked from the header before a file is read. A pack of a few big pictures was read and
   decoded whole, up to 1.6 GB each, and overflowed the 32-bit Wayland pool, which took the daemon down.

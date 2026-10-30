@@ -126,7 +126,7 @@ clean:
 
 # The bubble's read-only tools (tools/bin/<tool> links to tools/mascot-tools)
 TOOLS := get_current_weather list_directory read_file search_file look_at_image list_todos add_todo remove_todo edit_todo \
-	set_reminder list_reminders cancel_reminder due_reminders last_commands sleep_mode context_size check_system read_log
+	set_reminder list_reminders cancel_reminder due_reminders last_commands sleep_mode context_size local_model check_system read_log
 
 .PHONY: install
 install: all

@@ -91,6 +91,19 @@ class Files(unittest.TestCase):
         self.aichat_config("http://127.0.0.1:9/v1")
         self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
 
+    def test_bubble_asks_the_same(self):
+        # The bubble's memory and private sessions go on only with a model the tools count as local
+        base = self.fake_ollama({"mine": {"remote_host": "https://ollama.com:443", "remote_model": "gpt-oss:120b"},
+                                 "gemma4:12b": {}})
+        self.aichat_config(base + "/v1")
+        cfg = os.path.join(self.home, "aichat")
+        ask = lambda model: self.tool("local_model", {}, MASCOT_VISION_MODEL=model, AICHAT_CONFIG_DIR=cfg).split("\n")[0]
+        self.assertEqual(ask("gemma4:12b"), "1")
+        self.assertEqual(ask("mine"), "0")
+        self.assertEqual(ask(""), "0")
+        self.aichat_config("http://127.0.0.1:9/v1")
+        self.assertEqual(ask("gemma4:12b"), "0")
+
     def test_local_means_where_aichat_sends_it(self):
         # aichat sends an ollama: model to its client's api_base (else OLLAMA_API_BASE), not to OLLAMA_HOST
         self.write("notes.txt", "secret plans\n")

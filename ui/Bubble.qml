@@ -834,6 +834,27 @@ PanelWindow {
     // aichat --info for these args, asked once per bubble: done(info, ok)
     property var lookups: ({})
 
+    // done(name): the local model in aichat --info's info, or "" when it is
+    // not one. Not by its name alone: tools/mascot-tools asks where aichat
+    // sends it and whether Ollama runs it here (a copy of a cloud model has a
+    // local name), the same as for the tools themselves
+    property var localModels: ({})
+
+    function localCheck(info: string, c: QtObject, done: var): void {
+        const name = Local.localModel(info, bubble.ollamaHost);
+        if (!name || name in bubble.localModels) {
+            done(name && bubble.localModels[name] ? name : "");
+            return;
+        }
+        const path = `${bubble.toolsDir}/bin/local_model`.replace(/'/g, "'\\''");
+        run(["{}"], false, "", (out, ok) => {
+            const local = ok && out.trim() === "1";
+            if (ok)
+                bubble.localModels[name] = local;
+            done(local ? name : "");
+        }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: "local_model", MASCOT_VISION_MODEL: name });
+    }
+
     function lookup(args: var, c: QtObject, command: string, done: var): void {
         const key = JSON.stringify([command, args]);
         if (key in bubble.lookups) {
@@ -969,7 +990,7 @@ PanelWindow {
                 return;
             }
             const probe = (c.model ? ["-m", c.model] : []).concat(role, "-s", "mascot-probe");
-            lookup(probe, c, command, (info, ok) => send(ok ? Local.localModel(info, bubble.ollamaHost) : ""));
+            lookup(probe, c, command, (info, ok) => ok ? localCheck(info, c, send) : send(""));
         };
         if (role[0] !== "-r") {
             build([], role[1] ?? ""); // Mascot's prompt, or none
@@ -1146,7 +1167,15 @@ PanelWindow {
     function localForPrivate(c: QtObject): void {
         const command = bubble.event?.command || "aichat";
         const isLocal = (model, done) => lookup((model ? ["-m", model] : []).concat(roleFlags(), "-s", "mascot-probe"), c, command,
-                                                (info, ok) => done(ok && Local.localModel(info, bubble.ollamaHost) !== ""));
+                                                (info, ok) => ok ? localCheck(info, c, local => done(local !== "")) : done(false));
+        // The first of these that is local, or null
+        const firstLocal = (models, done) => {
+            if (!models.length) {
+                done(null);
+                return;
+            }
+            isLocal(models[0], local => local ? done(models[0]) : firstLocal(models.slice(1), done));
+        };
         const use = model => {
             c.model = model;
             c.entries.append({ kind: "system", body: `model: ${model || defaultName("model")} - ${c.session} is a private `
@@ -1160,19 +1189,22 @@ PanelWindow {
                     use("");
                     return;
                 }
-                const used = bubble.usedModels.find(m => Local.localModel(`model: ${m}`, bubble.ollamaHost));
-                if (used) {
-                    use(used);
-                    return;
-                }
-                run(["--list-models"], false, "", (list, ok) => {
-                    const first = ok ? list.split("\n").map(l => l.trim()).find(m => Local.localModel(`model: ${m}`, bubble.ollamaHost)) : null;
-                    if (first)
-                        use(first);
-                    else
-                        c.entries.append({ kind: "system", body: `${c.session} is a private session, but aichat has no `
-                            + "local (ollama:) model to go on with it" });
-                }, c, command);
+                const named = models => models.filter(m => Local.localModel(`model: ${m}`, bubble.ollamaHost));
+                firstLocal(named(bubble.usedModels), used => {
+                    if (used) {
+                        use(used);
+                        return;
+                    }
+                    run(["--list-models"], false, "", (list, ok) => {
+                        firstLocal(ok ? named(list.split("\n").map(l => l.trim())) : [], first => {
+                            if (first)
+                                use(first);
+                            else
+                                c.entries.append({ kind: "system", body: `${c.session} is a private session, but aichat has no `
+                                    + "local (ollama:) model to go on with it" });
+                        });
+                    }, c, command);
+                });
             });
         });
     }
@@ -1226,8 +1258,8 @@ PanelWindow {
     // done(ok): ok when the message may go to c.session with this model
     function sessionKind(c: QtObject, command: string, done: var): void {
         const probe = (c.model ? ["-m", c.model] : []).concat(roleFlags(), "-s", "mascot-probe");
-        lookup(probe, c, command, (info, ok) => {
-            const local = ok && Local.localModel(info, bubble.ollamaHost) !== "";
+        lookup(probe, c, command, (info, ok) => ok ? localCheck(info, c, name => decide(name !== "")) : decide(false));
+        function decide(local) {
             const kind = bubble.sessionKinds[c.session];
             if (kind === "private" && !local) {
                 c.entries.append({ kind: "system", body: `${c.session} is a private session: it holds what your `
@@ -1249,7 +1281,7 @@ PanelWindow {
                 sessionKindsView.setText(JSON.stringify(bubble.sessionKinds, null, 1) + "\n");
                 done(true);
             }, c, command);
-        });
+        }
     }
 
     function askWithTools(text: string, kind: string, c: QtObject, command: string): void {
