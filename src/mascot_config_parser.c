@@ -35,6 +35,7 @@
 #include <strings.h>
 #include "global_symbols.h"
 #include <sys/stat.h>
+#include <unistd.h>
 #include <io.h>
 #include "protocol/server.h"
 
@@ -2265,6 +2266,55 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
 
 }
 
+// The most a pack's manifest.json, programs, actions or behaviors may hold
+#define PACK_FILE_MAX (16 * 1024 * 1024)
+
+// A file name in a pack's manifest: relative, inside the pack (no "..
+// part), and naming something in it, not the pack itself
+static bool pack_name_safe(const char* name)
+{
+    if (name[0] == '/') return false;
+    bool named = false;
+    for (const char* part = name; *part; ) {
+        size_t length = strcspn(part, "/");
+        if (length == 2 && !strncmp(part, "..", 2)) return false;
+        if (length && !(length == 1 && part[0] == '.')) named = true;
+        part += length;
+        part += strspn(part, "/");
+    }
+    return named;
+}
+
+// A file of a pack, read whole into a NUL-terminated buffer: only a regular
+// file (not a link, a FIFO or a device) of at most PACK_FILE_MAX; NULL with
+// errno set otherwise
+static char* read_pack_file(const char* path, size_t* size)
+{
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return NULL;
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size > PACK_FILE_MAX) {
+        close(fd);
+        errno = EINVAL;
+        return NULL;
+    }
+    char* buffer = calloc(1, (size_t)st.st_size + 1);
+    if (!buffer) {
+        close(fd);
+        errno = ENOMEM;
+        return NULL;
+    }
+    size_t got = 0;
+    while (got < (size_t)st.st_size) {
+        ssize_t n = read(fd, buffer + got, (size_t)st.st_size - got);
+        if (n <= 0) break;
+        got += (size_t)n;
+    }
+    close(fd);
+    *size = got;
+    return buffer;
+}
+
 enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype * prototype, const char* prototypes_root, const char *path_)
 {
     static int64_t minver = -1;
@@ -2317,29 +2367,23 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
 
     char filename_buf[PATH_MAX+15] = {0};
     snprintf(filename_buf, PATH_MAX+15, "%s/manifest.json", path);
-    FILE* manifest = fopen(filename_buf, "r");
-    if (!manifest) {
+    size_t size = 0;
+    char* buffer = read_pack_file(filename_buf, &size);
+    if (!buffer) {
         if (errno == ENOENT) {
             WARN("Failed to load prototype from %s: manifest.json not found", path);
             return PROTOTYPE_LOAD_MANIFEST_NOT_FOUND;
         }
+        WARN("Failed to load prototype from %s: manifest.json is not a regular file of at most %d bytes", path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_MANIFEST_INVALID;
     }
-    fseek(manifest, 0, SEEK_END);
-    size_t size = ftell(manifest);
 
-    char* buffer = (char*)malloc(size + 1);
-    if (!buffer) {
-        ERROR("Cannot load prototype from %s: Out of memory", filename_buf);
-    }
-
-    fseek(manifest, 0, SEEK_SET);
-    int readed = fread(buffer, 1, size, manifest);
-    UNUSED(readed);
-
+    // One pack's broken manifest only leaves that pack out
     struct json_value_s* manifest_data = json_parse(buffer, size);
     if (!manifest_data) {
-        ERROR("Cannot load prototype from %s: Invalid JSON or out of memory", filename_buf);
+        WARN("Cannot load prototype from %s: Invalid JSON or out of memory", filename_buf);
+        free(buffer);
+        return PROTOTYPE_LOAD_MANIFEST_INVALID;
     }
 
     if (manifest_data->type != json_type_object) {
@@ -2395,10 +2439,18 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
                 WARN("Cannot load prototype from %s: Invalid JSON: programs expected to be a string", filename_buf);
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
+            if (!pack_name_safe(((struct json_string_s*)(element->value->payload))->string)) {
+                WARN("Cannot load prototype from %s: programs must be a name inside the pack", filename_buf);
+                return PROTOTYPE_LOAD_MANIFEST_INVALID;
+            }
             snprintf(programs_path, PATH_MAX+2, "%s/%s", path, ((struct json_string_s*)(element->value->payload))->string);
         } else if (!strcmp(element->name->string, "assets")) {
             if (element->value->type != json_type_string) {
                 WARN("Cannot load prototype from %s: Invalid JSON: assets expected to be a string", filename_buf);
+                return PROTOTYPE_LOAD_MANIFEST_INVALID;
+            }
+            if (!pack_name_safe(((struct json_string_s*)(element->value->payload))->string)) {
+                WARN("Cannot load prototype from %s: assets must be a name inside the pack", filename_buf);
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
             snprintf(assets_path, PATH_MAX+2, "%s/%s", path, ((struct json_string_s*)(element->value->payload))->string);
@@ -2407,10 +2459,18 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
                 WARN("Cannot load prototype from %s: Invalid JSON: actions expected to be a string", filename_buf);
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
+            if (!pack_name_safe(((struct json_string_s*)(element->value->payload))->string)) {
+                WARN("Cannot load prototype from %s: actions must be a name inside the pack", filename_buf);
+                return PROTOTYPE_LOAD_MANIFEST_INVALID;
+            }
             snprintf(actions_path, PATH_MAX+2, "%s/%s", path, ((struct json_string_s*)(element->value->payload))->string);
         } else if (!strcmp(element->name->string, "behaviors")) {
             if (element->value->type != json_type_string) {
                 WARN("Cannot load prototype from %s: Invalid JSON: behaviors expected to be a string", filename_buf);
+                return PROTOTYPE_LOAD_MANIFEST_INVALID;
+            }
+            if (!pack_name_safe(((struct json_string_s*)(element->value->payload))->string)) {
+                WARN("Cannot load prototype from %s: behaviors must be a name inside the pack", filename_buf);
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
             snprintf(behaviors_path, PATH_MAX+2, "%s/%s", path, ((struct json_string_s*)(element->value->payload))->string);
@@ -2455,19 +2515,11 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     }
 
     // Open and load programs.json
-    FILE* programs = fopen(programs_path, "r");
-    if (!programs) {
-        WARN("Cannot load prototype from %s: Failed to open %s", filename_buf, programs_path);
+    char* progbuf = read_pack_file(programs_path, &size);
+    if (!progbuf) {
+        WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, programs_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_PROGRAMS_NOT_FOUND;
     }
-
-    fseek(programs, 0, SEEK_END);
-    size = ftell(programs);
-    fseek(programs, 0, SEEK_SET);
-
-    char* progbuf = (char*)calloc(1, size + 1);
-    readed = fread(progbuf, 1, size, programs);
-    UNUSED(readed);
     struct json_value_s* programs_data = json_parse(progbuf, size);
 
     if (!programs_data) {
@@ -2492,22 +2544,13 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     prototype->expressions_count = program_loader_result.count;
 
     free(programs_data);
-    fclose(programs);
     free(progbuf);
 
-    FILE* actions = fopen(actions_path, "r");
-    if (!actions) {
-        WARN("Cannot load prototype from %s: Failed to open %s", filename_buf, actions_path);
+    char* actbuf = read_pack_file(actions_path, &size);
+    if (!actbuf) {
+        WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, actions_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_ACTIONS_NOT_FOUND;
     }
-
-    fseek(actions, 0, SEEK_END);
-    size = ftell(actions);
-    fseek(actions, 0, SEEK_SET);
-
-    char* actbuf = (char*)calloc(1, size + 1);
-    readed = fread(actbuf, 1, size, actions);
-    UNUSED(readed);
     struct json_value_s* actions_data = json_parse(actbuf, size);
 
     if (!actions_data) {
@@ -2532,22 +2575,13 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     prototype->actions_count = actions_loader_result.count;
 
     free(actions_data);
-    fclose(actions);
     free(actbuf);
 
-    FILE* behaviors = fopen(behaviors_path, "r");
-    if (!behaviors) {
-        WARN("Cannot load prototype from %s: Failed to open %s", filename_buf, behaviors_path);
+    char* behbuf = read_pack_file(behaviors_path, &size);
+    if (!behbuf) {
+        WARN("Cannot load prototype from %s: Failed to open %s (only a regular file of at most %d bytes)", filename_buf, behaviors_path, PACK_FILE_MAX);
         return PROTOTYPE_LOAD_BEHAVIORS_NOT_FOUND;
     }
-
-    fseek(behaviors, 0, SEEK_END);
-    size = ftell(behaviors);
-    fseek(behaviors, 0, SEEK_SET);
-
-    char* behbuf = (char*)calloc(1, size + 1);
-    readed = fread(behbuf, 1, size, behaviors);
-    UNUSED(readed);
     // struct json_value_s* behaviors_data = json_parse(behbuf, size);
     struct json_parse_result_s result;
     struct json_value_s* behaviors_data = json_parse_ex(behbuf, size, 0, NULL, NULL, &result);
@@ -2598,7 +2632,6 @@ enum mascot_prototype_load_result mascot_prototype_load(struct mascot_prototype 
     }
 
     free(behaviors_data);
-    fclose(behaviors);
     free(behbuf);
 
     prototype->local_variables_count = 128;

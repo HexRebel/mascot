@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -277,6 +278,100 @@ class Atlas(unittest.TestCase):
                     self.fail(f"{count} sprites: no end")
                 self.assertEqual((out.returncode, out.stdout.strip().splitlines()[-1:]), (0, [expected]),
                                  f"{count}: " + out.stdout[-300:] + out.stderr[-1500:])
+
+
+PARSER_DRIVER = ATLAS_DRIVER.split("int main(")[0].replace('#include "mascot_atlas.h"', '#include "mascot_config_parser.h"') + r"""
+int main(int argc, char** argv) {
+    (void)argc;
+    printf("result %d\n", (int)mascot_prototype_load(mascot_prototype_new(), argv[1], argv[2]));
+    return 0;
+}
+"""
+
+MANIFEST = {"name": "Shimeji.T", "version": "0.0.1", "programs": "programs.json", "actions": "actions.json",
+            "behaviors": "behaviors.json", "assets": "assets"}
+
+
+class Manifest(unittest.TestCase):
+    """mascot_prototype_load with a pack's own manifest.json: its file names stay inside the pack, and a file that
+    is not a regular file (a FIFO: ftell -1, a read of SIZE_MAX bytes into one) is refused, not read"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = self.tmp.name
+        driver = os.path.join(self.root, "driver.c")
+        with open(driver, "w") as f:
+            f.write(PARSER_DRIVER)
+        self.binary = os.path.join(self.root, "driver")
+        # Only the loading up to programs.json runs: the rest of the daemon (Wayland, expressions) is left out,
+        # each function it would call a stub that aborts
+        stubs = os.path.join(self.root, "stubs.c")
+        open(stubs, "w").close()
+        build = lambda: subprocess.run(["cc", "-std=gnu11", "-fsanitize=address,undefined", "-I", os.path.join(ROOT, "src"),
+                                        "-I", os.path.join(ROOT, "build"), driver, stubs,
+                                        *(os.path.join(ROOT, "src", f) for f in ("mascot_config_parser.c",
+                                                                                 "mascot_atlas.c", "io.c")),
+                                        "-lm", "-o", self.binary], capture_output=True, text=True)
+        missing = sorted(set(re.findall(r"undefined reference to `(\w+)'", build().stderr)))
+        with open(stubs, "w") as f:
+            f.write("#include <stdlib.h>\n" + "".join(f"void {name}(void) {{ abort(); }}\n" for name in missing))
+        built = build()
+        self.assertEqual(built.returncode, 0, built.stderr)
+        self.pack("Outside", {})  # another pack, with the files a manifest could point at
+
+    def pack(self, name, manifest_changes, manifest_text=None):
+        path = os.path.join(self.root, name)
+        os.makedirs(os.path.join(path, "assets"))
+        with open(os.path.join(path, "assets", "0.qoi"), "wb") as f:
+            f.write(QOI)
+        with open(os.path.join(path, "manifest.json"), "w") as f:
+            f.write(manifest_text if manifest_text is not None else json.dumps({**MANIFEST, **manifest_changes}))
+        return path
+
+    def load(self, name):
+        try:
+            out = subprocess.run([self.binary, self.root, name], capture_output=True, text=True, timeout=20,
+                                 env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
+        except subprocess.TimeoutExpired:
+            self.fail(f"{name}: no end (a FIFO read?)")
+        self.assertEqual(out.returncode, 0, f"{name}: " + out.stdout[-300:] + out.stderr[-1500:])
+        return int(out.stdout.strip().splitlines()[-1].split()[1])
+
+    def test_inside_the_pack_gets_to_programs(self):
+        # No programs.json: the manifest itself was fine
+        self.pack("Plain", {})
+        self.assertEqual(self.load("Plain"), 11)  # PROTOTYPE_LOAD_PROGRAMS_NOT_FOUND
+
+    def test_names_outside_the_pack_refused(self):
+        outside = os.path.join(self.root, "Outside")
+        with open(os.path.join(outside, "programs.json"), "w") as f:
+            f.write("{}")
+        for i, changes in enumerate(({"assets": os.path.join(outside, "assets")}, {"assets": "../Outside/assets"},
+                                     {"programs": "../Outside/programs.json"}, {"programs": "/etc/hostname"},
+                                     {"actions": "a/../../Outside/actions.json"}, {"behaviors": "/dev/zero"},
+                                     {"assets": ""}, {"programs": "."})):
+            self.pack(f"P{i}", changes)
+            self.assertEqual(self.load(f"P{i}"), 6, changes)  # PROTOTYPE_LOAD_MANIFEST_INVALID
+
+    def test_only_regular_files_are_read(self):
+        fifo = self.pack("Fifo", {})
+        os.mkfifo(os.path.join(fifo, "programs.json"))
+        self.assertIn(self.load("Fifo"), (11, 12))
+        link = self.pack("Link", {})
+        with open(os.path.join(self.root, "Outside", "programs.json"), "w") as f:
+            f.write("{}")
+        os.symlink(os.path.join(self.root, "Outside", "programs.json"), os.path.join(link, "programs.json"))
+        self.assertIn(self.load("Link"), (11, 12))
+        manifest_fifo = self.pack("ManifestFifo", {})
+        os.unlink(os.path.join(manifest_fifo, "manifest.json"))
+        os.mkfifo(os.path.join(manifest_fifo, "manifest.json"))
+        self.assertIn(self.load("ManifestFifo"), (5, 6))
+
+    def test_broken_manifest_does_not_stop_the_daemon(self):
+        # ERROR() ends the daemon: one bad pack must only be left out
+        self.pack("Broken", {}, manifest_text="{not json")
+        self.assertEqual(self.load("Broken"), 6)
 
 
 if __name__ == "__main__":
