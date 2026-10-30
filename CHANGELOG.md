@@ -37,6 +37,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   guess, not `/tmp/mascot-poses-<name>.html`, where another user could put a link first.
 - The bubble quits when `XDG_RUNTIME_DIR` is not set (started by hand with `qs -p`), instead of keeping its socket
   and the mascots' memory in `null/` where it was started, and removing that with `rm -rf`.
+- Security: `last_commands` hides a command that is given a password, however short: `mysql -pPW`, `sshpass -p`,
+  `curl -u user:PW`, `https://user:PW@host`, `echo PW | sudo -S`.
 
 ## 0.8.0 (2026-10-29)
 

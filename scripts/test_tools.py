@@ -187,6 +187,22 @@ class Files(unittest.TestCase):
         self.assertIn("git status  <- the last command", out)
         self.assertIn("ls -la", out)
 
+    def test_shell_history_hides_passwords(self):
+        # A short password has no key-like look and no word that gives it away: the command it is given to does
+        secret = ["mysql -u root -phunter2 shop", "sshpass -p hunter2 ssh pi", "curl -u me:hunter2 https://x.dk",
+                  "git clone https://me:hunter2@github.com/me/x", "echo hunter2 | sudo -S pacman -Syu",
+                  "mariadb --user=root -phunter2", "echo hunter2 | sudo -k -S true"]
+        plain = ["mkdir -p src/x", "ssh -p 2222 pi", "curl -u me https://x.dk", "git clone https://github.com/me/x",
+                 "ls -p", "sudo pacman -Syu", "sudo pacman -S firefox", "sudo -E pacman -S --needed git",
+                 "socat -u UNIX-CONNECT:/run/x.sock -"]
+        out = self.history(secret)
+        self.assertNotIn("hunter2", out)
+        self.assertEqual(out.count("[hidden"), len(secret), out)
+        out = self.history(plain)
+        self.assertNotIn("[hidden", out)
+        for command in plain:
+            self.assertIn(command, out)
+
     def test_search_never_finds_a_key(self):
         # Searching for the key itself must not tell, one letter at a time, what it is
         self.write(".zshrc", f"export OPENAI_API_KEY={KEY}\n")

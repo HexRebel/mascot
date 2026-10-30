@@ -960,8 +960,16 @@ SECRET_WORDS = re.compile(r"pass(wd|word)?\b|secret|token|api[_-]?key|apikey|aut
 RANDOM_LOOKING = re.compile(r"[A-Za-z0-9+/_=-]{32,}")
 
 
+# A password given to a command, however short: mysql -pPW, sshpass -p PW,
+# curl -u user:PW, https://user:PW@host, echo PW | sudo -S (sudo's own
+# option, not pacman -S after it)
+PASSWORD_ARGUMENT = re.compile(r"\b(?:mysql\w*|mariadb\w*)\b.*\s-p\S|\bsshpass\b.*\s-p"
+                               r"|\b(?:curl|wget|lftp|svn)\b.*\s(?:-u|--user)[\s=]+[^\s:]+:\S|://[^/\s:@]+:[^/\s@]+@"
+                               r"|\bsudo(?:\s+-\S+)*?\s+(?:-[A-Za-z]*S[A-Za-z]*|--stdin)(?:\s|$)")
+
+
 def looks_secret(command):
-    if SECRET_WORDS.search(command):
+    if SECRET_WORDS.search(command) or PASSWORD_ARGUMENT.search(command):
         return True
     # Long runs of letters and digits mixed, like keys; not paths or words
     return any(re.search(r"\d", run) and re.search(r"[A-Za-z]", run) and "/" not in run
