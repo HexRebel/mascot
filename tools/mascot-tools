@@ -138,9 +138,10 @@ def weather_once():
     off 64 letters at a time"""
     answer = os.environ.get("MASCOT_ANSWER", "")
     runtime = os.environ.get("XDG_RUNTIME_DIR", "")
-    if os.environ.get("MASCOT_TOOLS_LOCAL") != "1" or not answer or not runtime:
+    if os.environ.get("MASCOT_TOOLS_LOCAL") != "1":
         return
-    if not re.fullmatch(r"[\w-]{1,64}", answer):
+    # Nowhere to count the answers (the bubble gives both): none at all
+    if not runtime or not re.fullmatch(r"[\w-]{1,64}", answer):
         raise ToolError("the weather cannot be looked up now")
     folder = os.path.join(runtime, "mascot-weather")
     os.makedirs(folder, mode=0o700, exist_ok=True)

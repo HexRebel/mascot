@@ -225,6 +225,13 @@ class Files(unittest.TestCase):
         self.assertIn("could not get the weather", weather("a2"))
         for _ in range(2):  # without the local tools, as often as it likes
             self.assertIn("could not get the weather", weather("b1", local="0"))
+        # With the local tools but nowhere to count the answers (no XDG_RUNTIME_DIR, no MASCOT_ANSWER): none at all
+        for env in ({"MASCOT_ANSWER": "c1", "XDG_RUNTIME_DIR": ""}, {"MASCOT_ANSWER": "", "XDG_RUNTIME_DIR": runtime}):
+            for _ in range(2):
+                out = self.tool("get_current_weather", {"location": "Paris"}, https_proxy="http://127.0.0.1:9",
+                                MASCOT_TOOLS_LOCAL="1", **env)
+                self.assertNotIn("could not get the weather", out, env)
+                self.assertIn("cannot be looked up", out, env)
 
     def test_only_the_chosen_tools_run(self):
         # aichat runs any function in functions.json the model calls, not only those in AICHAT_USE_TOOLS: with
