@@ -136,13 +136,27 @@ class Files(unittest.TestCase):
         # the "city" would leave the computer. Nothing is sent here (the proxy is a closed port)
         weather = lambda location: self.tool("get_current_weather", {"location": location},
                                              https_proxy="http://127.0.0.1:9", MASCOT_TOOLS_LOCAL="0")
-        for place in ("København", "Paris, France", "St. Petersburg", "Aix-en-Provence", ""):
+        for place in ("København", "Paris, France", "St. Petersburg", "Aix-en-Provence", "L'Aquila", "L’Aquila",
+                      "Frankfurt (Oder)", ""):
             self.assertIn("could not get the weather", weather(place), place)
         for data in ("export OPENAI_API_KEY=sk-abc", "~/.ssh/id_ed25519", "a@b", "line\nbreak", "x" * 65,
                      "%2e%2e", "Paris?format=j1", "Århus/../etc"):
             out = weather(data)
             self.assertNotIn("could not get the weather", out, data)
             self.assertIn("a place name", out, data)
+
+    def test_weather_once_an_answer_with_local_tools(self):
+        # With the local tools a model can read a file: the weather must not carry it away 64 letters at a time
+        runtime = os.path.join(self.home, "run")
+        os.mkdir(runtime, 0o700)
+        weather = lambda answer, local="1": self.tool(
+            "get_current_weather", {"location": "Paris"}, https_proxy="http://127.0.0.1:9", MASCOT_TOOLS_LOCAL=local,
+            MASCOT_ANSWER=answer, XDG_RUNTIME_DIR=runtime)
+        self.assertIn("could not get the weather", weather("a1"))
+        self.assertIn("once", weather("a1"))
+        self.assertIn("could not get the weather", weather("a2"))
+        for _ in range(2):  # without the local tools, as often as it likes
+            self.assertIn("could not get the weather", weather("b1", local="0"))
 
     def test_only_the_chosen_tools_run(self):
         # aichat runs any function in functions.json the model calls, not only those in AICHAT_USE_TOOLS: with

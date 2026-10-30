@@ -196,7 +196,7 @@ writes, deletes or runs anything else:
 | `CHAT_TOOLS` | Tools | What they do |
 |---|---|---|
 | `time` | – | The date, weekday and time, put in front of every message (unseen), so it works with any model |
-| `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address) |
+| `weather` | `get_current_weather` | The weather from [wttr.in](https://wttr.in); only the place name is sent (none: wttr.in guesses it from your IP address), and with the local tools on, once an answer |
 | `files` | `list_directory`, `read_file`, `search_file`, `look_at_image` | List directories (or draw a tree of one, up to 4 levels), read text files (as much as fits the model, see below), find lines in a file or a directory of files, and look at pictures (PNG, JPEG, WebP) in your home directory |
 | `todo` | `list_todos`, `add_todo`, `remove_todo`, `edit_todo` | Keep your todo list: ask the mascot to remember something, to reword an item, or tell it something is done |
 | `reminders` | `set_reminder`, `list_reminders`, `cancel_reminder` | Reminders and timers: "remind me to water the plants tomorrow at 12", "set a timer for 10 minutes" |

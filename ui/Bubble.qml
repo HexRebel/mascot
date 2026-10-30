@@ -781,9 +781,13 @@ PanelWindow {
             // CHAT_LANGUAGE: each tool's answer ends with it (gemma4 drifted to Norwegian after one)
             MASCOT_LANGUAGE: bubble.event?.language ?? "",
             // For sleep_mode, which tells the daemon
-            MASCOT_CHAT_SOCKET: bubble.chatSocket
+            MASCOT_CHAT_SOCKET: bubble.chatSocket,
+            // Each answer its own: with the local tools, the weather is looked up once an answer
+            MASCOT_ANSWER: `${Date.now()}-${++bubble.answers}`
         };
     }
+
+    property int answers: 0
 
     // The daemon's chat socket, for sleep_mode (.quiet), which tells the daemon
     readonly property string chatSocket: Quickshell.env("MASCOT_CHAT_SOCKET")
