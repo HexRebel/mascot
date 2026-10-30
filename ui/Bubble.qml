@@ -841,22 +841,27 @@ PanelWindow {
     // done(name): the local model in aichat --info's info, or "" when it is
     // not one. Not by its name alone: tools/mascot-tools asks where aichat
     // sends it and whether Ollama runs it here (a copy of a cloud model has a
-    // local name), the same as for the tools themselves
+    // local name), the same as for the tools themselves, with the config
+    // aichat --info names (CHAT_COMMAND may give aichat its own)
     property var localModels: ({})
 
     function localCheck(info: string, c: QtObject, done: var): void {
         const name = Local.localModel(info, bubble.ollamaHost);
-        if (!name || name in bubble.localModels) {
-            done(name && bubble.localModels[name] ? name : "");
+        // Per config: the same name may be sent elsewhere by another one
+        const key = JSON.stringify([name, Local.configFile(info)]);
+        if (!name || bubble.localModels[key]) {
+            done(name);
             return;
         }
         const path = `${bubble.toolsDir}/bin/local_model`.replace(/'/g, "'\\''");
         run(["{}"], false, "", (out, ok) => {
             const local = ok && out.trim() === "1";
-            if (ok)
-                bubble.localModels[name] = local;
+            // Only local is remembered: "not local" may be Ollama not running yet
+            if (local)
+                bubble.localModels[key] = true;
             done(local ? name : "");
-        }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: "local_model", MASCOT_VISION_MODEL: name });
+        }, c, `'${path}'`, { MASCOT_TOOLS_LOCAL: "1", MASCOT_TOOLS_ALLOWED: "local_model", MASCOT_VISION_MODEL: name,
+                             AICHAT_CONFIG_FILE: Local.configFile(info) });
     }
 
     function lookup(args: var, c: QtObject, command: string, done: var): void {

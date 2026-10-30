@@ -49,7 +49,7 @@ class Local(unittest.TestCase):
     def call(self, function, *args):
         script = (f"const src = require('fs').readFileSync({json.dumps(os.path.join(ROOT, 'ui', 'local.js'))}, 'utf8')"
                   ".replace(/^\\.pragma.*$/m, '');"
-                  f"const lib = new Function(src + '; return {{ localModel, ollamaHere }};')();"
+                  f"const lib = new Function(src + '; return {{ localModel, ollamaHere, configFile }};')();"
                   f"console.log(JSON.stringify(lib.{function}(...{json.dumps(list(args))})));")
         out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
         self.assertEqual(out.returncode, 0, out.stderr)
@@ -78,6 +78,21 @@ class Local(unittest.TestCase):
                      "127.0.0.1.evil.com:11434", "http://[::1]@evil.com"):
             self.assertFalse(self.call("ollamaHere", host), host)
             self.assertEqual(self.call("localModel", "model: ollama:gemma4:12b", host), "", host)
+
+    def test_config_file_aichat_reads(self):
+        # CHAT_COMMAND may give aichat another config (AICHAT_CONFIG_DIR=… aichat): local_model must read that one
+        info = "model                   ollama:x\nconfig_file             /home/me/cloud aichat/config.yaml\nenv_file   /x/.env\n"
+        self.assertEqual(self.call("configFile", info), "/home/me/cloud aichat/config.yaml")
+        self.assertEqual(self.call("configFile", "model: ollama:x\n"), "")
+
+    def test_local_check_asks_aichats_config_and_remembers_only_local(self):
+        # Ollama down for a moment answers "not local": that must not stick for the rest of the bubble
+        with open(os.path.join(ROOT, "ui", "Bubble.qml")) as f:
+            qml = f.read()
+        check = qml[qml.index("function localCheck("):]
+        check = check[:check.index("\n    }\n")]
+        self.assertIn("AICHAT_CONFIG_FILE: Local.configFile(info)", check)
+        self.assertRegex(check, r"if \(local\)\s*bubble\.localModels\[key\] = true;")
 
     def test_ollama_host_is_only_ollama_host(self):
         # ollamaHost was put between dataDir's two lines: without OLLAMA_HOST it was the data directory's path

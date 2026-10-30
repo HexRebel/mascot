@@ -21,3 +21,10 @@ function localModel(info, host) {
         return "";
     return m[1];
 }
+
+// The config file aichat --info says it reads ("config_file  <path>"), or "": CHAT_COMMAND may give it another one,
+// and where that sends an ollama: model is what counts
+function configFile(info) {
+    const m = info.match(/^config_file\s+(.*\S)\s*$/m);
+    return m ? m[1] : "";
+}

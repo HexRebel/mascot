@@ -57,7 +57,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   `Robo` or `Evil.Robo`) gets the role you gave Robo.
 - Security: the bubble's memory and private sessions count a model as local the same way the tools do (where aichat
   sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
-  with the memory of what the tools had read, and could go on with a private session.
+  with the memory of what the tools had read, and could go on with a private session. It reads the config
+  `aichat --info` names, so one `CHAT_COMMAND` gives aichat counts, and Ollama not yet running is not remembered.
 - Security: a pack's JSON files nest at most 64 levels, give no key twice in an object and have no NUL in a key or
   text, and their words are compared whole (`"t"` was `"type"`, `""` was `"stay"`). A million `[` ran the parser
   out of stack, a second `"definitions"` freed behaviors twice, and 70 `"type"` keys in one piece of an action
