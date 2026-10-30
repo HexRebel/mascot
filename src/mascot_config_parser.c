@@ -1106,6 +1106,16 @@ hotspot_generator_fail:
 
 }
 
+// A frame's number, at most a million either way: atoi of a bigger one (and
+// -atoi of INT_MIN) is undefined
+static int pose_number(const char* text)
+{
+    long long value = strtoll(text, NULL, 10);
+    if (value > 1000000) value = 1000000;
+    if (value < -1000000) value = -1000000;
+    return (int)value;
+}
+
 struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_object_s* pose)
 {
     struct mascot_pose* pose_obj = (struct mascot_pose*)calloc(1, sizeof(struct mascot_pose));
@@ -1138,7 +1148,12 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_string_s* sprite = (struct json_string_s*)celement->value->payload;
-            snprintf(image, sprite->string_size+1, "%s", sprite->string);
+            // Into 128 bytes on the stack: a longer name was written past them
+            if (sprite->string_size >= sizeof(image)) {
+                WARN("Sprite name is too long");
+                goto pose_generator_fail;
+            }
+            snprintf(image, sizeof(image), "%s", sprite->string);
             sprite_set = true;
 
         }
@@ -1153,7 +1168,11 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_string_s* sprite = (struct json_string_s*)celement->value->payload;
-            snprintf(image_right, sprite->string_size+1, "%s", sprite->string);
+            if (sprite->string_size >= sizeof(image_right)) {
+                WARN("Sprite name is too long");
+                goto pose_generator_fail;
+            }
+            snprintf(image_right, sizeof(image_right), "%s", sprite->string);
             sprite_right_set = true;
         }
 
@@ -1165,7 +1184,7 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_number_s* duration = (struct json_number_s*)celement->value->payload;
-            pose_obj->duration = atoi(duration->number);
+            pose_obj->duration = pose_number(duration->number);
             duration_set = true;
         }
 
@@ -1177,7 +1196,7 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_number_s* anchor_x = (struct json_number_s*)celement->value->payload;
-            pose_obj->anchor_x = -atoi(anchor_x->number);
+            pose_obj->anchor_x = -pose_number(anchor_x->number);
         }
 
         // Get anchor_y
@@ -1188,7 +1207,7 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_number_s* anchor_y = (struct json_number_s*)celement->value->payload;
-            pose_obj->anchor_y = -atoi(anchor_y->number);
+            pose_obj->anchor_y = -pose_number(anchor_y->number);
         }
 
         // Get velocity_X
@@ -1199,7 +1218,7 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_number_s* velocity_x = (struct json_number_s*)celement->value->payload;
-            pose_obj->velocity_x = atoi(velocity_x->number);
+            pose_obj->velocity_x = pose_number(velocity_x->number);
         }
 
         // Get velocity_Y
@@ -1210,7 +1229,7 @@ struct mascot_pose* parse_pose(struct mascot_prototype* prototype, struct json_o
             }
 
             struct json_number_s* velocity_y = (struct json_number_s*)celement->value->payload;
-            pose_obj->velocity_y = atoi(velocity_y->number);
+            pose_obj->velocity_y = pose_number(velocity_y->number);
         }
     }
 

@@ -690,6 +690,23 @@ class Pack(Manifest):
         self.robo("Select", "actions.json", lambda data: first_action(data, select_behavior="x"))
         self.load("Select", leaks=True)
 
+    def test_long_image_name_and_big_numbers_in_a_frame(self):
+        # image was copied into 128 bytes on the stack whatever its length; -atoi("-2147483648") overflowed
+        def frame(data, **changes):
+            action = next(a for a in data if any(c.get("frames") for c in a["content"]))
+            piece = next(c for c in action["content"] if c.get("frames"))
+            piece["frames"][0].update(changes)
+            return data
+        for name, changes in (("LongImage", {"image": "A" * 200}), ("LongRight", {"image_right": "B" * 300}),
+                              ("Anchor", {"image_anchor_x": -2147483648, "image_anchor_y": 99999999999}),
+                              ("Duration", {"duration": 99999999999, "velocity_x": -99999999999})):
+            path = self.robo(name, "actions.json", lambda data: frame(data, **changes))
+            out = subprocess.run([self.binary, self.root, name], capture_output=True, text=True, timeout=20,
+                                 env={"ASAN_OPTIONS": "detect_leaks=1", "UBSAN_OPTIONS": "halt_on_error=1",
+                                      "PATH": "/usr/bin:/bin"})
+            self.assertEqual(out.returncode, 0, f"{name}: " + out.stderr[-1500:])
+            self.assertNotIn("runtime error", out.stderr, name)
+
     def test_unknown_next_behavior(self):
         self.robo("Unknown", "behaviors.json", lambda data: self.behavior(
             data, next_behavior_list=[{"name": "Nobody", "frequency": 1}], next_behavior_list_count=1))

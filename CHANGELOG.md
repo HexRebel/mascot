@@ -62,6 +62,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Security: a client named `ollama` the tools cannot read (`- {name: ollama, …}`, `'name': "ollama"`) no longer
   lets `OLLAMA_API_BASE` decide where the model is; quoted keys are read. A proxy not on this computer (the client's
   `extra: proxy:`, `HTTPS_PROXY`, `ALL_PROXY`, `HTTP_PROXY`) makes the model not local: the proxy gets what is sent.
+- Security: a frame's `image` or `image_right` over 127 bytes refuses the pack. The name was copied into 128 bytes on
+  the stack whatever its length, so a pack with a 200-byte name wrote past them, at every start of the daemon (from
+  upstream). A frame's numbers (anchor, duration, velocity) are kept within a million either way.
 - Security: a pack's JSON files nest at most 64 levels, give no key twice in an object and have no NUL in a key or
   text, and their words are compared whole (`"t"` was `"type"`, `""` was `"stay"`). A million `[` ran the parser
   out of stack, a second `"definitions"` freed behaviors twice, and 70 `"type"` keys in one piece of an action
