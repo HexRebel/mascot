@@ -5,10 +5,12 @@ its own.
 Run: python3 -I scripts/test_tools.py
 """
 
+import http.server
 import json
 import os
 import subprocess
 import tempfile
+import threading
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,6 +44,36 @@ class Files(unittest.TestCase):
         todo = os.path.join(self.home, "todo.md")
         self.tool("add_todo", {"item": "secret plans"}, MASCOT_TODO_FILE=todo)
         self.assertEqual(os.stat(todo).st_mode & 0o777, 0o600)
+
+    def test_copy_of_a_cloud_model_is_not_local(self):
+        # ollama cp gpt-oss:120b-cloud mine: a local name, but Ollama sends it to ollama.com (its /api/show has
+        # remote_host); the files must not go there. Ollama not answering: not local either
+        self.write("notes.txt", "secret plans\n")
+        shows = {"mine": {"remote_host": "https://ollama.com:443", "remote_model": "gpt-oss:120b"},
+                 "gemma4:12b": {"parameters": "num_ctx 16384"}}
+
+        class Ollama(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                model = json.loads(self.rfile.read(int(self.headers["Content-Length"])))["model"]
+                body = json.dumps(shows.get(model, {})).encode()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Ollama)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        host = f"127.0.0.1:{server.server_port}"
+        read = lambda model, ollama=host: self.tool("read_file", {"path": "~/notes.txt"}, MASCOT_VISION_MODEL=model,
+                                                    OLLAMA_HOST=ollama)
+        self.assertIn("secret plans", read("gemma4:12b"))
+        out = read("mine")
+        self.assertNotIn("secret plans", out)
+        self.assertIn("local model", out)
+        self.assertNotIn("secret plans", read("gemma4:12b", "127.0.0.1:9"))
 
     def test_weather_sends_only_a_place_name(self):
         # The place goes into wttr.in's URL, also for a model that is not local: a file or the shell history as

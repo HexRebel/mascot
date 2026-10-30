@@ -17,6 +17,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   read the todo list and the chat sessions.
 - Security: `OLLAMA_HOST=127.0.0.1@evil.com` or `127.attacker.example` counted as this computer, so the file, todo and
   shell tools went to a model somewhere else. Now only localhost and loopback addresses count.
+- Security: a local copy of one of Ollama's cloud models (`ollama cp gpt-oss:120b-cloud mine`) does not get the file,
+  todo and shell tools: they ask Ollama first, and refuse when it says the model runs elsewhere.
 
 ## 0.8.0 (2026-10-29)
 

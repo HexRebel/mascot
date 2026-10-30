@@ -192,18 +192,24 @@ def ollama_url(endpoint):
     return (host if "://" in host else "http://" + host).rstrip("/") + endpoint
 
 
-def context_tokens():
-    """The local model's context in tokens, as Ollama runs it: its num_ctx,
-    or Ollama's default, at most what the model can; None if unknown"""
-    model = os.environ.get("MASCOT_VISION_MODEL", "")
-    if not model:
-        return None
+def ollama_show(model):
+    """What Ollama's /api/show says about model, or None if it does not answer"""
     request = urllib.request.Request(ollama_url("/api/show"), data=json.dumps({"model": model}).encode(),
                                      headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
             show = json.loads(response.read())
     except (OSError, ValueError):
+        return None
+    return show if isinstance(show, dict) else None
+
+
+def context_tokens():
+    """The local model's context in tokens, as Ollama runs it: its num_ctx,
+    or Ollama's default, at most what the model can; None if unknown"""
+    model = os.environ.get("MASCOT_VISION_MODEL", "")
+    show = ollama_show(model) if model else None
+    if show is None:
         return None
     m = re.search(r"^num_ctx\s+(\d+)", str(show.get("parameters") or ""), re.M)
     tokens = int(m.group(1)) if m else OLLAMA_DEFAULT_CONTEXT
@@ -1672,6 +1678,13 @@ def main():
         # ones the bubble chose for this answer run (none without the list)
         if name not in os.environ.get("MASCOT_TOOLS_ALLOWED", "").split(","):
             raise ToolError(f"{name} is not turned on; do not try other ways to get what it would give")
+        # A local name can be a copy of one of Ollama's cloud models (ollama cp
+        # x:cloud mine), which runs at ollama.com: then the local-only tools refuse
+        model = os.environ.get("MASCOT_VISION_MODEL", "")
+        if os.environ.get("MASCOT_TOOLS_LOCAL") == "1" and model:
+            show = ollama_show(model)
+            if show is None or show.get("remote_host") or show.get("remote_model"):
+                os.environ["MASCOT_TOOLS_LOCAL"] = "0"
         try:
             args = json.loads(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].strip() else {}
         except json.JSONDecodeError:
