@@ -26,6 +26,7 @@
 #include "mascot.h"
 #include "mascot_atlas.h"
 #include "third_party/json.h/json.h"
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/limits.h>
@@ -2343,6 +2344,22 @@ struct config_behavior_loader_result load_behaviors(struct mascot_prototype* pro
 // The most a pack's manifest.json, programs, actions or behaviors may hold
 #define PACK_FILE_MAX (16 * 1024 * 1024)
 
+// A pack's display name is the mascot's name in the bubble's prompt: only a
+// short name (letters, digits, spaces and - ' . _), so a pack cannot write
+// instructions there; else its name is used
+#define DISPLAY_NAME_MAX 48
+
+static bool display_name_safe(const char* name, size_t size)
+{
+    if (!size || size > DISPLAY_NAME_MAX || strlen(name) != size) return false;
+    for (size_t i = 0; i < size; i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (c >= 0x80 || isalnum(c) || strchr(" -'._", c)) continue;  // UTF-8 for Bjørn
+        return false;
+    }
+    return true;
+}
+
 // A file name in a pack's manifest: relative, inside the pack (no "..
 // part), and naming something in it, not the pack itself
 static bool pack_name_safe(const char* name)
@@ -2524,7 +2541,14 @@ static enum mascot_prototype_load_result prototype_load(struct mascot_prototype*
                 WARN("Cannot load prototype from %s: Invalid JSON: display_name expected to be a string", filename_buf);
                 return PROTOTYPE_LOAD_MANIFEST_INVALID;
             }
-            prototype->display_name = strdup(((struct json_string_s*)(element->value->payload))->string);
+            struct json_string_s* display_name = (struct json_string_s*)element->value->payload;
+            free((char*)prototype->display_name);
+            prototype->display_name = NULL;
+            if (display_name_safe(display_name->string, display_name->string_size)) {
+                prototype->display_name = strdup(display_name->string);
+            } else {
+                WARN("Prototype %s: display_name is not a short name (letters, digits, spaces and - ' . _), using its name", filename_buf);
+            }
         } else if (!strcmp(element->name->string, "artist")) {
             // Optional, null when unknown
             if (element->value->type == json_type_string && ((struct json_string_s*)(element->value->payload))->string_size > 255) {

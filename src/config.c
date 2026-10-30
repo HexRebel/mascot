@@ -925,6 +925,18 @@ const char* config_get_chat_language()
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
 // prototype's display or internal name (any case). An empty role means none,
 // not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
+// Whether display_name is the last part of name ("Robo" of "Shimeji.Robo"):
+// only then does CHAT_ROLES find a mascot by it, so a pack from the net that
+// calls itself Robo does not get the role the user gave Robo
+static bool display_name_is_own(const char* display_name, const char* name)
+{
+    if (!name) return false;
+    size_t dlen = strlen(display_name), nlen = strlen(name);
+    if (dlen > nlen) return false;
+    if (strcasecmp(name + nlen - dlen, display_name)) return false;
+    return dlen == nlen || name[nlen - dlen - 1] == '.';
+}
+
 const char* config_get_chat_role_for(const char* display_name, const char* name, char* dest, size_t size)
 {
     for (const char* entry = config.chat_roles; entry && *entry; ) {
@@ -937,7 +949,8 @@ const char* config_get_chat_role_for(const char* display_name, const char* name,
             snprintf(role, sizeof(role), "%.*s", (int)(entry + len - eq - 1), eq + 1);
             char* k = string_strip(key);
             char* r = string_strip(role);
-            if (*k && ((display_name && !strcasecmp(k, display_name)) || (name && !strcasecmp(k, name)))) {
+            if (*k && ((display_name && display_name_is_own(display_name, name) && !strcasecmp(k, display_name))
+                       || (name && !strcasecmp(k, name)))) {
                 if (!*r) return NULL;
                 snprintf(dest, size, "%s", r);
                 return dest;

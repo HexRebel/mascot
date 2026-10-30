@@ -180,7 +180,9 @@ until you pick a role again or `qs` restarts.
 
 To give each kind of mascot its own role, set `CHAT_ROLES` to `<mascot>=<role>` pairs separated by
 `;`, e.g. `mascot config set CHAT_ROLES 'Shimeji=my-role;Example=other-role'`. Mascot names are the
-ones `.mascots` lists (any letter case); a mascot that is not in the list gets `CHAT_ROLE`, and an
+ones `.mascots` lists (any letter case), or the full name (`Shimeji.Robo`). The short one counts only when it is
+the end of the full one, so a pack from the net that calls itself Robo does not get Robo's role; a mascot that
+is not in the list gets `CHAT_ROLE`, and an
 empty role (`Shimeji=`) gives that mascot Mascot's prompt instead. Swapping
 with `.mascot` switches to the new mascot's role.
 
