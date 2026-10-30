@@ -107,8 +107,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   `curl -u user:PW` (also `-uuser:PW`), `lftp -u user,PW`, `https://user:PW@host`, `echo PW | sudo -S`, `redis-cli -a`,
   `docker login -p`, `smbclient -U user%PW`, `zip -P`, `7z -pPW`, `wpa_passphrase`, `ssh-keygen -N`, `openssl -k`,
   `htpasswd -b` and `mosquitto_pub -P`; also `nmcli … wifi-sec.psk`, `xfreerdp /p:`, `rdesktop -p`, `mongosh -p`,
-  `ldapsearch -w`, `transmission-remote -n`, `sqlcmd -P`, `MYSQL_PWD=…`, `sudo -u bob -S`, `su … <<< …` and a
-  command split over lines with `\`.
+  `ldapsearch -w`, `transmission-remote -n`, `sqlcmd -P`, `MYSQL_PWD=…`, `sudo -u bob -S`, `sudo --user bob -S`,
+  `su … <<< …`, `bw unlock`/`bw login` with a password, `veracrypt -p`, a password given to `kinit` or `cryptsetup`
+  through a pipe or `<<<`, `sqlplus user/password@db` and a command split over lines with `\`.
 - `mascot prototypes import` says why a pack whose header and `manifest.json` give different names was refused,
   instead of "Invalid file format", and a pack with no readable `manifest.json` (missing, not JSON, too deep) says
   that instead. Converting a Shimeji whose name is over 247 bytes says so instead of crashing.

@@ -388,13 +388,17 @@ class Files(unittest.TestCase):
                   "nmcli con modify w wifi-sec.psk hunter2", "xfreerdp /u:me /p:hunter2 /v:pc",
                   "rdesktop -u me -p hunter2 pc", "mongosh -u me -p hunter2", "ldapsearch -x -D cn=me -w hunter2",
                   "transmission-remote -n me:hunter2 -l", "sqlcmd -S db -U sa -P hunter2", "MYSQL_PWD=hunter2 mysql",
-                  "echo hunter2 | sudo -u bob -S id", "su -c id <<< hunter2"]
+                  "echo hunter2 | sudo -u bob -S id", "su -c id <<< hunter2", "sudo --user bob -S id",
+                  "sudo --user=bob --stdin id", "bw unlock hunter2", "bw login me@x.dk hunter2", "veracrypt -p hunter2 v",
+                  "kinit bob <<< hunter2", "echo hunter2 | kinit bob", "echo -n hunter2 | cryptsetup open /dev/x c",
+                  "sqlplus bob/hunter2@db", "printf hunter2 | sudo -S true"]
         plain = ["mkdir -p src/x", "ssh -p 2222 pi", "curl -u me https://x.dk", "git clone https://github.com/me/x",
                  "ls -p", "sudo pacman -Syu", "sudo pacman -S firefox", "sudo -E pacman -S --needed git",
                  "socat -u UNIX-CONNECT:/run/x.sock -", "docker login ghcr.io", "docker ps -a", "redis-cli ping",
                  "zip -r a.zip f", "unzip a.zip", "ssh-keygen -t ed25519", "smbclient -L nas -U me", "7z x a.7z",
                  "lftp -u me ftp.x.dk", "redis-cli -h db -p 6379 get x", "sudo -u bob pacman -S git",
-                 "echo $PWD", "ldapsearch -x -W", "nmcli con show", "rdesktop pc"]
+                 "echo $PWD", "ldapsearch -x -W", "nmcli con show", "rdesktop pc", "bw unlock", "bw login",
+                 "kinit bob", "cryptsetup open /dev/x c", "sqlplus /nolog", "echo hi | grep h", "sudo --user bob ls"]
         # last_commands shows at most 10
         for chunk in (secret[i:i + 10] for i in range(0, len(secret), 10)):
             out = self.history(chunk)

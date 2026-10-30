@@ -1025,7 +1025,8 @@ RANDOM_LOOKING = re.compile(r"[A-Za-z0-9+/_=-]{32,}")
 PASSWORD_ARGUMENT = re.compile(r"\b(?:mysql\w*|mariadb\w*)\b.*\s-p\S|\bsshpass\b.*\s-p"
                                r"|\b(?:curl|wget|svn)\b.*\s(?:-u|--user)[\s=]*[^\s:]+:\S|://[^/\s:@]+:[^/\s@]+@"
                                r"|\blftp\b.*\s(?:-u|--user)[\s=]*[^\s:,]+[:,]\S"
-                               r"|\bsudo(?:\s+(?:-[A-Za-z]*[ugpCDhrtTUR]\s+[^-\s]\S*|-\S+))*?\s+(?:-[A-Za-z]*S[A-Za-z]*|--stdin)(?:\s|$)"
+                               r"|\bsudo(?:\s+(?:-[A-Za-z]*[ugpCDhrtTUR]\s+[^-\s]\S*|--(?:user|group|prompt|chdir|host|role|type|other-user"
+                               r"|close-from)\s+[^-\s]\S*|-\S+))*?\s+(?:-[A-Za-z]*S[A-Za-z]*|--stdin)(?:\s|$)"
                                r"|\bredis-cli\b.*\s(?:-a|--pass)[\s=]*\S"
                                r"|\b(?:docker|podman|nerdctl|buildah|skopeo|helm|oras)\b.*\blogin\b.*\s(?:-p|--password(?![-\w]))[\s=]*\S"
                                r"|\b(?:smbclient|rpcclient|smbget|smbcacls)\b.*\s(?:-U|--user)[\s=]*[^\s%]+%\S"
@@ -1036,7 +1037,10 @@ PASSWORD_ARGUMENT = re.compile(r"\b(?:mysql\w*|mariadb\w*)\b.*\s-p\S|\bsshpass\b
                                r"|\bnmcli\b.*\.(?:psk|password|wep-key\d)\s+\S|\b\w*freerdp\b.*\s[/-]p:\S"
                                r"|\b(?:rdesktop|mongosh|mongo)\b.*\s-p\s*\S|\bldap\w+\b.*\s-w\s*\S|\bsqlcmd\b.*\s-P\s*\S"
                                r"|\btransmission-remote\b.*\s(?:-n|--auth)[\s=]*[^\s:]+:\S|\b\w+_PWD?=\S"
-                               r"|\b(?:su|sudo|doas)\b.*<<<", re.S)  # re.S: a command over lines with \\
+                               r"|\b(?:su|sudo|doas|kinit|cryptsetup)\b.*<<<"
+                               r"|\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:kinit|cryptsetup)\b"  # a password piped in
+                               r"|\bbw\s+unlock\s+[^-\s]|\bbw\s+login\s+\S+\s+[^-\s]"
+                               r"|\bveracrypt\b.*\s(?:-p|--password)[\s=]*\S|\bsqlplus\s+[^/\s]+/[^\s@]", re.S)  # re.S: a command over lines with \\
 
 
 def looks_secret(command):
