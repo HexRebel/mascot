@@ -145,6 +145,28 @@ void protocol_init()
     common_requests[0x2F] = protocol_handler_plugin_restore_windows;
 }
 
+// An import or export runs in a thread of its own and may outlast its client (mascot import stopped with
+// Ctrl-C). Its creator and the client's objects are only touched under this lock; a creator of NULL is a
+// client that is gone, and the thread finishes without telling anyone
+static pthread_mutex_t transfers_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void* client_remove_object(struct protocol_client* client, uint32_t id);
+
+static void transfer_send(struct protocol_client* const* creator, ipc_packet_t* packet)
+{
+    pthread_mutex_lock(&transfers_mutex);
+    if (*creator) ipc_connector_send((*creator)->connector, packet);
+    else if (packet) ipc_free_packet(packet);
+    pthread_mutex_unlock(&transfers_mutex);
+}
+
+static void transfer_forget(struct protocol_client* const* creator, uint32_t id)
+{
+    pthread_mutex_lock(&transfers_mutex);
+    if (*creator) client_remove_object(*creator, id);
+    pthread_mutex_unlock(&transfers_mutex);
+}
+
 struct protocol_client* protocol_accept_connection(ipc_connector_t *connector)
 {
     if (!connector) return NULL;
@@ -162,6 +184,7 @@ void protocol_disconnect_client(struct protocol_client* client)
 {
     if (!client) return;
 
+    pthread_mutex_lock(&transfers_mutex);
     for (uint32_t i = 0; i < list_size(client->objects); i++) {
         struct protocol_object* object = list_get(client->objects, i);
         if (!object) continue;
@@ -181,30 +204,11 @@ void protocol_disconnect_client(struct protocol_client* client)
                 free(object->data);
                 break;
             case PROTOCOL_OBJECT_IMPORT:
-                if (pthread_mutex_timedlock(&((protocol_import_t*)object->data)->thread_mutex, &(struct timespec){.tv_sec = 5, .tv_nsec = 0})) {
-                    WARN("Cannot wait until import thread is unlocked! Killing import thread. Notice! Resources may be leaked.");
-                    pthread_kill(((protocol_import_t*)object->data)->thread, SIGKILL);
-                    close(((protocol_import_t*)object->data)->target_descriptor);
-                } else {
-                    pthread_mutex_unlock(&((protocol_import_t*)object->data)->thread_mutex);
-                }
-
-                pthread_mutex_destroy(&((protocol_import_t*)object->data)->thread_mutex);
-                free(object->data);
-
+                // Its thread goes on and frees it; it only no longer tells this client
+                ((protocol_import_t*)object->data)->creator = NULL;
                 break;
             case PROTOCOL_OBJECT_EXPORT:
-                if (pthread_mutex_timedlock(&((protocol_export_t*)object->data)->thread_mutex, &(struct timespec){.tv_sec = 5, .tv_nsec = 0})) {
-                    WARN("Cannot wait until export thread is unlocked! Killing export thread. Notice! Resources may be leaked.");
-                    pthread_kill(((protocol_export_t*)object->data)->thread, SIGKILL);
-                    close(((protocol_export_t*)object->data)->target_descriptor);
-                } else {
-                    pthread_mutex_unlock(&((protocol_export_t*)object->data)->thread_mutex);
-                }
-
-                pthread_mutex_destroy(&((protocol_import_t*)object->data)->thread_mutex);
-                free(object->data);
-
+                ((protocol_export_t*)object->data)->creator = NULL;
                 break;
             default:
                 break;
@@ -215,6 +219,7 @@ void protocol_disconnect_client(struct protocol_client* client)
 
     list_free(client->objects);
     free(client);
+    pthread_mutex_unlock(&transfers_mutex);
 }
 
 void protocol_server_broadcast_packet(ipc_packet_t* packet) {
@@ -555,23 +560,36 @@ int32_t protocol_client_push_object(struct protocol_client* client, uint32_t id,
     protocol_object->type = type;
     protocol_object->data = object;
 
+    pthread_mutex_lock(&transfers_mutex);
     list_add(client->objects, protocol_object);
+    pthread_mutex_unlock(&transfers_mutex);
     return 0;
 }
 
 void* protocol_client_find_object(struct protocol_client* client, uint32_t id) {
     if (!client) return NULL;
 
+    void* data = NULL;
+    pthread_mutex_lock(&transfers_mutex);
     for (uint32_t i = 0; i < list_size(client->objects); i++) {
         struct protocol_object* protocol_object = list_get(client->objects, i);
         if (protocol_object && protocol_object->id == id) {
-            return protocol_object->data;
+            data = protocol_object->data;
+            break;
         }
     }
-    return NULL;
+    pthread_mutex_unlock(&transfers_mutex);
+    return data;
 }
 
 void* protocol_client_remove_object(struct protocol_client* client, uint32_t id) {
+    pthread_mutex_lock(&transfers_mutex);
+    void* data = client_remove_object(client, id);
+    pthread_mutex_unlock(&transfers_mutex);
+    return data;
+}
+
+static void* client_remove_object(struct protocol_client* client, uint32_t id) {
     if (!client) return NULL;
 
     for (uint32_t i = 0; i < list_size(client->objects); i++) {
@@ -694,12 +712,11 @@ protocol_popup_t* protocol_server_click_accept(struct protocol_client* client, u
 
 void* protocol_import_thread(void* arg) {
     protocol_import_t* import = (protocol_import_t*)arg;
-    struct protocol_client* client = import->creator;
 
     pthread_mutex_lock(&import->thread_mutex);
 
     ipc_packet_t* started = protocol_builder_import_started(import);
-    ipc_connector_send(client->connector, started);
+    transfer_send(&import->creator, started);
 
     lseek(import->target_descriptor, 0, SEEK_SET);
 
@@ -708,8 +725,8 @@ void* protocol_import_thread(void* arg) {
     int32_t count = read(import->target_descriptor, wlshm_header, sizeof(wlshm_header));
     if (count != 512) {
         ipc_packet_t* error = protocol_builder_import_failed(import, 1);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -719,8 +736,8 @@ void* protocol_import_thread(void* arg) {
 
     if (wlshm_header[0] != 'W' || wlshm_header[1] != 'L' || wlshm_header[2] != 'P' || wlshm_header[3] != 'K') {
         ipc_packet_t* error = protocol_builder_import_failed(import, 1);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -735,8 +752,8 @@ void* protocol_import_thread(void* arg) {
     // The pack is someone else's file: its name becomes a directory in the store, so it must be one
     if (!wlshm_read_header(wlshm_header, mascot_name, mascot_version)) {
         ipc_packet_t* error = protocol_builder_import_failed(import, 1);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -758,8 +775,8 @@ void* protocol_import_thread(void* arg) {
     mascot_prototype_version = version_to_i64(mascot_version);
     if (mascot_prototype_version < 0) {
         ipc_packet_t* error = protocol_builder_import_failed(import, 2);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -769,12 +786,7 @@ void* protocol_import_thread(void* arg) {
 
     if (mascot_prototype_version > current_version || mascot_prototype_version < minimum_version) {
         ipc_packet_t* error = protocol_builder_import_failed(import, 5);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
-        pthread_mutex_unlock(&import->thread_mutex);
-        pthread_mutex_destroy(&import->thread_mutex);
-        close(import->target_descriptor);
-        free(import);
+        transfer_send(&import->creator, error);
 
         const char* notice_args[] = {
             mascot_version,
@@ -783,7 +795,12 @@ void* protocol_import_thread(void* arg) {
         };
 
         ipc_packet_t* warning = protocol_builder_notice(NOTICE_SEVERITY_WARNING, "import.error.bad_version", notice_args, 3, true);
-        ipc_connector_send(client->connector, warning);
+        transfer_send(&import->creator, warning);
+        transfer_forget(&import->creator, import->id);
+        pthread_mutex_unlock(&import->thread_mutex);
+        pthread_mutex_destroy(&import->thread_mutex);
+        close(import->target_descriptor);
+        free(import);
         return NULL;
     }
 
@@ -794,8 +811,8 @@ void* protocol_import_thread(void* arg) {
     int32_t r = archive_read_open_fd(archive, import->target_descriptor, 10240);
     if (r != ARCHIVE_OK) {
         ipc_packet_t* error = protocol_builder_import_failed(import, 4);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -813,8 +830,8 @@ void* protocol_import_thread(void* arg) {
         if (!(import->flags & 1)) { // Replace flag
             mascot_prototype_unlink(old_prototype);
             ipc_packet_t* error = protocol_builder_import_failed(import, 3);
-            ipc_connector_send(client->connector, error);
-            protocol_client_remove_object(client, import->id);
+            transfer_send(&import->creator, error);
+            transfer_forget(&import->creator, import->id);
             pthread_mutex_unlock(&import->thread_mutex);
             pthread_mutex_destroy(&import->thread_mutex);
             close(import->target_descriptor);
@@ -835,8 +852,8 @@ void* protocol_import_thread(void* arg) {
             if (retries_count > 4096) {
                 mascot_prototype_unlink(old_prototype);
                 ipc_packet_t* error = protocol_builder_import_failed(import, 3);
-                ipc_connector_send(client->connector, error);
-                protocol_client_remove_object(client, import->id);
+                transfer_send(&import->creator, error);
+                transfer_forget(&import->creator, import->id);
                 pthread_mutex_unlock(&import->thread_mutex);
                 pthread_mutex_destroy(&import->thread_mutex);
                 close(import->target_descriptor);
@@ -851,8 +868,8 @@ void* protocol_import_thread(void* arg) {
     if (io_mkdtempat(mascot_prototype_store_get_fd(server_state->prototypes), tmpdirname) == -1) {
         mascot_prototype_unlink(old_prototype);
         ipc_packet_t* error = protocol_builder_import_failed(import, 0);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -865,8 +882,8 @@ void* protocol_import_thread(void* arg) {
     if (newfd == -1) {
         mascot_prototype_unlink(old_prototype);
         ipc_packet_t* error = protocol_builder_import_failed(import, 0);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -926,8 +943,8 @@ void* protocol_import_thread(void* arg) {
         archive_read_free(archive);
         // 8: unpacked, but its names differ (or manifest.json has more than one); 9: no manifest.json is read
         ipc_packet_t* error = protocol_builder_import_failed(import, !unpacked ? 1 : manifest == WLSHM_MANIFEST_OTHER ? 8 : 9);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -952,8 +969,8 @@ void* protocol_import_thread(void* arg) {
 
     if (moved != 0) {
         ipc_packet_t* error = protocol_builder_import_failed(import, 0);
-        ipc_connector_send(client->connector, error);
-        protocol_client_remove_object(client, import->id);
+        transfer_send(&import->creator, error);
+        transfer_forget(&import->creator, import->id);
         pthread_mutex_unlock(&import->thread_mutex);
         pthread_mutex_destroy(&import->thread_mutex);
         close(import->target_descriptor);
@@ -962,9 +979,9 @@ void* protocol_import_thread(void* arg) {
     }
 
     ipc_packet_t* success = protocol_builder_import_finished(import, dirname);
-    ipc_connector_send(client->connector, success);
+    transfer_send(&import->creator, success);
 
-    protocol_client_remove_object(client, import->id);
+    transfer_forget(&import->creator, import->id);
     pthread_mutex_unlock(&import->thread_mutex);
     pthread_mutex_destroy(&import->thread_mutex);
     close(import->target_descriptor);
@@ -1128,7 +1145,6 @@ static void _add_file_to_archive(struct archive *a, int atfd, const char *rel_pa
 void* protocol_export_thread(void* arg)
 {
     protocol_export_t* export = arg;
-    struct protocol_client* client = export->creator;
     struct mascot_prototype* prototype = export->prototype;
 
     pthread_mutex_lock(&export->thread_mutex);
@@ -1167,9 +1183,9 @@ void* protocol_export_thread(void* arg)
     mascot_prototype_unlink(prototype);
 
     ipc_packet_t* success = protocol_builder_export_finished(export);
-    ipc_connector_send(client->connector, success);
+    transfer_send(&export->creator, success);
 
-    protocol_client_remove_object(client, export->id);
+    transfer_forget(&export->creator, export->id);
 
     pthread_mutex_unlock(&export->thread_mutex);
     pthread_mutex_destroy(&export->thread_mutex);

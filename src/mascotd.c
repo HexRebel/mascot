@@ -983,8 +983,9 @@ int main(int argc, const char** argv)
             } else if (sd->type == SOCKET_TYPE_CLIENT) {
                 if (events[i].events & EPOLLHUP) {
                     list_remove(server_state.clients, list_find(server_state.clients, sd->client));
-                    ipc_destroy_connector(sd->ipc_connector);
+                    // The client first: an import's thread may still send to it
                     protocol_disconnect_client(sd->client);
+                    ipc_destroy_connector(sd->ipc_connector);
                     close(sd->fd);
                     free(sd);
                     fds_count--;
@@ -1006,8 +1007,9 @@ int main(int argc, const char** argv)
                 protocol_error handler_status = protocol_client_handle_packet(sd->client, packet);
                 if (handler_status == PROTOCOL_CLIENT_VIOLATION) {
                     list_remove(server_state.clients, list_find(server_state.clients, sd->client));
-                    ipc_destroy_connector(sd->ipc_connector);
+                    // The client first: an import's thread may still send to it
                     protocol_disconnect_client(sd->client);
+                    ipc_destroy_connector(sd->ipc_connector);
                     close(sd->fd);
                     free(sd);
                     fds_count--;

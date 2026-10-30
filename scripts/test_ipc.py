@@ -6,6 +6,7 @@ Run: python3 -I scripts/test_ipc.py
 """
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -116,6 +117,88 @@ class Receive(unittest.TestCase):
                                  env={"ASAN_OPTIONS": "detect_leaks=0", "PATH": "/usr/bin:/bin"})
             self.assertEqual((out.returncode, out.stdout.strip().splitlines()[-1:]), (0, ["ok"]),
                              out.stdout + out.stderr[-1500:])
+
+
+IMPORT_DRIVER = r"""
+#include <fcntl.h>
+#include <semaphore.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include "protocol/connector.h"
+#include "protocol/server.h"
+#include "protocol/wlshm.h"
+
+static sem_t reading, go_on;
+
+// The import thread reads the pack's header here: it waits, holding the import, while its client goes away
+bool wlshm_read_header(const uint8_t header[WLSHM_HEADER_SIZE], char name[256], char version[128])
+{
+    (void)header; (void)name; (void)version;
+    sem_post(&reading);
+    sem_wait(&go_on);
+    return false;
+}
+
+int main(int argc, char** argv)
+{
+    (void)argc;
+    sem_init(&reading, 0, 0);
+    sem_init(&go_on, 0, 0);
+    int sv[2];
+    socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sv);
+    int epfd = epoll_create1(0);
+    ipc_connector_t* connector = ipc_initialize_connector(sv[0], epfd, NULL);
+    struct protocol_client* client = protocol_accept_connection(connector);
+    int pack = open(argv[1], O_RDONLY);
+    if (!protocol_server_import(client, pack, (uint32_t)PROTOCOL_OBJECT_IMPORT << 24 | 1, 0)) return 2;
+    close(pack);
+    sem_wait(&reading);
+    // As mascotd does when the client hangs up (mascot import stopped with Ctrl-C)
+    protocol_disconnect_client(client);
+    ipc_destroy_connector(connector);
+    sem_post(&go_on);
+    usleep(300000);  // the thread finishes and frees the import
+    puts("still running");
+    return 0;
+}
+"""
+
+
+class Transfers(unittest.TestCase):
+    def test_import_outlives_its_client(self):
+        # mascot import stopped with Ctrl-C while mascotd unpacks: mascotd waited for the import with a deadline
+        # of 1970 (none), then sent SIGKILL to its thread, which ends the whole process (all mascots gone)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(ROOT, "src")
+            driver, stubs, binary = (os.path.join(tmp, n) for n in ("driver.c", "stubs.c", "driver"))
+            with open(driver, "w") as f:
+                f.write(IMPORT_DRIVER)
+            with open(os.path.join(tmp, "pack.wlshm"), "wb") as f:
+                f.write(b"WLPK" + bytes(508))
+            open(stubs, "w").close()
+            # Only the import and the protocol run; anything else the daemon would call is a stub that aborts
+            build = lambda: subprocess.run(["cc", "-std=gnu11", "-g", "-pthread", "-fsanitize=address,undefined",
+                                            "-I", src, "-I", os.path.join(ROOT, "build"), driver, stubs,
+                                            *(os.path.join(src, f) for f in ("protocol/server.c", "protocol/connector.c",
+                                                                             "protocol/messages.c", "list.c")),
+                                            "-o", binary], capture_output=True, text=True)
+            missing = sorted(set(re.findall(r"undefined reference to `(\w+)'", build().stderr)) - {"__clog", "__warn"})
+            with open(stubs, "w") as f:
+                f.write("#include <stdlib.h>\n"
+                        "void __clog(const char* c, const char* t, const char* f, int l, const char* x, ...) "
+                        "{ (void)c; (void)t; (void)f; (void)l; (void)x; }\n"
+                        "void __warn(const char* f, int l, const char* x, ...) { (void)f; (void)l; (void)x; }\n"
+                        + "".join(f"void {name}(void) {{ abort(); }}\n" for name in missing))
+            built = build()
+            self.assertEqual(built.returncode, 0, built.stderr)
+            out = subprocess.run([binary, os.path.join(tmp, "pack.wlshm")], capture_output=True, text=True, timeout=20,
+                                 env={"ASAN_OPTIONS": "detect_leaks=1", "PATH": "/usr/bin:/bin"})
+            self.assertEqual((out.returncode, out.stdout), (0, "still running\n"), out.stderr)
 
 
 class Client(unittest.TestCase):
