@@ -385,10 +385,14 @@ def prototype_find(name: str) -> Prototype | None:
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
+# Letters that do not show: Hangul fillers and Khmer's inherent vowels (mascotd refuses them too)
+INVISIBLE_LETTERS = "\u115f\u1160\u17b4\u17b5\u3164\uffa0"
+
+
 def display_name_of(text: str) -> str:
     """text as a name the daemon takes (it is the mascot's name in the bubble's prompt): letters, digits, spaces
     and - ' . _ only, at most 48 bytes; "" if nothing is left"""
-    kept = "".join(c if c.isalnum() or c in " -'._" else " " for c in text)
+    kept = "".join(c if (c.isalnum() and c not in INVISIBLE_LETTERS) or c in " -'._" else " " for c in text)
     kept = " ".join(kept.split())
     while len(kept.encode("utf-8")) > 48:
         kept = kept[:-1].rstrip()

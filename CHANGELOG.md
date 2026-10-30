@@ -62,7 +62,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   marks); otherwise the end of the pack's name is used, or "Mascot", never the whole name. A pack could write
   instructions to the model there. Converting a Shimeji makes its name fit and says so. In `CHAT_ROLES` a name
   without a dot means `Shimeji.<name>` and one with a dot the full name, so no pack calling itself Robo (or named
-  `Robo` or `Evil.Robo`) gets the role you gave Robo.
+  `Robo` or `Evil.Robo`) gets the role you gave Robo; written with the name's own letter case, so neither does a
+  `Shimeji.ROBO` beside it. A display name has no characters that do not show either (soft hyphen, Hangul fillers,
+  variation selectors and the like).
 - Security: the bubble's memory and private sessions count a model as local the same way the tools do (where aichat
   sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
   with the memory of what the tools had read, and could go on with a private session. It reads the config

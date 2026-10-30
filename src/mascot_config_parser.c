@@ -2411,6 +2411,12 @@ static bool display_name_safe(const char* name, size_t size)
             || (point >= 0xD800 && point <= 0xDFFF)) return false;
         if (point < 0xA0 || (point >= 0x2000 && point <= 0x206F) || point == 0xFEFF
             || (point >= 0xFFF0 && point <= 0xFFFF) || point >= 0xE0000) return false;
+        // Characters that do not show (some of them letters): soft hyphen, combining grapheme joiner, Arabic
+        // letter mark, Hangul fillers, Khmer's inherent vowels, Mongolian separators, variation selectors
+        if (point == 0xAD || point == 0x34F || point == 0x61C || point == 0x115F || point == 0x1160
+            || point == 0x17B4 || point == 0x17B5 || (point >= 0x180B && point <= 0x180F) || point == 0x3164
+            || (point >= 0xFE00 && point <= 0xFE0F) || point == 0xFFA0 || (point >= 0x1D173 && point <= 0x1D17A))
+            return false;
         i += length;
     }
     return true;

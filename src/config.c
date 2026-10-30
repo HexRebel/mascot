@@ -923,18 +923,20 @@ const char* config_get_chat_language()
 }
 
 // CHAT_ROLES is "<mascot>=<role>;<mascot>=<role>...", where <mascot> is a
-// prototype's display or internal name (any case). An empty role means none,
-// not even CHAT_ROLE (the bubble then uses Mascot's prompt). Falls back to CHAT_ROLE
+// prototype's full name or a Shimeji's short name (see chat_role_key_names). An
+// empty role means none, not even CHAT_ROLE (the bubble then uses Mascot's
+// prompt). Falls back to CHAT_ROLE
 // Whether a CHAT_ROLES key names this mascot: a key with a dot is the full
 // name ("Shimeji.Robo"), one without is the short name of a Shimeji ("Robo"
 // for Shimeji.Robo). Not by its display name, which a pack chooses, nor by a
 // name "Robo" or "Evil.Robo": names are unique, and Shimeji.Robo can only be
-// replaced with -f, so no pack from the net gets the role the user gave Robo
+// replaced with -f, so no pack from the net gets the role the user gave Robo.
+// Letter case as the name has it: the store keeps Shimeji.ROBO apart from Robo
 static bool chat_role_key_names(const char* key, const char* name)
 {
     if (!name) return false;
-    if (strchr(key, '.')) return !strcasecmp(key, name);
-    return !strncasecmp(name, "Shimeji.", 8) && !strcasecmp(name + 8, key);
+    if (strchr(key, '.')) return !strcmp(key, name);
+    return !strncmp(name, "Shimeji.", 8) && !strcmp(name + 8, key);
 }
 
 const char* config_get_chat_role_for(const char* name, char* dest, size_t size)
