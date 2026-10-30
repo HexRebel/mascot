@@ -59,6 +59,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   sends it, and whether Ollama runs it here), not by its name: a copy of a cloud model with a local name went on
   with the memory of what the tools had read, and could go on with a private session. It reads the config
   `aichat --info` names, so one `CHAT_COMMAND` gives aichat counts, and Ollama not yet running is not remembered.
+- Security: a client named `ollama` the tools cannot read (`- {name: ollama, …}`, `'name': "ollama"`) no longer
+  lets `OLLAMA_API_BASE` decide where the model is; quoted keys are read. A proxy not on this computer (the client's
+  `extra: proxy:`, `HTTPS_PROXY`, `ALL_PROXY`, `HTTP_PROXY`) makes the model not local: the proxy gets what is sent.
 - Security: a pack's JSON files nest at most 64 levels, give no key twice in an object and have no NUL in a key or
   text, and their words are compared whole (`"t"` was `"type"`, `""` was `"stay"`). A million `[` ran the parser
   out of stack, a second `"definitions"` freed behaviors twice, and 70 `"type"` keys in one piece of an action

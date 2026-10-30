@@ -142,6 +142,35 @@ class Files(unittest.TestCase):
             self.aichat_config(odd)
             self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg), odd)
 
+    def test_unread_ollama_client_is_not_local(self):
+        # A client named ollama the tools cannot read (quoted key, a {…} list item) is not passed over for
+        # OLLAMA_API_BASE: aichat sends the model to that client. A proxy that is not on this computer gets it too
+        self.write("notes.txt", "secret plans\n")
+        base = self.fake_ollama({})
+        cfg = os.path.join(self.home, "aichat")
+        local = {"OLLAMA_API_BASE": base + "/v1", "AICHAT_CONFIG_DIR": cfg}
+        os.makedirs(cfg, exist_ok=True)
+        for clients in ('  - type: openai-compatible\n    "name": ollama\n    "api_base": http://192.168.1.20:11434/v1\n',
+                        "  - {type: openai-compatible, name: ollama, api_base: 'http://192.168.1.20:11434/v1'}\n",
+                        "  - type: openai-compatible\n    'name': \"ollama\"\n    api_base: http://192.168.1.20:11434/v1\n"):
+            with open(os.path.join(cfg, "config.yaml"), "w") as f:
+                f.write("model: ollama:gemma4:12b\nclients:\n" + clients)
+            self.assertNotIn("secret plans", self.read_as("gemma4:12b", **local), clients)
+        # Quoted keys are read
+        with open(os.path.join(cfg, "config.yaml"), "w") as f:
+            f.write(f'model: ollama:gemma4:12b\nclients:\n  - "type": openai-compatible\n    "name": ollama\n'
+                    f'    "api_base": {base}/v1\n')
+        self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
+        self.aichat_config(base + "/v1")
+        for proxy in ({"HTTPS_PROXY": "http://proxy.example.com:3128"}, {"all_proxy": "socks5://10.0.0.1:1080"},
+                      {"http_proxy": "http://proxy.example.com:3128"}):
+            self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg, **proxy), proxy)
+        self.assertIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg,
+                                                   HTTPS_PROXY="http://127.0.0.1:8118"))
+        with open(os.path.join(cfg, "config.yaml"), "a") as f:
+            f.write("    extra:\n      proxy: socks5://10.0.0.1:1080\n")
+        self.assertNotIn("secret plans", self.read_as("gemma4:12b", AICHAT_CONFIG_DIR=cfg))
+
     def test_flow_yaml_is_explained(self):
         # aichat reads clients: [{...}] too, but the tools do not: they say so instead of only refusing
         self.write("notes.txt", "secret plans\n")

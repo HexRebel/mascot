@@ -251,14 +251,24 @@ def aichat_ollama_base():
             item, keys = indent, indent + 2
             clients.append({})
             text, indent = text[2:].lstrip(), keys
-        if clients and indent == keys and (m := re.fullmatch(r"(name|api_base):\s*(.*)", text)):
-            clients[-1].setdefault(m[1], yaml_scalar(m[2]))
+        if clients and indent == keys and (m := re.fullmatch(r"""(["']?)(name|api_base)\1:\s*(.*)""", text)):
+            clients[-1].setdefault(m[2], yaml_scalar(m[3]))
+        elif clients and indent > keys - 2 and (m := re.fullmatch(r"""(["']?)proxy\1:\s*(.*)""", text)):
+            clients[-1].setdefault("proxy", yaml_scalar(m[2]))  # extra: proxy:
     client = next((c for c in clients if c.get("name") == "ollama"), {})
     global NOT_LOCAL_WHY
-    if not client and any(re.match(r"clients:\s*\[", line) for line in lines):
-        NOT_LOCAL_WHY = (f"{path} lists its clients on one line (clients: [...]); Mascot's tools read only a "
-                         "client named ollama written one setting a line, with its api_base, so they cannot tell "
-                         "the model is local")
+    if not client and any(re.search(r"""["']?name["']?\s*:\s*["']?ollama["']?\s*[,}\n]""", line + "\n") for line in lines):
+        # aichat sends the model to that client, not to OLLAMA_API_BASE
+        NOT_LOCAL_WHY = (f"{path} has a client named ollama the tools cannot read (clients: [...] or - {{...}}); "
+                         "they read one written one setting a line, with its api_base")
+        return None
+    # A proxy (the client's own, else aichat's HTTPS_PROXY or ALL_PROXY) gets what is sent; "-" is none
+    proxies = [client.get("proxy")] + [os.environ.get(k) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY",
+                                                                   "all_proxy", "HTTP_PROXY", "http_proxy")]
+    for proxy in proxies:
+        if proxy and proxy.strip() not in ("", "-") and not loopback(proxy.strip()):
+            NOT_LOCAL_WHY = f"aichat would send it through the proxy {proxy.strip()}, which is not on this computer"
+            return None
     return client.get("api_base") or os.environ.get("OLLAMA_API_BASE") or None
 
 
