@@ -185,6 +185,7 @@ class Network(unittest.TestCase):
             self.assertIn('startsWith("openrouter:")', line, line.strip())
 
 
+
 class Poses(unittest.TestCase):
     def test_a_lookup_before_the_answer_keeps_the_compliment(self):
         # "Tusind tak ❤" as the first message: the lookups before the answer (aichat --info, a local model's context
@@ -201,6 +202,21 @@ class Poses(unittest.TestCase):
             if "c.loved = false" in line:
                 guard = (line + lines[i - 1]).replace(" ", "")
                 self.assertIn("!reply&&kind", guard, line.strip())
+
+
+    def test_every_weather_reaches_the_mascot(self):
+        # The weather tool says mascot-<kind> on stderr (see weather_mood() in tools/mascot-tools); the bubble
+        # sends the kind when the answer starts and keeps it a few seconds; the daemon plays the behavior
+        with open(os.path.join(ROOT, "ui", "Bubble.qml")) as f:
+            qml = f.read()
+        with open(os.path.join(ROOT, "src", "mascot.c")) as f:
+            daemon = f.read()
+        lingers = qml[qml.index("function lingers("):]
+        lingers = lingers[:lingers.index("\n    }")]
+        for kind, behavior in (("rain", "Rain"), ("snow", "Snow"), ("cold", "Cold"), ("warm", "Warm")):
+            self.assertIn(f'"mascot-{kind}"', qml, kind)
+            self.assertIn(f'"{kind}"', lingers, kind)
+            self.assertIn(f'{{"{kind}", "{behavior}"}}', daemon, kind)
 
 
 if __name__ == "__main__":

@@ -129,10 +129,32 @@ def get_current_weather(args):
             weather = response.read(4096).decode("utf-8", "replace").strip()
     except OSError as e:
         raise ToolError(f"could not get the weather: {e}")
-    feels = re.search(r"feels like ([+-]?\d+)°C", weather)
-    if feels and int(feels.group(1)) <= 0:
-        print("mascot-cold", file=sys.stderr)  # the mascot wraps itself in a blanket
+    mood = weather_mood(weather)
+    if mood:
+        print(f"mascot-{mood}", file=sys.stderr)  # the mascot shows it: an umbrella, a scarf...
     return weather
+
+
+def weather_mood(weather):
+    """What the mascot shows of wttr.in's line (see the format above): "snow" (snow or sleet), "rain" (it rains
+    or drizzles here, or any rain fell), "cold" (it feels like 0 °C or colder), "warm" (25 °C or warmer), the
+    first that is so; None in between. "Patchy rain nearby" is not here"""
+    sky = re.match(r"[^:]*:\s*([^,]*),", weather)
+    sky = sky.group(1).lower() if sky else ""
+    here = "nearby" not in sky and "possible" not in sky
+    feels = re.search(r"feels like ([+-]?\d+)°C", weather)
+    feels = int(feels.group(1)) if feels else None
+    fell = re.search(r"rain ([\d.]+)mm", weather)
+    fell = float(fell.group(1)) if fell else 0.0
+    if here and re.search(r"snow|sleet|blizzard|ice pellets", sky):
+        return "snow"
+    if fell > 0 or (here and re.search(r"rain|drizzle|shower|thunder", sky)):
+        return "rain"
+    if feels is not None and feels <= 0:
+        return "cold"
+    if feels is not None and feels >= 25:
+        return "warm"
+    return None
 
 
 def weather_once():

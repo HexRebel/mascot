@@ -250,6 +250,32 @@ class Files(unittest.TestCase):
             self.assertNotIn("could not get the weather", out, data)
             self.assertIn("a place name", out, data)
 
+    def test_weather_says_how_it_feels(self):
+        # The mascot shows the weather it is: wet (an umbrella), snow, freezing (a scarf), warm (sunglasses). One
+        # kind, the first of snow, rain, cold, warm; none for weather in between
+        mood = tools_module().weather_mood
+        line = lambda c, t, f, mm: f"Here: {c}, {t}°C (feels like {f}°C), wind ↓11km/h, humidity 80%, rain {mm}mm"
+        cases = [
+            (line("Light rain", "+7", "+4", "0.4"), "rain"),
+            (line("Overcast", "+9", "+7", "1.2"), "rain"),  # wet, though the sky's word is not rain
+            (line("Light drizzle", "+11", "+10", "0.0"), "rain"),
+            (line("Moderate or heavy rain shower", "+14", "+13", "0.0"), "rain"),
+            (line("Thundery outbreaks in nearby", "+20", "+21", "0.0"), None),  # nearby: not here
+            (line("Patchy rain nearby", "+12", "+11", "0.0"), None),
+            (line("Light snow", "-2", "-6", "0.1"), "snow"),  # snow, not rain or cold
+            (line("Light sleet", "+1", "-3", "0.3"), "snow"),
+            (line("Sunny", "-3", "-7", "0.0"), "cold"),
+            (line("Clear", "+2", "0", "0.0"), "cold"),
+            (line("Sunny", "+29", "+31", "0.0"), "warm"),
+            (line("Sunny", "+24", "+25", "0.0"), "warm"),
+            (line("Light rain", "+26", "+28", "0.2"), "rain"),  # wet before warm
+            (line("Partly cloudy", "+15", "+14", "0.0"), None),
+            (line("Sunny", "+24", "+24", "0.0"), None),
+            ("Unknown location; please try ~59.9,10.7", None),
+        ]
+        for text, want in cases:
+            self.assertEqual(mood(text), want, text)
+
     def test_weather_once_an_answer_with_local_tools(self):
         # With the local tools a model can read a file: the weather must not carry it away 64 letters at a time
         runtime = os.path.join(self.home, "run")

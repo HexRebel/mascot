@@ -53,7 +53,7 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   your system... When the system tools found nothing to go on, it plays `Unsure` while it answers
   (Robo's "?"); when it took a todo off the list (or after `.todo done`), `Done` (Robo laughs); when the answer
   failed, `Failed` (Robo's "ERROR" and a tear); when the CPU runs on performance, `FullPower` (Robo's "100% FULL
-  POWER"); when the weather feels like 0 °C or colder, `Cold` (Robo wraps himself in a blanket); when your message is nothing but thanks or a compliment ("thanks!", "well done", "tusind tak ❤"),
+  POWER"); when the weather feels like 0 °C or colder, `Cold` (Robo wraps himself in a blanket); when it rains or drizzles there, `Rain`; snows or sleets, `Snow`; feels like 25 °C or warmer, `Warm` (the first of these that is so; without one, the mascot shows its `Weather`); when your message is nothing but thanks or a compliment ("thanks!", "well done", "tusind tak ❤"),
   `Love` (Robo blushes). One word that is not thanks or praise and it does not: "great, you deleted it all". A
   reminder that is due plays `Alarm` (Robo's yellow "!").
 - All of these wait until the mascot is on the floor: one holding on to a wall (the screen's side or a
