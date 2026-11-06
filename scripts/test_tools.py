@@ -630,6 +630,31 @@ class Files(unittest.TestCase):
         self.assertNotIn("abc", out)
         self.assertNotIn("webpw1", out)
 
+    def test_auth_scheme_in_a_log_message_takes_its_credential(self):
+        # A message's value is one word, but after an auth scheme (Basic, Bearer, Token, Negotiate) the word is the
+        # scheme, and the credential after it was shown: AUTH_HEADER=[hidden] dXNlcjpwYXNz
+        head = "2026-11-06T10:00:00+0100 pc app[1]: "
+        path = self.fake_journal([head + "AUTH_HEADER=Basic dXNlcjpwYXNzd29yZA== sent", head + "TOKEN=bearer abcdefgh1",
+                                  head + "api_token: Token tok12345 for bob", head + "auth=Negotiate YIIneg0123 done",
+                                  head + "token=abc rejected for user bob"])
+        out = self.tool("read_log", {}, PATH=path)
+        for secret in ("dXNlcjpwYXNz", "abcdefgh1", "tok12345", "YIIneg0123", "abc "):
+            self.assertNotIn(secret, out)
+        for shown in ("[hidden] sent", "[hidden] for bob", "[hidden] done", "token=[hidden] rejected for user bob"):
+            self.assertIn(shown, out)
+
+    def test_deep_arguments_give_an_error_not_a_traceback(self):
+        # JSON nested deeper than Python recurses (unfit_text, json.loads) gave a RecursionError traceback
+        for depth in (1500, 20000):  # (one argument is at most 128 KiB)
+            # a list in lists, and an object in objects' values (unfit_text looks into both)
+            for args in ("[" * depth + "]" * depth, '{"a":' * depth + '"x"' + "}" * depth):
+                out = subprocess.run([os.path.join(ROOT, "tools", "bin", "add_todo"), args],
+                                     env={"HOME": self.home, "PATH": "/usr/bin:/bin", "MASCOT_TOOLS_ALLOWED": "add_todo",
+                                          "MASCOT_TODO_FILE": os.path.join(self.home, "todo.md")},
+                                     capture_output=True, text=True, timeout=30)
+                self.assertNotIn("Traceback", out.stdout + out.stderr, (depth, args[:2]))
+                self.assertIn("error:", out.stdout, (depth, args[:2]))
+
     def test_more_shell_histories_are_private(self):
         # Even with all of home's dotfiles allowed: zsh's other names and XDG places, fish's, and other programs'
         histories = [".zhistory", ".zsh_history", ".bash_history", ".python_history", ".psql_history", ".mysql_history",

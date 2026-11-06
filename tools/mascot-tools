@@ -1326,6 +1326,9 @@ AUTHORIZATION = re.compile(r"((?<![\w-])(?:(?:proxy-)?authorization|(?:set-)?coo
 SECRET_OPTION = re.compile(r"(--(?:password|passwd|pass|pwd|token|secret|api[-_]?key)\s+)([^\s-]\S*)", re.I)
 NETRC_PASSWORD = re.compile(r"^(?=.*\b(?:machine|login|default)\s)(.*?\b(?:password|passwd)\s+)(\S+)", re.I)
 BEARER = re.compile(r"\b(bearer\s+)([^\s=:]{8,})", re.I)
+# HTTP auth schemes a secret's value may start with: then the secret is the word after it
+AUTH_SCHEMES = {"basic", "bearer", "token", "negotiate"}
+AUTH_CREDENTIAL = re.compile(r"[ \t]+\S+")
 # A password given to a command (as last_commands' PASSWORD_ARGUMENT finds it): after the command's name,
 # the option's value. mysql -pPW, sshpass -p PW, curl -u user:PW, redis-cli -a PW
 COMMAND_PASSWORDS = [(re.compile(r"\b(?:mysql\w*|mariadb\w*)\b"), re.compile(r"(\s-p)(\S+)")),
@@ -1427,6 +1430,10 @@ def masked_line(line, setting=True, opened=None):
         at = end
         if not secret_value(name, line[m.end():end]):
             continue  # (a path: what it took is not searched again)
+        # An auth scheme is not the secret, the word after it is (AUTH_HEADER=Basic dXNlcjpw…)
+        credential = AUTH_CREDENTIAL.match(line, end) if line[m.end():end].lower() in AUTH_SCHEMES else None
+        if credential:
+            end = at = credential.end()
         if setting and n < 2 and line[m.end()] not in "\"'" and SETTING_START.fullmatch(line, 0, m.start()):
             end = len(line.rstrip())  # a setting's own line: all of it
             at = len(line)
@@ -2269,10 +2276,12 @@ def main():
                 os.environ["MASCOT_TOOLS_LOCAL"] = "0"
         try:
             args = json.loads(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].strip() else {}
+            # JSON can carry a NUL ("\u0000") or half a UTF-16 pair ("\ud800"), which no file name or text file can
+            unfit = unfit_text(args)
         except json.JSONDecodeError:
             raise ToolError("invalid JSON arguments")
-        # JSON can carry a NUL ("\u0000") or half a UTF-16 pair ("\ud800"), which no file name or text file can
-        unfit = unfit_text(args)
+        except RecursionError:  # [[[[… deeper than Python goes; no tool takes more than a list in an object
+            raise ToolError("the arguments are nested too deep")
         if unfit:
             raise ToolError(f"the arguments have a character no file name or text can hold ({unfit})")
         # What it is doing, for the bubble to show while it waits
