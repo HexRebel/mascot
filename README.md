@@ -24,10 +24,11 @@ keeps thinking, then shows *NEW* until you click it to read the answer.
 Mascot needs a compositor with **wlr-layer-shell** and **wl_subcompositor**, so GNOME (Mutter) and
 Gamescope will not work.
 
-- **Hyprland** is what Mascot is developed and tested on (0.56). It works, with two known quirks:
-  a mascot that overlaps the right or bottom edge of the screen is squashed instead of clipped
-  ([hyprwm/Hyprland#10515](https://github.com/hyprwm/Hyprland/issues/10515)), and Mascot works around
-  a Hyprland crash when the bubble closes while the pointer is over a mascot.
+- **Hyprland** is what Mascot is developed and tested on (0.56, 0.57). It works; Mascot works around
+  a Hyprland crash when the bubble closes while the pointer is over a mascot. A mascot pushed past
+  an edge of the screen is squeezed against it (by Mascot, on every side: Hyprland squashed one past
+  the right or bottom edge by itself, [hyprwm/Hyprland#10515](https://github.com/hyprwm/Hyprland/issues/10515),
+  and the pointer then missed it).
 - **KDE Plasma, Sway and other wlroots compositors** are supported by upstream but have not been
   tested with Mascot's changes.
 

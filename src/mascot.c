@@ -48,7 +48,11 @@ static void mascot_init_(struct mascot *mascot,
 void mascot_build_behavior_pool(struct mascot *mascot,
                                 const struct mascot_behavior *behavior,
                                 bool add);
-static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot);
+static const struct mascot_behavior *
+mascot_stay_pick(struct mascot *mascot, const struct mascot_behavior *fallback);
+static const struct mascot_behavior *
+mascot_behavior_here(struct mascot *mascot,
+                     const struct mascot_behavior *behavior);
 static bool mascot_action_animates(const struct mascot_action *action, int depth);
 
 const struct mascot_behavior *
@@ -643,21 +647,33 @@ enum mascot_tick_result mascot_behavior_next(struct mascot *mascot,
   }
 
   // Sitting in mid-air would freeze a falling mascot, so wait for the floor
-  if (mascot->chat_behavior &&
-      mascot_get_border_type(mascot) == environment_border_type_floor) {
-    mascot_set_behavior(mascot, mascot->chat_behavior);
+  // (or a wall it has its own pose for, see mascot_behavior_here())
+  const struct mascot_behavior *here =
+      mascot_behavior_here(mascot, mascot->chat_behavior);
+  if (mascot->chat_behavior && here) {
+    mascot_set_behavior(mascot, here);
     return mascot_tick_ok;
   }
 
-  if (mascot->sleep_behavior &&
-      mascot_get_border_type(mascot) == environment_border_type_floor) {
-    mascot_set_behavior(mascot, mascot->sleep_behavior);
+  here = mascot_behavior_here(mascot, mascot->sleep_behavior);
+  if (mascot->sleep_behavior && !mascot->chat_behavior && here) {
+    mascot_set_behavior(mascot, here);
     return mascot_tick_ok;
   }
 
+  // Staying on the floor, or holding on to the screen's or a window's side
+  // where it was (it does not let go and fall)
+  const struct mascot_behavior *staying = NULL;
   if (mascot->stay_behavior &&
-      mascot_get_border_type(mascot) == environment_border_type_floor) {
-    mascot_set_behavior(mascot, mascot_stay_pick(mascot));
+      mascot_get_border_type(mascot) == environment_border_type_floor)
+    staying = mascot_stay_pick(mascot, mascot->stay_behavior);
+  else if (mascot->stay_behavior &&
+           mascot_get_border_type(mascot) == environment_border_type_wall)
+    staying = mascot_stay_pick(
+        mascot,
+        mascot_prototype_behavior_by_name(mascot->prototype, "HoldOntoWall"));
+  if (staying) {
+    mascot_set_behavior(mascot, staying);
     INFO("<Mascot:%s:%u> Stays put with \"%s\"", mascot->prototype->name,
          mascot->id, mascot->current_behavior->name);
     return mascot_tick_ok;
@@ -916,16 +932,37 @@ bool mascot_drag_ended(struct mascot *mascot, bool throw) {
   return true;
 }
 
-// Repeats behavior while held; switches now if on the floor, else on landing.
+// What to play now for behavior (one it keeps doing while it chats, sleeps or
+// stays): on the floor behavior itself; on a wall (the screen's or a window's
+// side) the prototype's "<behavior>OnWall" if it has one, so it chats or
+// sleeps where it holds on (the owl on its branch); else NULL: it waits until
+// it lands. Caller holds tick_lock
+static const struct mascot_behavior *
+mascot_behavior_here(struct mascot *mascot,
+                     const struct mascot_behavior *behavior) {
+  if (!behavior || mascot->dragged)
+    return NULL;
+  enum environment_border_type border = mascot_get_border_type(mascot);
+  if (border == environment_border_type_floor)
+    return behavior;
+  if (border != environment_border_type_wall || !behavior->name)
+    return NULL;
+  char name[128];
+  if (snprintf(name, sizeof(name), "%sOnWall", behavior->name) >=
+      (int)sizeof(name))
+    return NULL;
+  return mascot_prototype_behavior_by_name(mascot->prototype, name);
+}
+
+// Repeats behavior while held; switches now if on the floor (or a wall, see
+// mascot_behavior_here()), else on landing.
 // Caller holds tick_lock
 static void mascot_chat_switch(struct mascot *mascot,
                                const struct mascot_behavior *behavior) {
   mascot->chat_behavior = behavior;
-  if (!mascot->dragged &&
-      mascot_get_border_type(mascot) == environment_border_type_floor &&
-      mascot->current_behavior != behavior) {
-    mascot_set_behavior(mascot, behavior);
-  }
+  const struct mascot_behavior *here = mascot_behavior_here(mascot, behavior);
+  if (here && mascot->current_behavior != here)
+    mascot_set_behavior(mascot, here);
 }
 
 bool mascot_chat_hold(struct mascot *mascot, bool hold) {
@@ -1088,10 +1125,13 @@ bool mascot_sleep(struct mascot *mascot, bool asleep, bool quiet) {
     mascot->sleep_behavior = NULL;
     // Wake up now rather than when the nap ends, also from the sit a chat
     // hold left it in (e.g. the menu's "Wake up"); a held mascot keeps sitting
+    const struct mascot_behavior *sit =
+        mascot_prototype_behavior_by_name(mascot->prototype, "SitDown");
     if (was && !mascot->chat_behavior && !mascot->dragged &&
-        (mascot->current_behavior == was ||
-         mascot->current_behavior ==
-             mascot_prototype_behavior_by_name(mascot->prototype, "SitDown")))
+        (mascot->current_behavior == was || mascot->current_behavior == sit ||
+         (mascot->current_behavior &&
+          (mascot->current_behavior == mascot_behavior_here(mascot, was) ||
+           mascot->current_behavior == mascot_behavior_here(mascot, sit)))))
       mascot_behavior_next(mascot, 0);
     pthread_mutex_unlock(&mascot->tick_lock);
     return true;
@@ -1106,10 +1146,12 @@ bool mascot_sleep(struct mascot *mascot, bool asleep, bool quiet) {
          "cannot sleep",
          mascot->prototype->name, mascot->id);
   // As for chat: right away on the floor, otherwise once it lands
-  else if (!mascot->chat_behavior && !mascot->dragged &&
-           mascot_get_border_type(mascot) == environment_border_type_floor &&
-           mascot->current_behavior != mascot->sleep_behavior)
-    mascot_set_behavior(mascot, mascot->sleep_behavior);
+  else if (!mascot->chat_behavior) {
+    const struct mascot_behavior *here =
+        mascot_behavior_here(mascot, mascot->sleep_behavior);
+    if (here && mascot->current_behavior != here)
+      mascot_set_behavior(mascot, here);
+  }
   pthread_mutex_unlock(&mascot->tick_lock);
   return true;
 }
@@ -1173,8 +1215,11 @@ static bool mascot_action_animates(const struct mascot_action *action, int depth
 
 // What a staying mascot does next: any behavior it could pick now that keeps
 // it on its spot (as often as usual) but its sleep (it stays awake), else
-// stay_behavior. Caller holds tick_lock
-static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot) {
+// fallback (SitDown on the floor, HoldOntoWall on a wall). Caller holds
+// tick_lock
+static const struct mascot_behavior *
+mascot_stay_pick(struct mascot *mascot,
+                 const struct mascot_behavior *fallback) {
   struct mascot_behavior_reference pool[128];
   uint16_t count = 0;
   mascot_build_behavior_pool(mascot, NULL, false);
@@ -1188,7 +1233,7 @@ static const struct mascot_behavior *mascot_stay_pick(struct mascot *mascot) {
   }
   const struct mascot_behavior *picked =
       select_behavior_from_pool(mascot, pool, count);
-  return picked ? picked : mascot->stay_behavior;
+  return picked ? picked : fallback;
 }
 
 bool mascot_stay(struct mascot *mascot, bool stay) {

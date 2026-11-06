@@ -10,6 +10,14 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   hidden, the credential not.
 - Robo's tools answer arguments nested deeper than Python goes (`[[[[…`) with an error the model can read, not a
   traceback.
+- A mascot thrown up against a bar no longer leaves a copy of itself in the bar until it lands, and one thrown to
+  the screen's right edge can be picked up again (Hyprland squeezed it there and the pointer missed it). Mascot
+  now squeezes a mascot pushed past an edge itself, on every side, and the pointer finds it: thrown up, it is
+  squeezed flat under the bar and straightens out as it falls. One holding on to a wall or the ceiling is cut off
+  at the edge instead, as its pose is drawn.
+- Asked to stay while it holds on to a wall, a mascot holds on there; it let go, fell and stayed on the floor.
+- A figure can chat, sleep and show its tools on a wall with `<behavior>OnWall` behaviors (`TalkOnWall`,
+  `AsleepOnWall`, `TodoOnWall`...); without them it waits until it lands, as before. See docs/mascots.md.
 
 ## 0.8.1 (2026-10-30)
 

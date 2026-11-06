@@ -56,6 +56,12 @@ Enter prototypes index or name to convert (can be comma-separated or A to conver
   POWER"); when the weather feels like 0 °C or colder, `Cold` (Robo wraps himself in a blanket); when your message is nothing but thanks or a compliment ("thanks!", "well done", "tusind tak ❤"),
   `Love` (Robo blushes). One word that is not thanks or praise and it does not: "great, you deleted it all". A
   reminder that is due plays `Alarm` (Robo's yellow "!").
+- All of these wait until the mascot is on the floor: one holding on to a wall (the screen's side or a
+  window's) goes on holding on, and chats, sleeps or stays once it has let go and landed. A figure can
+  do them on the wall too: a behavior named like the one on the floor with `OnWall` after it
+  (`SitDownOnWall`, `TalkOnWall`, `AnsweredOnWall`, `AsleepOnWall`, `TodoOnWall`...; frequency 0, its
+  action's `BorderType` `Wall`) plays there instead. Asked to stay on a wall, a mascot holds on
+  (`HoldOntoWall`) rather than letting go.
 - A figure with an `Appear` behavior (frequency 0) starts on the floor and plays it when it is summoned
   without a place (`mascot summon Robo`, Super+M) or comes back after the screen was off: Robo peeks out of a
   hole for a moment. One without it falls from the top as before.

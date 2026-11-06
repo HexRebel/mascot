@@ -234,6 +234,9 @@ struct environment_subsurface {
   struct environment_pointer *drag_pointer;
   int32_t x, y;
   int32_t width, height;
+  // As last drawn and the part of the sprite in it, see set_position()
+  int32_t drawn_width, drawn_height, source_x, source_y, source_width,
+      source_height;
   int32_t offset_x, offset_y;
 
   struct {
@@ -2844,15 +2847,21 @@ void environment_subsurface_attach(environment_subsurface_t *surface,
   surface->width = sprite->width;
   surface->height = sprite->height;
 
-  wl_surface_commit(surface->surface);
-
-  if (viewporter) {
+  if (viewporter && surface->viewport && surface->env->root_surface) {
+    // set_position() below sizes it and squeezes it onto the layer, committed with
+    // the buffer: sized here as well in a commit of its own, Hyprland (0.57)
+    // kept the size from before, from where it was cropped at the screen's
+    // edge, and squeezed the whole sprite into that (on its branch, half as
+    // wide)
+  } else if (viewporter) {
+    wl_surface_commit(surface->surface);
     wp_viewport_set_destination(
         surface->viewport,
         sprite->width / (config_get_mascot_scale() * surface->env->scale),
         sprite->height / (config_get_mascot_scale() * surface->env->scale));
     wl_surface_commit(surface->surface);
   } else {
+    wl_surface_commit(surface->surface);
     wl_surface_set_buffer_scale(surface->surface, surface->env->scale);
   }
 
@@ -3209,9 +3218,18 @@ void environment_subsurface_unmap(environment_subsurface_t *surface) {
     return;
 
   wl_surface_attach(surface->surface, NULL, 0, 0);
+  // Mapped again, attach() commits the new buffer before set_position() gives it
+  // a part of its own: the old part, outside a smaller buffer, is a protocol
+  // error (the compositor drops mascotd)
+  if (viewporter && surface->viewport)
+    wp_viewport_set_source(surface->viewport, wl_fixed_from_int(-1),
+                           wl_fixed_from_int(-1), wl_fixed_from_int(-1),
+                           wl_fixed_from_int(-1));
   wl_surface_commit(surface->surface);
   surface->env->pending_commit = true;
   surface->width = 0;
+  surface->drawn_width = surface->drawn_height = 0;
+  surface->source_width = surface->source_height = 0;
   surface->height = 0;
   surface->x = 0;
   surface->y = 0;
@@ -3467,6 +3485,11 @@ static void environment_subsurface_sprite_offset(environment_subsurface_t *surfa
        (config_get_mascot_scale() * surface->env->scale);
 }
 
+static bool environment_subsurface_squeezed(environment_subsurface_t *surface,
+                                            int32_t x, int32_t y,
+                                            struct bounding_box *out,
+                                            struct bounding_box *source);
+
 // Sprite's input rectangle (its non-transparent bounds) in environment-local
 // logical coordinates, top-referenced
 static bool environment_sprite_input_box(environment_subsurface_t *surface,
@@ -3477,15 +3500,37 @@ static bool environment_sprite_input_box(environment_subsurface_t *surface,
       surface->pose->sprite[surface->mascot->LookingRight->value.i];
   if (!sprite || !sprite->buffer)
     return false;
-  struct bounding_box box;
-  if (!environment_subsurface_sprite_geometry(surface, &box))
-    return false;
-
   float scale = config_get_mascot_scale() * surface->env->scale;
-  out->x = box.x + sprite->buffer->input_region_desc.x / scale;
-  out->y = box.y + sprite->buffer->input_region_desc.y / scale;
-  out->width = sprite->buffer->input_region_desc.width / scale;
-  out->height = sprite->buffer->input_region_desc.height / scale;
+  // Its non-transparent bounds, sprite-local logical
+  float cx = sprite->buffer->input_region_desc.x / scale;
+  float cy = sprite->buffer->input_region_desc.y / scale;
+  float cw = sprite->buffer->input_region_desc.width / scale;
+  float ch = sprite->buffer->input_region_desc.height / scale;
+  int32_t offset_x, offset_y;
+  environment_subsurface_sprite_offset(surface, &offset_x, &offset_y);
+  struct bounding_box box, part;
+  if (!(viewporter && surface->viewport &&
+        environment_subsurface_squeezed(surface, surface->x + offset_x,
+                                        surface->y + offset_y, &box, &part))) {
+    if (!environment_subsurface_sprite_geometry(surface, &box))
+      return false;
+    part = box;
+    part.x = part.y = 0;
+  }
+  if (part.width <= 0 || part.height <= 0)
+    return false;
+  // As drawn: its part of the sprite (all, or clipped) in box (see squeezed())
+  float sx = (float)box.width / part.width, sy = (float)box.height / part.height;
+  float x0 = box.x + (cx - part.x) * sx, y0 = box.y + (cy - part.y) * sy;
+  float x1 = x0 + cw * sx, y1 = y0 + ch * sy;
+  if (x0 < box.x) x0 = box.x;
+  if (y0 < box.y) y0 = box.y;
+  if (x1 > box.x + box.width) x1 = box.x + box.width;
+  if (y1 > box.y + box.height) y1 = box.y + box.height;
+  out->x = x0;
+  out->y = y0;
+  out->width = x1 - x0;
+  out->height = y1 - y0;
   return out->width > 0 && out->height > 0;
 }
 
@@ -3572,6 +3617,87 @@ void environment_update_input_region(environment_t *env) {
   pthread_mutex_unlock(&env->input_lock);
 }
 
+// One side of squeezed(): the part of [from, from + size) on [0, limit) that
+// is drawn (start, length) and the part of the sprite drawn there (source,
+// sprite-local). Squeezed: all of the sprite, but never into less than half of
+// it (pushed in from the edge it stands out past). Clipped: only what is on it
+// (one pixel at the edge when none is)
+static void environment_squeeze_side(int32_t from, int32_t size, int32_t limit,
+                                     bool clip, int32_t *start, int32_t *length,
+                                     int32_t *source, int32_t *source_length) {
+  int32_t a = from < 0 ? 0 : from;
+  int32_t b = from + size > limit ? limit : from + size;
+  if (clip) {
+    if (b <= a) {
+      a = from < 0 ? 0 : limit - 1;
+      b = a + 1;
+      *source = from < 0 ? size - 1 : 0;
+    } else {
+      *source = a - from;
+    }
+    *source_length = b - a;
+    *start = a;
+    *length = b - a;
+    return;
+  }
+  int32_t least = size / 2 > 0 ? size / 2 : 1;
+  if (least > limit)
+    least = limit;
+  if (b - a < least) {
+    if (from < 0) {
+      a = 0;
+      b = least;
+    } else {
+      b = limit;
+      a = limit - least;
+    }
+  }
+  *start = a;
+  *length = b - a;
+  *source = 0;
+  *source_length = size;
+}
+
+// Where a sprite whose top-left corner is at (x, y) is drawn, layer-local
+// (out), and which part of it (source, sprite-local logical; may be NULL). One
+// standing out past the layer's edge is squeezed against it, the whole of it
+// into what is left on the layer (down to half its size), on every side:
+// Hyprland squeezed one past the right or bottom edge by itself, but its input
+// stayed where it was (the pointer missed it), and one drawn up over a bar left
+// a copy of itself there (nothing redrew outside the layer). Thrown up, it is
+// squeezed flat against the ceiling. But one holding on to a wall or the
+// ceiling is clipped: those poses are drawn standing out past the edge (a
+// Shiba's paw at the middle of its sprite, its back beyond the edge)
+static bool environment_subsurface_squeezed(environment_subsurface_t *surface,
+                                            int32_t x, int32_t y,
+                                            struct bounding_box *out,
+                                            struct bounding_box *source) {
+  if (!surface->pose || !surface->env->root_surface ||
+      surface->env->root_surface->width <= 0 ||
+      surface->env->root_surface->height <= 0)
+    return false;
+  float scale = config_get_mascot_scale() * surface->env->scale;
+  int32_t width = surface->width / scale, height = surface->height / scale;
+  if (width <= 0 || height <= 0)
+    return false;
+  bool clip = false;
+  struct mascot *mascot = surface->mascot;
+  if (mascot && !mascot->dragged && mascot->current_action.action) {
+    enum environment_border_type border =
+        mascot->current_action.action->border_type;
+    clip = border == environment_border_type_wall ||
+           border == environment_border_type_ceiling;
+  }
+  struct bounding_box unused;
+  if (!source)
+    source = &unused;
+  environment_squeeze_side(x, width, surface->env->root_surface->width, clip,
+                           &out->x, &out->width, &source->x, &source->width);
+  environment_squeeze_side(y, height, surface->env->root_surface->height, clip,
+                           &out->y, &out->height, &source->y, &source->height);
+  return true;
+}
+
 bool environment_subsurface_sprite_geometry(environment_subsurface_t *surface,
                                             struct bounding_box *box) {
   if (!surface || !surface->surface || !surface->pose || !surface->env)
@@ -3580,6 +3706,10 @@ bool environment_subsurface_sprite_geometry(environment_subsurface_t *surface,
   int32_t offset_x, offset_y;
   environment_subsurface_sprite_offset(surface, &offset_x, &offset_y);
 
+  if (viewporter && surface->viewport &&
+      environment_subsurface_squeezed(surface, surface->x + offset_x,
+                                      surface->y + offset_y, box, NULL))
+    return true; // as drawn, see set_position()
   box->x = surface->x + offset_x;
   box->y = surface->y + offset_y;
   box->width =
@@ -3601,8 +3731,42 @@ environment_subsurface_set_position(environment_subsurface_t *surface,
   environment_subsurface_sprite_offset(surface, &surface_anchor_x,
                                        &surface_anchor_y);
 
-  wl_subsurface_set_position(surface->subsurface, dx + surface_anchor_x,
-                             dy + surface_anchor_y);
+  int32_t x = dx + surface_anchor_x, y = dy + surface_anchor_y;
+  struct bounding_box drawn, part;
+  if (viewporter && surface->viewport && surface->pose && surface->mascot &&
+      environment_subsurface_squeezed(surface, x, y, &drawn, &part)) {
+    // Its part (all of it, or clipped) in its box on the layer, squeezed()
+    float scale = config_get_mascot_scale() * surface->env->scale;
+    wp_viewport_set_source(surface->viewport,
+                           wl_fixed_from_double(part.x * scale),
+                           wl_fixed_from_double(part.y * scale),
+                           wl_fixed_from_double(part.width * scale),
+                           wl_fixed_from_double(part.height * scale));
+    wp_viewport_set_destination(surface->viewport, drawn.width, drawn.height);
+    if (drawn.width != surface->drawn_width ||
+        drawn.height != surface->drawn_height || part.x != surface->source_x ||
+        part.y != surface->source_y || part.width != surface->source_width ||
+        part.height != surface->source_height) {
+      // Hyprland (0.57) sized it anew only with a buffer: without one it kept
+      // drawing it in the size before (flat while falling from the ceiling)
+      struct mascot_sprite *sprite =
+          surface->pose->sprite[surface->mascot->LookingRight->value.i];
+      if (sprite && sprite->buffer) {
+        wl_surface_attach(surface->surface, sprite->buffer->buffer, 0, 0);
+        wl_surface_damage_buffer(surface->surface, 0, 0, INT32_MAX, INT32_MAX);
+      }
+      surface->drawn_width = drawn.width;
+      surface->drawn_height = drawn.height;
+      surface->source_x = part.x;
+      surface->source_y = part.y;
+      surface->source_width = part.width;
+      surface->source_height = part.height;
+    }
+    wl_surface_commit(surface->surface); // applied with the layer's commit
+    x = drawn.x;
+    y = drawn.y;
+  }
+  wl_subsurface_set_position(surface->subsurface, x, y);
 
   surface->x = dx;
   surface->y = dy;
