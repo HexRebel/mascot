@@ -1393,7 +1393,9 @@ PanelWindow {
             c.streaming = -1;
         }
         c.replying = reply;
-        if (!reply)
+        // A dot command ends the compliment; a lookup before the answer (no kind: aichat --info, a local
+        // model's context) does not, or the first message of a chat never made it blush
+        if (!reply && kind)
             c.loved = false;
         c.doing = "";
         c.doingIcon = "";

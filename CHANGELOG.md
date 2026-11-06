@@ -18,6 +18,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
 - Asked to stay while it holds on to a wall, a mascot holds on there; it let go, fell and stayed on the floor.
 - A figure can chat, sleep and show its tools on a wall with `<behavior>OnWall` behaviors (`TalkOnWall`,
   `AsleepOnWall`, `TodoOnWall`...); without them it waits until it lands, as before. See docs/mascots.md.
+- Thanks or a compliment as the first message of a chat ("tusind tak ❤") makes the mascot blush (`Love`) too; the
+  lookups before the answer cancelled it, so only a later message did.
 
 ## 0.8.1 (2026-10-30)
 

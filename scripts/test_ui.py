@@ -185,5 +185,23 @@ class Network(unittest.TestCase):
             self.assertIn('startsWith("openrouter:")', line, line.strip())
 
 
+class Poses(unittest.TestCase):
+    def test_a_lookup_before_the_answer_keeps_the_compliment(self):
+        # "Tusind tak ❤" as the first message: the lookups before the answer (aichat --info, a local model's context
+        # size: run() with no kind) set loved back to false, and the mascot never blushed. Only a job the
+        # conversation shows (a dot command) is a new message that ends it
+        with open(os.path.join(ROOT, "ui", "Bubble.qml")) as f:
+            qml = f.read()
+        run = qml[qml.index("    function run(args: var"):]
+        run = run[:run.index("\n    }\n")]
+        resets = [line.strip() for line in run.splitlines() if "c.loved = false" in line]
+        self.assertTrue(resets)
+        lines = run.splitlines()
+        for i, line in enumerate(lines):
+            if "c.loved = false" in line:
+                guard = (line + lines[i - 1]).replace(" ", "")
+                self.assertIn("!reply&&kind", guard, line.strip())
+
+
 if __name__ == "__main__":
     unittest.main()
