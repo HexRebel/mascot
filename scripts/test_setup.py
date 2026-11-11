@@ -679,6 +679,20 @@ class Cli(Served):
         self.assertNotIn("sk-good-key", text)
         self.assertIn("the key works", text)
 
+    def test_cli_config_key_in_small_letters(self):
+        # mascotd.conf writes chat_roles, so that is what a user types; mascot config set/get takes it too
+        os.makedirs(self.data, exist_ok=True)
+        with open(os.path.join(self.data, "mascotd.conf"), "w") as f:
+            f.write("chat_role=bunny\n")
+        out = self.mascot("config", "set", "chat_roles", "White Bear=Bear")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertNotIn("Unknown key", out.stdout)
+        with open(os.path.join(self.data, "mascotd.conf")) as f:
+            self.assertIn("chat_roles=White Bear=Bear", f.read())
+        out = self.mascot("config", "get", "chat_roles")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("White Bear=Bear", out.stdout)
+
     def test_cli_chatsetup_names_are_its_own(self):
         import ast
         with open(type(self).composed) as f:

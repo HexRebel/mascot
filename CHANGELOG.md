@@ -22,6 +22,8 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   feels like 25 °C or warmer, as `Cold` below 0 °C; a figure without them shows its `Weather` as before.
 - Thanks or a compliment as the first message of a chat ("tusind tak ❤") makes the mascot blush (`Love`) too; the
   lookups before the answer cancelled it, so only a later message did.
+- `mascot config set/get` takes a key in small letters, as mascotd.conf writes it (`chat_roles`); only
+  `CHAT_ROLES` was known.
 
 ## 0.8.1 (2026-10-30)
 

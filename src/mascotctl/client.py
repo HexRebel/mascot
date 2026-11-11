@@ -2686,10 +2686,10 @@ if __name__ == "__main__":
 
     config_subparsers.add_parser("list", help="List all config files")
     getter = config_subparsers.add_parser("get", help="Get a config value")
-    getter.add_argument("key", help="Key of the config value to get")
+    getter.add_argument("key", type=str.upper, help="Key of the config value to get")
 
     setter = config_subparsers.add_parser("set", help="Set a config value")
-    setter.add_argument("key", help="Key of the config value to set, e.g. CHAT_TOOLS (mascot config list shows them all, mascot --help the chat's)")
+    setter.add_argument("key", type=str.upper, help="Key of the config value to set, e.g. CHAT_TOOLS (mascot config list shows them all, mascot --help the chat's)")
     setter.add_argument("value", help="Value to set, e.g. 'time,weather,files'")
 
 # Stop
