@@ -3,7 +3,7 @@
 Mascot's versions (`mascotd --version`). Mascot is a fork of
 [wl_shimeji](https://github.com/CluelessCatBurger/wl_shimeji), which was at 0.0.2 when it forked.
 
-## 0.8.2 (2026-11-06)
+## 0.8.2 (2026-11-11)
 
 - Security: in a log message, a secret's value that starts with an auth scheme (`Basic`, `Bearer`, `Token`,
   `Negotiate`) is hidden with the word after it. `read_log` showed `AUTH_HEADER=[hidden] dXNlcjpw…`: the scheme
