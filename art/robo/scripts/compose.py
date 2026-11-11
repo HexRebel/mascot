@@ -8,7 +8,8 @@ thinking, tinkering; row 3: notepad, -, opening its chest) and experimental3.png
 cheering; grumpy, gears, singing; giggling, globe, meditating), and a few of experimental5.png and
 experimental6.png, the "?" of experimental7.png, a few of experimental8.png and experimental9.png (4x4), the Easter egg of
 experimental10.png and one each of full.png, experimental11.png, experimental4.png, three of experimental12.png and
-the blanket and the hole of experimental13.png
+the blanket and the hole of experimental13.png and the umbrella, the bobble hat and the sunglasses of
+experimental14.png (the weather)
 """
 import os
 import sys
@@ -267,6 +268,35 @@ eleven = cells_of("experimental11.png", [(1, 2)])
 four = cells_of("experimental4.png", [(1, 0)])
 twelve = cells_of("experimental12.png", [(0, 0), (1, 0), (1, 2)])
 thirteen = cells_of("experimental13.png", [(2, 0), (2, 2)])
+# experimental14.png, the weather (the user's choice, 11 Nov): column 1. One scale for the sheet, from the umbrella
+# one's visor (the sunglasses hide the visor, which measured it too small); the magenta in the gaps under the
+# umbrella and by the fan see-through; the loose raindrops and snowflakes left out (see unspecked())
+weather_sheet = Image.open(os.path.join(here, "experimental14.png"))
+ww = weather_sheet.width // 3
+raw = {r: unpinked(rechest(cutout(weather_sheet.crop((0, r * ww, ww, (r + 1) * ww))), CHEST)) for r in range(3)}
+fw = VISOR / visor(raw[0])
+
+
+def unspecked(im):
+    """Without the loose raindrops and snowflakes (small parts on their own): they made the frame taller and wider
+    than there is room for, so the robot was made smaller to fit them"""
+    a = np.asarray(im).copy()
+    solid = Image.fromarray((a[..., 3] > 0).astype(np.uint8) * 255).copy()
+    total = int((a[..., 3] > 0).sum())
+    while True:
+        ys, xs = np.nonzero(np.asarray(solid) == 255)
+        if not len(ys):
+            break
+        ImageDraw.floodfill(solid, (int(xs[0]), int(ys[0])), 100, thresh=0)
+        part = np.asarray(solid) == 100
+        if part.sum() < total // 50:
+            a[part] = 0
+        solid.paste(0, mask=Image.fromarray(part.astype(np.uint8) * 255))
+    out = Image.fromarray(a)
+    return out.crop(out.getbbox())
+
+
+fourteen = {(r, 0): resized(unspecked(raw[r]), fw) for r in range(3)}
 thirteen[2, 2] = resized(thirteen[2, 2], 2.0)  # the hole: half its visor hidden, the rest runs into the hole (measured 32 px of 64)
 eight[2, 2] = resized(unpinked(eight[2, 2]), 0.87)  # the graph on its visor: measured by its height (100 px, like 60)
 still = stand(0, im=hanging)  # front.png: standing still and sitting
@@ -335,6 +365,9 @@ frames = {
     102: stand(0, im=twelve[1, 2]),  # looking through binoculars
     103: stand(0, im=thirteen[2, 0]),  # wrapped in a blanket, freezing: the weather feels like 0 °C or colder (Cold)
     104: stand(0, im=thirteen[2, 2]),  # peeking up out of a hole in the floor: it appears (Appear)
+    105: stand(0, im=fourteen[0, 0]),  # an umbrella in the rain: it rains or drizzles there (Rain)
+    106: stand(0, im=fourteen[1, 0]),  # a bobble hat and a scarf, arms up, snowflakes: snow or sleet (Snow)
+    107: stand(0, im=fourteen[2, 0]),  # sunglasses, fanning itself: it feels like 25 °C or warmer (Warm)
     100: stand(0, im=nine[3, 0]),   # "100% FULL POWER" on its visor, flexing: the CPU on performance (FullPower)
     90: dangle(0, im=hanging),    # held up and still: hanging straight down (Pinched, Resisting)
 }

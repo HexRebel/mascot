@@ -26,7 +26,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
 | `experimental11.png` | 3×3; used: row 2 column 3, sunglasses (97) |
 | `experimental12.png` | 3×3; used: row 2 column 1, a magnifying glass (99, `Power`); row 1 column 1, wondering (101); row 2 column 3, binoculars (102) |
 | `experimental13.png` | 3×3; used: row 3 column 1, wrapped in a blanket, freezing (103, `Cold`); row 3 column 3, peeking out of a hole in the floor (104, `Appear`) |
-| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime104.png` (128×128, base at (64, 128)) and `preview.png` |
+| `experimental14.png` | 3×3, the weather; used: column 1, an umbrella (105, `Rain`), a bobble hat and a scarf (106, `Snow`), sunglasses and a fan (107, `Warm`). One scale for the sheet, from the umbrella one's visor; the loose raindrops and snowflakes left out |
+| `scripts/compose.py` | Cuts the images out and makes `shime1.png` … `shime107.png` (128×128, base at (64, 128)) and `preview.png` |
 | `scripts/chest.py` | Swaps the square on its chest for a speech bubble (or the Arch logo, for your own copy only: it is Arch Linux's trademark) |
 | `scripts/measure.py` | Checks that Robo is the same size in every frame (by its visor); run it after adding images |
 | `scripts/cutout.py` | `robo.png` → `robo-cutout.png` |
@@ -42,7 +43,8 @@ The big source images (28 MB) are not in git: download `robo-sources.zip` from t
   does (see `mascot_chat_doing()`): the **notepad** for the todo list, a **salute** for reminders, the **globe** for the
   weather, the **hologram cube** for files, images and searching a file, its
   **head open, gears turning** over your last commands, **meditating** when it gets sleepy, its **chest open** while it checks your system, a **magnifying glass** over a graph while it checks the machine, a magnifying glass while it checks how the CPU runs, and **"100% FULL POWER"** when it runs on performance. The weather feels like 0 °C or colder: wrapped in a
-  **blanket**, freezing (`Cold`). Summoned (or back after the screen was off): it **peeks out of a hole** in the
+  **blanket**, freezing (`Cold`); rain or drizzle: an **umbrella** (`Rain`); snow or sleet: a **bobble hat** and a scarf (`Snow`);
+  25 °C or warmer: **sunglasses** and a fan (`Warm`). Summoned (or back after the screen was off): it **peeks out of a hole** in the
   floor for about 1.5 s (`Appear`). Thanked or praised: it **blushes** (`Love`). When that found
   nothing to go on, a **"?"** on its visor while it answers (`Unsure`). A todo done:
   **laughing**, eyes shut tight (`Done`). An answer that failed: **"ERROR"** and a tear (`Failed`). A reminder

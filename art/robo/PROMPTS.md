@@ -109,3 +109,48 @@ looking straight ahead at the viewer, eyes as surprised round circles in the mid
 of the visor. No legs and no feet. Full body visible, centered, solid flat magenta
 (#FF00FF) background, no glow, no shadow, no floor, no text.
 ```
+
+## 5. The weather (`experimental14.png`, 1:1, with `robo-cutout.png` attached, 11 Nov 2026)
+
+A 3×3 sheet: row 1 rain (umbrella, yellow raincoat, a rain cloud), row 2 snow (bobble hat and scarf, a snowball, snow
+on its head), row 3 warm (sunglasses and a fan, sweating with a cold drink, an ice cream). The user picked column 1.
+The prompt CC wrote for it:
+
+```
+Using the attached robot as the exact reference (same design, colors, proportions,
+size, thick dark navy outlines and glossy highlights), make a sprite sheet: a 3 by 3
+grid of equal square cells, one pose per cell. The robot is the same design, same
+colors and same size in every cell. It has no legs and no feet: it hovers on its dark
+round base, which is at the same height near the bottom of every cell. Its body never
+changes shape; only its arms, the eyes and smile on its visor, and the props change.
+Front view, centered in each cell with clear empty space around it; nothing touches or
+crosses the cell borders. Every outline is fully closed.
+
+Poses, row by row, left to right:
+Row 1 (rain):
+1. Holding a small open umbrella over its head with one arm, raindrops falling around
+   it, eyes as calm content arcs.
+2. Wearing a little yellow raincoat hood over its head, holding the hood with both
+   arms, a few raindrops bouncing off it, eyes looking up.
+3. Without an umbrella, a small grey rain cloud right above its head raining on it,
+   eyes as grumpy flat lines.
+Row 2 (snow):
+4. Wearing a knitted bobble hat and a scarf, both arms raised happily, snowflakes
+   around it, eyes as happy upside-down arcs.
+5. Holding a small snowball in one hand, ready to throw, wearing a knitted bobble hat,
+   eyes as playful arcs.
+6. A small pile of snow on top of its head, snowflakes falling, eyes looking up at
+   them in wonder as round circles.
+Row 3 (warm):
+7. Wearing dark sunglasses over its visor, fanning itself with a small hand fan.
+8. Sweating: two small cyan drops on its head, holding a cold drink with a straw,
+   eyes as tired half-closed arcs.
+9. Holding a small ice cream cone, melting a little, eyes as happy arcs.
+
+Background: solid flat magenta (#FF00FF) everywhere, in every cell and between cells.
+No grid lines, no cell borders, no text, no labels, no numbers, no glow, no shadow,
+no floor. Raindrops, snowflakes and props stay inside their cell and never use
+magenta. Full body visible in every cell, never cropped.
+```
+
+Gemini still drew faint grid lines (pink, cut away with the background) and a shadow under row 3.

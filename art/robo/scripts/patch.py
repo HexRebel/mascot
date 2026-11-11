@@ -3,7 +3,7 @@ eleven things it does now and then on the floor (Hologram, Tinker, OpenChest, Gi
 Meditate, Wave, Shades, Hearts, Wonder, Binoculars), what it does while a tool runs (Todo, Reminder, Weather, Files, Image, Search, Shell, Sleepy, System,
 Machine), Unsure (a system tool found nothing to go on), Done (a todo is done), Failed (an answer failed), Alarm
 (a reminder that is due), EasterEgg (tapped quickly many times), Power (checking how the CPU runs), FullPower
-(it runs on performance), Cold (the weather feels freezing), Love (thanks or a compliment) and Appear (summoned: peeks out of a hole),
+(it runs on performance), Cold (the weather feels freezing), Rain, Snow and Warm (the weather), Love (thanks or a compliment) and Appear (summoned: peeks out of a hole),
 makes it hover (Walk/Run/Dash/Creep lean in the glide, bobbing 1, 2, 3, 2), Quiet (switched off), no pulling
 itself up, look straight ahead when it stands still (60) and dangle whenever it is held up. Its personality
 (prompt.md) is not in the pack: an import leaves a pack's prompt.md out, so the README copies it in afterwards"""
@@ -76,7 +76,7 @@ LONGER = {"Meditate": 300,  # ticks (a pose is 100, about 4 s): a meditation tak
 # Singing (73) only while music plays: experimental, not yet (Mascot has to see that music plays, MPRIS)
 # Poses only for a tool
 POSES = {"Globe": 69, "Gears": 71, "Salute": 80, "Puzzled": 89, "Delighted": 91, "Inspect": 92, "Broken": 94,  # the magnifying glass (78): kept for later
-         "Egg": 95, "Scan": 99, "Charged": 100, "Shiver": 103, "PeekOut": 104,
+         "Egg": 95, "Scan": 99, "Charged": 100, "Shiver": 103, "PeekOut": 104, "Umbrella": 105, "Snowy": 106, "Fanning": 107,
          "Notepad": 66,  # only for the todo list (the user's choice, 26 Oct: not while it walks around)
          "Blush": 83}
 READABLE = {89, 94, 100}  # the "?", "ERROR" and "FULL POWER": not mirrored facing right
@@ -101,7 +101,7 @@ floor["next_behavior_list_count"] = len(floor["next_behavior_list"])
 # While a tool runs for its answer, it shows what it does (see mascot_chat_doing())
 TOOLS = {"Todo": "Notepad", "Reminder": "Salute", "Weather": "Globe", "Files": "Hologram", "Image": "Hologram",
          "Search": "Hologram", "Shell": "Gears", "Sleepy": "Meditate", "System": "OpenChest", "Machine": "Inspect",
-         "Power": "Scan", "FullPower": "Charged", "Cold": "Shiver", "Appear": "PeekOut", "Love": "Blush",
+         "Power": "Scan", "FullPower": "Charged", "Cold": "Shiver", "Rain": "Umbrella", "Snow": "Snowy", "Warm": "Fanning", "Appear": "PeekOut", "Love": "Blush",
          "Unsure": "Puzzled", "Done": "Delighted", "Failed": "Broken", "Alarm": "Alarm", "Quiet": "SwitchedOff",
          "EasterEgg": "Egg"}  # tapped quickly many times (see chat_easter_egg())
 for name, act in TOOLS.items():
