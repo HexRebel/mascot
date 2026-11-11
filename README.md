@@ -145,6 +145,7 @@ see the commands, and `.tools` to see which tools are on.
 - [Using mascots](docs/mascots.md): adding and converting mascots, the right-click menu, sleep, multiple screens
 - [Building and installing](docs/building.md): every requirement, packages and plugins
 - [Robo](art/robo/README.md): how Mascot's own mascot is made
+- [Owl](art/owl/README.md): how the owl is made
 - [The protocol](docs/protocol.md) between `mascot`, the daemon and the bubble
 - [Upstream](docs/upstream.md): wl_shimeji's features and its author's notes
 - [Changelog](CHANGELOG.md)

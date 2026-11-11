@@ -123,9 +123,10 @@ You can list all available mascot prototypes using the following command:
 mascot prototypes list
 ```
 
-Mascot ships with two, installed to `$(PREFIX)/share/mascot/prototypes/`: **Robo**, Mascot's own
+Mascot ships with three, installed to `$(PREFIX)/share/mascot/prototypes/`: **Robo**, Mascot's own
 mascot (a small hovering robot whose visor shows how it feels; CC0, sources and how it was made in
-[`art/robo/`](../art/robo/)), and the original **Shimeji** by Yuki Yamada (Group Finity). Prototypes you import yourself go to
+[`art/robo/`](../art/robo/)), **Owl** (a small brown owl that hops, flies and sits on a branch in the screen's
+side; CC0, [`art/owl/`](../art/owl/)), and the original **Shimeji** by Yuki Yamada (Group Finity). Prototypes you import yourself go to
 `~/.local/share/mascot/shimejis/` and take precedence over a bundled one with the same name.
 
 ## Summoning mascots

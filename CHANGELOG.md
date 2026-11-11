@@ -22,6 +22,9 @@ Mascot's versions (`mascotd --version`). Mascot is a fork of
   feels like 25 °C or warmer, as `Cold` below 0 °C; a figure without them shows its `Weather` as before.
 - Thanks or a compliment as the first message of a chat ("tusind tak ❤") makes the mascot blush (`Love`) too; the
   lookups before the answer cancelled it, so only a later message did.
+- A new mascot comes with Mascot: **Owl**, a small brown owl that hops on the floor, flies when it hurries and sits
+  on a branch in the screen's side, where it also chats and sleeps (`mascot summon Owl`). CC0, like Robo; how it is
+  made is in art/owl/.
 - Robo shows the weather too: an umbrella in the rain, a bobble hat and a scarf in the snow, sunglasses and a fan
   when it is warm.
 - `mascot config set/get` takes a key in small letters, as mascotd.conf writes it (`chat_roles`); only
